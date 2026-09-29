@@ -25,6 +25,6 @@ GitHub Actions erzeugt eine unsignierte IPA, die anschließend mit einem eigenen
 - Quiet, readable cards by default, optional glass, system/light/dark appearance.
 - Weekly progress and today's latest energy check; open-task filter and archive search.
 - Larger touch targets and layouts that adapt to Dynamic Type and rotation.
-- CI validates the compiled device bundle, then runs onboarding, navigation and full-screen UI tests on two simulator sizes. Test screenshots are available in the UI verification artifact.
+- CI validates the compiled device bundle, then boots and measures the actual app on two iPhone sizes in light/dark mode and large-text onboarding. Screenshots and viewport reports are available in the UI verification artifact. The XCTest suite remains available for interactive navigation regression checks.
 
 The bundle identifier stays unchanged so an in-place update preserves existing data. The IPA is unsigned and must be signed by your installation tool.

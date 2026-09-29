@@ -29,7 +29,30 @@ struct RootView: View {
                         .font(.system(size: 1))
                         .accessibilityIdentifier("therapy.viewport")
                         .allowsHitTesting(false)
+                        .onChange(of: geometry.size, initial: true) { _, _ in
+                            recordViewport(width: geometry.size.width + geometry.safeAreaInsets.leading + geometry.safeAreaInsets.trailing,
+                                           height: geometry.size.height + geometry.safeAreaInsets.top + geometry.safeAreaInsets.bottom)
+                        }
                 }
+            }
+        }
+    }
+
+    private func recordViewport(width: CGFloat, height: CGFloat) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1))
+            guard let window = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene }).flatMap(\.windows)
+                .first(where: { $0.isKeyWindow }) else { return }
+            let report: [String: Double] = [
+                "viewportWidth": Double(width), "viewportHeight": Double(height),
+                "windowWidth": Double(window.bounds.width), "windowHeight": Double(window.bounds.height),
+                "nativeWidth": Double(window.screen.nativeBounds.width),
+                "nativeHeight": Double(window.screen.nativeBounds.height),
+                "nativeScale": Double(window.screen.nativeScale)
+            ]
+            if let bytes = try? JSONSerialization.data(withJSONObject: report, options: [.sortedKeys]) {
+                try? bytes.write(to: store.rootURL.appendingPathComponent("ui-viewport.json"), options: .atomic)
             }
         }
     }

@@ -55,24 +55,16 @@ jobs:
       - name: Validate actual iPhone bundle
         run: python3 scripts/validate_bundle.py build/Build/Products/Release-iphoneos/Therapie.app
 
-      - name: Verify full screen and navigation on two iPhone simulators
+      - name: Build simulator app
         run: |
           set -o pipefail
-          python3 - <<'PYTHON'
-          import json, subprocess
-          listing = json.loads(subprocess.check_output(["xcrun", "simctl", "list", "devices", "available", "--json"]))
-          phones = [d for runtime, ds in listing["devices"].items() if "iOS" in runtime for d in ds if "iPhone" in d["name"]]
-          large = next((d for d in phones if "Pro Max" in d["name"]), phones[0])
-          small = next((d for d in phones if "16e" in d["name"] or "17e" in d["name"]), next(d for d in phones if d["udid"] != large["udid"]))
-          for label, device in [("large", large), ("compact", small)]:
-              print("Testing", label, device["name"], flush=True)
-              subprocess.run(["xcodebuild", "test", "-project", "Therapie.xcodeproj", "-scheme", "TherapieApp",
-                              "-destination", "platform=iOS Simulator,id=" + device["udid"],
-                              "-derivedDataPath", "build-simulator", "-resultBundlePath", "build/" + label + ".xcresult",
-                              "-parallel-testing-enabled", "NO", "CODE_SIGNING_ALLOWED=NO"], check=True)
-              subprocess.run(["xcrun", "xcresulttool", "export", "attachments", "--path", "build/" + label + ".xcresult",
-                              "--output-path", "build/screenshots-" + label], check=True)
-          PYTHON
+          xcodebuild -project Therapie.xcodeproj -scheme TherapieApp -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build-simulator CODE_SIGNING_ALLOWED=NO build | tee simulator-build.log
+
+      - name: Verify native full-screen rendering on two iPhone sizes
+        timeout-minutes: 12
+        run: python3 scripts/verify_simulator.py
 
       - name: Upload simulator screenshots and test results
         if: always()
@@ -80,8 +72,7 @@ jobs:
         with:
           name: Therapie-UI-Verification
           path: |
-            build/*.xcresult
-            build/screenshots-*
+            build/simulator-verification
           if-no-files-found: ignore
           retention-days: 30
 
@@ -107,6 +98,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Therapie-build-log
-          path: xcodebuild.log
+          path: |
+            xcodebuild.log
+            simulator-build.log
           if-no-files-found: ignore
 
