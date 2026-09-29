@@ -1,0 +1,40 @@
+name: Therapie
+options:
+  bundleIdPrefix: eu.rjuhas
+  deploymentTarget:
+    iOS: "26.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: 1.0.0
+targets:
+  TherapieApp:
+    type: application
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: TherapieApp
+        excludes:
+          - "Assets.xcassets"
+    resources:
+      - path: TherapieApp/Assets.xcassets
+    info:
+      path: TherapieApp/Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: eu.rjuhas.therapie
+        PRODUCT_NAME: Therapie
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        SUPPORTS_MACCATALYST: NO
+        GENERATE_INFOPLIST_FILE: NO
+schemes:
+  TherapieApp:
+    build:
+      targets:
+        TherapieApp: all
+    run:
+      config: Debug
+    archive:
+      config: Release
