@@ -188,7 +188,7 @@ final class BackupService {
         defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
 
         let bookmark = try url.bookmarkData(
-            options: .withSecurityScope,
+            options: [],
             includingResourceValuesForKeys: nil,
             relativeTo: nil
         )
@@ -211,7 +211,7 @@ final class BackupService {
         var stale = false
         let url = try URL(
             resolvingBookmarkData: bookmark,
-            options: .withSecurityScope,
+            options: [],
             relativeTo: nil,
             bookmarkDataIsStale: &stale
         )
