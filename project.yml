@@ -6,8 +6,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    CURRENT_PROJECT_VERSION: 2
-    MARKETING_VERSION: 1.1.0
+    CURRENT_PROJECT_VERSION: 3
+    MARKETING_VERSION: 1.2.0
 targets:
   TherapieApp:
     type: application
@@ -23,9 +23,24 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "1"
         SUPPORTS_MACCATALYST: NO
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+        SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
         ENABLE_USER_SCRIPT_SANDBOXING: YES
+  TherapieUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "26.1"
+    sources:
+      - path: TherapieUITests
+    dependencies:
+      - target: TherapieApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: eu.rjuhas.therapie.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: TherapieApp
 schemes:
   TherapieApp:
     build:
@@ -35,3 +50,8 @@ schemes:
       config: Debug
     archive:
       config: Release
+
+    test:
+      config: Debug
+      targets:
+        - TherapieUITests

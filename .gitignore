@@ -1,0 +1,6 @@
+build/
+build-simulator/
+*.xcodeproj/
+Payload/
+*.ipa
+__pycache__/

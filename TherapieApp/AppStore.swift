@@ -22,8 +22,9 @@ final class AppStore: ObservableObject {
 
     init() {
         let fm = FileManager.default
+        let folder = ProcessInfo.processInfo.arguments.contains("--ui-testing") ? "TherapieUITests" : "Therapie"
         let root = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("Therapie", isDirectory: true)
+            .appendingPathComponent(folder, isDirectory: true)
         rootURL = root
         mediaURL = root.appendingPathComponent("Media", isDirectory: true)
         recordingsURL = root.appendingPathComponent("Recordings", isDirectory: true)
@@ -37,6 +38,16 @@ final class AppStore: ObservableObject {
             data = loaded
         } else {
             data = AppData()
+        }
+        if ProcessInfo.processInfo.arguments.contains("--ui-testing") {
+            data = AppData()
+            if ProcessInfo.processInfo.arguments.contains("--show-dashboard") {
+                data.profile = UserProfile(userName: "Robin", therapistName: "Therapeutin", onboardingCompleted: true)
+                let week = Date().therapyWeek
+                data.weeklyTasks = [WeeklyTask(weekOfYear: week.week, yearForWeekOfYear: week.year,
+                                               title: "Einen ruhigen Moment festhalten", details: "Ein kleiner Schritt für diese Woche.")]
+                data.energyEntries = [EnergyEntry(level: 3, givesEnergy: "Musik und eine Pause", takesEnergy: "", note: "")]
+            }
         }
         isLoading = false
     }
@@ -208,3 +219,4 @@ final class AppStore: ObservableObject {
         save()
     }
 }
+

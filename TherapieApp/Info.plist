@@ -2,46 +2,50 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleDisplayName</key>
-    <string>Therapie</string>
-    <key>CFBundleName</key>
-    <string>Therapie</string>
-    <key>CFBundleIdentifier</key>
-    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-    <key>CFBundleExecutable</key>
-    <string>$(EXECUTABLE_NAME)</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleShortVersionString</key>
-    <string>$(MARKETING_VERSION)</string>
-    <key>CFBundleVersion</key>
-    <string>$(CURRENT_PROJECT_VERSION)</string>
-    <key>CFBundleIconName</key>
-    <string>AppIcon</string>
-    <key>UILaunchScreen</key>
-    <dict>
-        <key>UIColorName</key>
-        <string></string>
-    </dict>
-    <key>UIApplicationSupportsIndirectInputEvents</key>
-    <true/>
-    <key>UISupportedInterfaceOrientations</key>
-    <array>
-        <string>UIInterfaceOrientationPortrait</string>
-        <string>UIInterfaceOrientationLandscapeLeft</string>
-        <string>UIInterfaceOrientationLandscapeRight</string>
-    </array>
-    <key>NSCalendarsFullAccessUsageDescription</key>
-    <string>Therapie synchronisiert deine Therapietermine und Erinnerungen mit deinem iPhone-Kalender.</string>
-    <key>NSCalendarsWriteOnlyAccessUsageDescription</key>
-    <string>Therapie kann deine Therapietermine in deinem iPhone-Kalender eintragen.</string>
-    <key>NSLocationWhenInUseUsageDescription</key>
-    <string>Wenn du möchtest, speichert Therapie den aktuellen Ort als Metadatum zu Fotos und Einträgen.</string>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>Therapie benötigt das Mikrofon, damit du private Sprachaufzeichnungen für deine Therapie speichern kannst.</string>
-    <key>NSPhotoLibraryUsageDescription</key>
-    <string>Therapie lässt dich Fotos für Aufgaben, Pläne und Rückblicke auswählen.</string>
-    <key>NSAlarmKitUsageDescription</key>
-    <string>Therapie verwendet Alarme für wichtige Therapietermine und von dir aktivierte Aufgaben-Erinnerungen.</string>
+	<key>CFBundleDisplayName</key>
+	<string>Therapie</string>
+	<key>CFBundleName</key>
+	<string>Therapie</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Therapie synchronisiert deine Therapietermine und Erinnerungen mit deinem iPhone-Kalender.</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>Therapie kann deine Therapietermine in deinem iPhone-Kalender eintragen.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Wenn du möchtest, speichert Therapie den aktuellen Ort als Metadatum zu Fotos und Einträgen.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Therapie benötigt das Mikrofon, damit du private Sprachaufzeichnungen für deine Therapie speichern kannst.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Therapie lässt dich Fotos für Aufgaben, Pläne und Rückblicke auswählen.</string>
+	<key>NSAlarmKitUsageDescription</key>
+	<string>Therapie verwendet Alarme für wichtige Therapietermine und von dir aktivierte Aufgaben-Erinnerungen.</string>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict/>
+	</dict>
 </dict>
 </plist>

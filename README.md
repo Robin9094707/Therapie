@@ -17,3 +17,14 @@ Therapiedaten bleiben standardmäßig auf dem Gerät. Kalender-, Standort- und A
 
 ## Build
 GitHub Actions erzeugt eine unsignierte IPA, die anschließend mit einem eigenen Sideloading-/Signing-Werkzeug signiert/installiert werden kann.
+
+
+## Version 1.2.0
+- Native iPhone launch storyboard and explicit SwiftUI scene configuration.
+- Complete opaque app-icon set, including 3x home-screen images; all images are checked in.
+- Quiet, readable cards by default, optional glass, system/light/dark appearance.
+- Weekly progress and today's latest energy check; open-task filter and archive search.
+- Larger touch targets and layouts that adapt to Dynamic Type and rotation.
+- CI validates the compiled device bundle, then runs onboarding, navigation and full-screen UI tests on two simulator sizes. Test screenshots are available in the UI verification artifact.
+
+The bundle identifier stays unchanged so an in-place update preserves existing data. The IPA is unsigned and must be signed by your installation tool.

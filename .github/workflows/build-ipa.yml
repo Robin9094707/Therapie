@@ -52,44 +52,53 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             build | tee xcodebuild.log
 
-      - name: Validate iPhone bundle
+      - name: Validate actual iPhone bundle
+        run: python3 scripts/validate_bundle.py build/Build/Products/Release-iphoneos/Therapie.app
+
+      - name: Verify full screen and navigation on two iPhone simulators
         run: |
-          APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" -print -quit)
-          if [ -z "$APP" ]; then
-            echo "No .app bundle found"
-            exit 1
-          fi
+          set -o pipefail
+          python3 - <<'PYTHON'
+          import json, subprocess
+          listing = json.loads(subprocess.check_output(["xcrun", "simctl", "list", "devices", "available", "--json"]))
+          phones = [d for runtime, ds in listing["devices"].items() if "iOS" in runtime for d in ds if "iPhone" in d["name"]]
+          large = next((d for d in phones if "Pro Max" in d["name"]), phones[0])
+          small = next((d for d in phones if "16e" in d["name"] or "17e" in d["name"]), next(d for d in phones if d["udid"] != large["udid"]))
+          for label, device in [("large", large), ("compact", small)]:
+              print("Testing", label, device["name"], flush=True)
+              subprocess.run(["xcodebuild", "test", "-project", "Therapie.xcodeproj", "-scheme", "TherapieApp",
+                              "-destination", "platform=iOS Simulator,id=" + device["udid"],
+                              "-derivedDataPath", "build-simulator", "-resultBundlePath", "build/" + label + ".xcresult",
+                              "-parallel-testing-enabled", "NO", "CODE_SIGNING_ALLOWED=NO"], check=True)
+              subprocess.run(["xcrun", "xcresulttool", "export", "attachments", "--path", "build/" + label + ".xcresult",
+                              "--output-path", "build/screenshots-" + label], check=True)
+          PYTHON
 
-          echo "Validating: $APP"
-
-          if [ ! -f "$APP/Assets.car" ]; then
-            echo "ERROR: Assets.car missing. App icon/resources were not compiled."
-            exit 1
-          fi
-
-          /usr/libexec/PlistBuddy -c "Print :CFBundleIconName" "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c "Print :NSAlarmKitUsageDescription" "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c "Print :NSCalendarsFullAccessUsageDescription" "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c "Print :UILaunchScreen" "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c "Print :UIDeviceFamily:0" "$APP/Info.plist"
-
-          echo "Bundle resource validation passed."
-          ls -lah "$APP" | head -40
+      - name: Upload simulator screenshots and test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Therapie-UI-Verification
+          path: |
+            build/*.xcresult
+            build/screenshots-*
+          if-no-files-found: ignore
+          retention-days: 30
 
       - name: Package IPA
         run: |
           APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" -print -quit)
-          rm -rf Payload Therapie.ipa
+          rm -rf Payload Therapie-v1.2.0.ipa
           mkdir Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Therapie.ipa Payload
-          ls -lh Therapie.ipa
+          /usr/bin/zip -qry Therapie-v1.2.0.ipa Payload
+          ls -lh Therapie-v1.2.0.ipa
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Therapie-IPA
-          path: Therapie.ipa
+          name: Therapie-v1.2.0-IPA
+          path: Therapie-v1.2.0.ipa
           if-no-files-found: error
           retention-days: 30
 
@@ -100,3 +109,4 @@ jobs:
           name: Therapie-build-log
           path: xcodebuild.log
           if-no-files-found: ignore
+

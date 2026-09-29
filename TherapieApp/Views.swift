@@ -6,6 +6,7 @@ import UIKit
 private let therapyContentMaxWidth: CGFloat = 720
 
 struct RootView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @EnvironmentObject private var store: AppStore
 
     var body: some View {
@@ -16,34 +17,37 @@ struct RootView: View {
                 OnboardingView()
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
         .tint(.indigo)
+        .accessibilityIdentifier("therapy.root")
+        .environment(\.dynamicTypeSize, ProcessInfo.processInfo.arguments.contains("--large-text") ? .accessibility2 : dynamicTypeSize)
+        .overlay {
+            if ProcessInfo.processInfo.arguments.contains("--ui-testing") {
+                GeometryReader { geometry in
+                    Text("\(Int(geometry.size.width))x\(Int(geometry.size.height + geometry.safeAreaInsets.top + geometry.safeAreaInsets.bottom))")
+                        .font(.system(size: 1))
+                        .accessibilityIdentifier("therapy.viewport")
+                        .allowsHitTesting(false)
+                }
+            }
+        }
     }
 }
 
 // MARK: - Design system
 
 struct AppBackground: View {
+    @AppStorage("therapy.calmInterface") private var calmInterface = true
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
     var body: some View {
         ZStack {
-            Color(uiColor: .systemBackground)
-
-            LinearGradient(
-                colors: [
-                    Color.indigo.opacity(0.20),
-                    Color.cyan.opacity(0.10),
-                    Color.mint.opacity(0.08),
-                    .clear
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            RadialGradient(
-                colors: [Color.purple.opacity(0.13), .clear],
-                center: .topTrailing,
-                startRadius: 20,
-                endRadius: 380
-            )
+            Color(uiColor: .systemGroupedBackground)
+            if !calmInterface && !reduceTransparency {
+                LinearGradient(colors: [.indigo.opacity(0.12), .cyan.opacity(0.05), .clear],
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+            }
         }
         .ignoresSafeArea()
     }
@@ -65,22 +69,36 @@ struct TherapyScreen<Content: View>: View {
                     .padding(.bottom, 32)
             }
             .scrollDismissesKeyboard(.interactively)
+            .scrollIndicators(.hidden)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
 struct GlassCard<Content: View>: View {
     var emphasized = false
+    @AppStorage("therapy.calmInterface") private var calmInterface = true
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @ViewBuilder var content: Content
 
     var body: some View {
-        content
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .glassEffect(
-                emphasized ? .clear.tint(.indigo.opacity(0.18)) : .regular,
-                in: RoundedRectangle(cornerRadius: 24, style: .continuous)
-            )
+        Group {
+            if calmInterface || reduceTransparency {
+                cardContent
+                    .background(Color(uiColor: .secondarySystemGroupedBackground),
+                                in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .strokeBorder(emphasized ? Color.indigo.opacity(0.24) : Color.primary.opacity(0.06), lineWidth: 1)
+                    }
+            } else {
+                cardContent
+                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            }
+        }
+    }
+    private var cardContent: some View {
+        content.padding(20).frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -205,12 +223,14 @@ struct OnboardingView: View {
 
                             VStack(spacing: 12) {
                                 TextField("Dein Name", text: $userName)
+                                    .accessibilityIdentifier("onboarding.name")
                                     .textContentType(.name)
                                     .textInputAutocapitalization(.words)
                                     .padding(13)
                                     .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
 
                                 TextField("Therapeutin / Therapeut", text: $therapistName)
+                                    .accessibilityIdentifier("onboarding.therapist")
                                     .textInputAutocapitalization(.words)
                                     .padding(13)
                                     .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -249,17 +269,12 @@ struct OnboardingView: View {
 
 struct TherapyLogoMark: View {
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(.thinMaterial)
-                .frame(width: 104, height: 104)
-                .glassEffect(.regular.tint(.indigo.opacity(0.24)), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-
-            Image(systemName: "heart.text.clipboard.fill")
-                .font(.system(size: 47, weight: .semibold))
-                .symbolRenderingMode(.hierarchical)
-        }
-        .accessibilityHidden(true)
+        Image("TherapyMark")
+            .resizable()
+            .scaledToFit()
+            .frame(width: 104, height: 104)
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .accessibilityHidden(true)
     }
 }
 
@@ -296,9 +311,10 @@ struct DashboardView: View {
 
     private var currentTask: WeeklyTask? {
         let week = Date().therapyWeek
-        return store.data.weeklyTasks.first {
+        let tasks = store.data.weeklyTasks.filter {
             $0.weekOfYear == week.week && $0.yearForWeekOfYear == week.year
         }
+        return tasks.first { !$0.completed } ?? tasks.first
     }
 
     private var nextTherapy: Date? {
@@ -311,6 +327,7 @@ struct DashboardView: View {
                 VStack(spacing: 16) {
                     hero
                     quickActions
+                    WeekOverviewCard()
                     weeklyTaskCard
                     latestCard
                 }
@@ -393,7 +410,7 @@ struct DashboardView: View {
                     HStack(spacing: 8) {
                         StatusPill(text: "KW \(Date().therapyWeek.week)", icon: "calendar")
                         StatusPill(
-                            text: currentTask?.completed == true ? "Aufgabe erledigt" : "Aufgabe offen",
+                            text: currentTask == nil ? "Keine Wochenaufgabe" : (currentTask?.completed == true ? "Aufgaben erledigt" : "Aufgabe offen"),
                             icon: currentTask?.completed == true ? "checkmark.circle.fill" : "circle.dashed"
                         )
                     }
@@ -401,7 +418,7 @@ struct DashboardView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         StatusPill(text: "KW \(Date().therapyWeek.week)", icon: "calendar")
                         StatusPill(
-                            text: currentTask?.completed == true ? "Aufgabe erledigt" : "Aufgabe offen",
+                            text: currentTask == nil ? "Keine Wochenaufgabe" : (currentTask?.completed == true ? "Aufgaben erledigt" : "Aufgabe offen"),
                             icon: currentTask?.completed == true ? "checkmark.circle.fill" : "circle.dashed"
                         )
                     }
@@ -430,7 +447,7 @@ struct DashboardView: View {
                 .padding(.horizontal, 2)
 
             LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 96, maximum: 180), spacing: 12)],
+                columns: [GridItem(.adaptive(minimum: 140), spacing: 12)],
                 spacing: 12
             ) {
                 QuickActionButton(title: "Notiz", subtitle: "Gedanken", icon: "square.and.pencil") {
@@ -529,6 +546,7 @@ struct DashboardView: View {
 }
 
 struct QuickActionButton: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let title: String
     let subtitle: String
     let icon: String
@@ -553,8 +571,13 @@ struct QuickActionButton: View {
             .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
             .padding(14)
         }
-        .buttonStyle(.plain)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .buttonStyle(TherapyPressStyle())
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(Color.indigo.opacity(0.14), lineWidth: 1)
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -736,6 +759,7 @@ struct DayCountTile: View {
 // MARK: - Tasks
 
 struct TasksView: View {
+    @State private var onlyOpen = false
     @EnvironmentObject private var store: AppStore
     @State private var showAdd = false
 
@@ -743,6 +767,12 @@ struct TasksView: View {
         NavigationStack {
             TherapyScreen {
                 VStack(spacing: 14) {
+                    Toggle("Nur offene Aufgaben", isOn: $onlyOpen)
+                        .padding(.horizontal, 4)
+                    if onlyOpen && !store.data.weeklyTasks.isEmpty && store.data.weeklyTasks.allSatisfy(\.completed) {
+                        ContentUnavailableView("Alles erledigt", systemImage: "checkmark.seal",
+                                               description: Text("Du hast alle eingetragenen Aufgaben abgeschlossen."))
+                    }
                     if store.data.weeklyTasks.isEmpty {
                         GlassCard {
                             ContentUnavailableView(
@@ -755,7 +785,9 @@ struct TasksView: View {
                         }
                     } else {
                         ForEach($store.data.weeklyTasks) { $task in
-                            taskCard(task: $task)
+                            if !onlyOpen || !task.completed {
+                                taskCard(task: $task)
+                            }
                         }
                     }
                 }
@@ -796,6 +828,7 @@ struct TasksView: View {
                     } label: {
                         Image(systemName: task.wrappedValue.completed ? "checkmark.circle.fill" : "circle")
                             .font(.title3)
+                            .frame(minWidth: 44, minHeight: 44)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(task.wrappedValue.completed ? "Als offen markieren" : "Als erledigt markieren")
@@ -844,6 +877,7 @@ private enum LibrarySection: String, CaseIterable, Identifiable {
 }
 
 struct LibraryView: View {
+    @State private var searchText = ""
     @EnvironmentObject private var store: AppStore
     @State private var section: LibrarySection = .timeline
     @State private var showPhoto = false
@@ -860,7 +894,7 @@ struct LibraryView: View {
                     Group {
                         switch section {
                         case .timeline:
-                            TimelineView()
+                            TimelineView(searchText: searchText)
                         case .media:
                             mediaSection
                         case .notes:
@@ -872,6 +906,7 @@ struct LibraryView: View {
                 }
             }
             .navigationTitle("Therapie-Archiv")
+            .searchable(text: $searchText, prompt: "Notizen, Medien und Rückblicke suchen")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
@@ -950,7 +985,7 @@ struct LibraryView: View {
                 }
             }
 
-            ForEach(store.data.media) { item in
+            ForEach(store.data.media.filter { matches([$0.title, $0.note] + $0.tags) }) { item in
                 GlassCard {
                     HStack(alignment: .top, spacing: 13) {
                         MediaThumbnail(item: item)
@@ -1011,6 +1046,7 @@ struct LibraryView: View {
             }
 
             ForEach($store.data.notes) { $note in
+                if matches([note.title, note.text] + note.tags) {
                 GlassCard {
                     VStack(alignment: .leading, spacing: 9) {
                         TextField("Titel", text: $note.title)
@@ -1026,6 +1062,7 @@ struct LibraryView: View {
                         }
                     }
                 }
+                }
             }
         }
     }
@@ -1040,7 +1077,7 @@ struct LibraryView: View {
                 }
             }
 
-            ForEach(store.data.energyEntries) { entry in
+            ForEach(store.data.energyEntries.filter { matches([$0.note, $0.givesEnergy, $0.takesEnergy, "Energie \($0.level)"]) }) { entry in
                 GlassCard {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
@@ -1067,6 +1104,11 @@ struct LibraryView: View {
                 }
             }
         }
+    }
+
+    private func matches(_ values: [String]) -> Bool {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return query.isEmpty || values.contains { $0.localizedStandardContains(query) }
     }
 
     @ViewBuilder
@@ -1110,6 +1152,7 @@ struct InsightRow: View {
 }
 
 struct TimelineView: View {
+    var searchText = ""
     @EnvironmentObject private var store: AppStore
 
     private struct Row: Identifiable {
@@ -1136,7 +1179,9 @@ struct TimelineView: View {
             Row(id: "r-" + $0.id.uuidString, date: $0.date, title: "Therapie-Rückblick", subtitle: $0.summary, icon: "clock.arrow.circlepath")
         }
 
-        return values.sorted { $0.date > $1.date }
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return values.filter { query.isEmpty || ($0.title + " " + $0.subtitle).localizedStandardContains(query) }
+            .sorted { $0.date > $1.date }
     }
 
     var body: some View {
@@ -1203,6 +1248,7 @@ struct SettingsView: View {
             TherapyScreen {
                 VStack(spacing: 16) {
                     profileCard
+                    AppearanceCard()
                     scheduleCard
                     reminderCard
                     backupCard
@@ -1928,3 +1974,4 @@ private func parseTags(_ raw: String) -> [String] {
         }
         .filter { !$0.isEmpty }
 }
+

@@ -30,62 +30,45 @@ ad.ellipse((830, 760, 2260, 2200), fill=(209, 104, 255, 110))
 ambient = ambient.filter(ImageFilter.GaussianBlur(250))
 base = Image.alpha_composite(base, ambient)
 
-draw = ImageDraw.Draw(base)
-
-# Large central glass plate.
-plate = (250, 250, 1798, 1798)
-draw.rounded_rectangle(
-    plate,
-    radius=430,
-    fill=(255, 255, 255, 34),
-    outline=(255, 255, 255, 95),
-    width=14,
-)
-
-# Soft inner highlight to sell the glass effect.
-highlight = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-hd = ImageDraw.Draw(highlight)
-hd.rounded_rectangle(
-    (292, 292, 1756, 1140),
-    radius=380,
-    fill=(255, 255, 255, 22),
-)
-highlight = highlight.filter(ImageFilter.GaussianBlur(45))
-base = Image.alpha_composite(base, highlight)
-draw = ImageDraw.Draw(base)
-
-# Therapy symbol: an infinity path representing continuity / regulation.
+# Composite translucent layers before converting to RGB; drawing alpha directly
+# into the final surface used to flatten the glass plate into solid white.
+plate = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+d = ImageDraw.Draw(plate)
+d.rounded_rectangle((270, 270, 1778, 1778), radius=390,
+                    fill=(255, 255, 255, 20), outline=(255, 255, 255, 55), width=6)
+base = Image.alpha_composite(base, plate)
+mark_layer = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+d = ImageDraw.Draw(mark_layer)
 points = []
-for i in range(900):
-    t = i / 899 * 2 * math.pi
+for i in range(1200):
+    t = i / 1199 * 2 * math.pi
     denom = 1 + math.sin(t) ** 2
-    x = math.cos(t) / denom
-    y = math.sin(t) * math.cos(t) / denom
-    points.append((S / 2 + x * 535, S / 2 + y * 455))
-
-# Shadow, then crisp white path.
-draw.line(points, fill=(21, 13, 55, 80), width=142, joint="curve")
-draw.line(points, fill=(255, 255, 255, 238), width=112, joint="curve")
-
-# Center heart: connection / care, kept simple for small icon sizes.
-cx, cy = S // 2, S // 2 + 4
-heart = [
-    (cx, cy + 160),
-    (cx - 218, cy - 18),
-    (cx - 204, cy - 194),
-    (cx - 78, cy - 225),
-    (cx, cy - 132),
-    (cx + 78, cy - 225),
-    (cx + 204, cy - 194),
-    (cx + 218, cy - 18),
-]
-draw.polygon(heart, fill=(255, 255, 255, 246))
-
-# Tiny highlight, giving the mark a polished iOS feel.
-draw.ellipse((cx - 82, cy - 150, cx - 28, cy - 96), fill=(255, 255, 255, 190))
+    points.append((S / 2 + math.cos(t) / denom * 580,
+                   S / 2 + math.sin(t) * math.cos(t) / denom * 750))
+# Overlapping opaque discs give the continuous path smooth round joints.
+for x, y in points:
+    radius = 57
+    d.ellipse((x-radius, y-radius, x+radius, y+radius), fill=(255, 255, 255, 255))
+base = Image.alpha_composite(base, mark_layer)
 
 # App Store icons must be opaque. Downsample for high-quality antialiasing.
 final = base.convert("RGB").resize((FINAL, FINAL), Image.Resampling.LANCZOS)
 OUT.parent.mkdir(parents=True, exist_ok=True)
 final.save(OUT, "PNG", optimize=True)
 print(f"Generated {OUT} ({OUT.stat().st_size} bytes)")
+
+
+# Explicit iPhone slots produce loose 2x/3x icons used by SpringBoard.
+import json
+slots = [(20, 2), (20, 3), (29, 2), (29, 3), (40, 2), (40, 3), (60, 2), (60, 3)]
+images = []
+for points, scale in slots:
+    name = f"AppIcon-{points}@{scale}x.png"
+    final.resize((points * scale, points * scale), Image.Resampling.LANCZOS).save(OUT.parent / name)
+    images.append({"idiom": "iphone", "size": f"{points}x{points}", "scale": f"{scale}x", "filename": name})
+images.append({"idiom": "ios-marketing", "size": "1024x1024", "scale": "1x", "filename": "AppIcon.png"})
+(OUT.parent / "Contents.json").write_text(json.dumps({"images": images, "info": {"author": "xcode", "version": 1}}, indent=2) + "\n")
+mark = OUT.parent.parent / "TherapyMark.imageset"
+mark.mkdir(exist_ok=True)
+final.resize((312, 312), Image.Resampling.LANCZOS).save(mark / "TherapyMark.png")
+(mark / "Contents.json").write_text(json.dumps({"images": [{"idiom": "universal", "filename": "TherapyMark.png", "scale": "3x"}], "info": {"author": "xcode", "version": 1}}, indent=2) + "\n")
