@@ -6,8 +6,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    CURRENT_PROJECT_VERSION: 4
-    MARKETING_VERSION: 3000.0.0
+    CURRENT_PROJECT_VERSION: 5
+    MARKETING_VERSION: 3001.0.0
 targets:
   TherapieApp:
     type: application
@@ -15,6 +15,10 @@ targets:
     deploymentTarget: "26.1"
     sources:
       - path: TherapieApp
+      - path: Shared
+    dependencies:
+      - target: TherapieLiveActivity
+        embed: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: eu.rjuhas.therapie
@@ -28,6 +32,21 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
         ENABLE_USER_SCRIPT_SANDBOXING: YES
+  TherapieLiveActivity:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "26.1"
+    sources:
+      - path: TherapieLiveActivity
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: eu.rjuhas.therapie.liveactivity
+        INFOPLIST_FILE: TherapieLiveActivity/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "1"
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES
   TherapieUITests:
     type: bundle.ui-testing
     platform: iOS

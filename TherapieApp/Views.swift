@@ -6,6 +6,9 @@ import UIKit
 private let therapyContentMaxWidth: CGFloat = 720
 
 struct RootView: View {
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var openSession = false
     @AppStorage("therapy.permissions3000") private var permissionSetupDone = false
     @State private var showPermissions = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -26,6 +29,22 @@ struct RootView: View {
         .tint(.indigo)
         .accessibilityIdentifier("therapy.root")
         .sheet(isPresented: $showPermissions) { PermissionSetupView() }
+        .sheet(isPresented: $openSession) {
+            NavigationStack {
+                SessionConductorView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fertig") { openSession = false } } }
+            }
+        }
+        .onOpenURL { url in if url.scheme == "therapie" && url.host == "session" { openSession = true } }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { store.sessionController.synchronize() } }
+        .task {
+            store.sessionController.synchronize()
+            while !Task.isCancelled {
+                store.sessionController.reconcile()
+                do { try await Task.sleep(for: .seconds(1)) } catch { break }
+            }
+        }
+        .overlay { TherapyCelebrationOverlay() }
+        .transaction { if reduceMotion { $0.animation = nil } }
         .task {
             if !permissionSetupDone && !ProcessInfo.processInfo.arguments.contains("--ui-testing") {
                 showPermissions = true
@@ -334,8 +353,8 @@ struct MainTabView: View {
                 .tabItem { Label("Stimmung", systemImage: "face.smiling") }
                 .tag(1)
 
-            TherapyCalendarView()
-                .tabItem { Label("Kalender", systemImage: "calendar") }
+            TherapyHubView()
+                .tabItem { Label("Therapie", systemImage: "leaf") }
                 .tag(2)
 
             LibraryView()
@@ -376,6 +395,7 @@ struct DashboardView: View {
                     hero
                     quickActions
                     WellnessProgressCard()
+                    TherapyTodayCard()
                     WeekOverviewCard()
                     weeklyTaskCard
                     latestCard
@@ -539,8 +559,7 @@ struct DashboardView: View {
 
                     Button {
                         guard let index = store.data.weeklyTasks.firstIndex(where: { $0.id == task.id }) else { return }
-                        store.data.weeklyTasks[index].completed.toggle()
-                        store.data.weeklyTasks[index].completedAt = store.data.weeklyTasks[index].completed ? Date() : nil
+                        store.toggleTask(store.data.weeklyTasks[index].id)
                     } label: {
                         Label(
                             task.completed ? "Wieder öffnen" : "Als erledigt markieren",
@@ -827,6 +846,7 @@ struct DayCountTile: View {
 // MARK: - Tasks
 
 struct TasksView: View {
+    @State private var taskDraft: WeeklyTask?
     @State private var taskToDelete: UUID?
     @State private var confirmDelete = false
     @State private var onlyOpen = false
@@ -877,6 +897,7 @@ struct TasksView: View {
                 AddTaskView()
                     .presentationDetents([.medium, .large])
             }
+            .sheet(item: $taskDraft) { WeeklyTaskEditorView(task: $0) }
             .alert("Wochenaufgabe löschen?", isPresented: $confirmDelete) {
                 Button("Abbrechen", role: .cancel) {}
                 Button("Löschen", role: .destructive) { store.data.weeklyTasks.removeAll { $0.id == taskToDelete } }
@@ -897,8 +918,7 @@ struct TasksView: View {
                     Spacer(minLength: 4)
 
                     Button {
-                        task.wrappedValue.completed.toggle()
-                        task.wrappedValue.completedAt = task.wrappedValue.completed ? Date() : nil
+                        store.toggleTask(task.wrappedValue.id)
                     } label: {
                         Image(systemName: task.wrappedValue.completed ? "checkmark.circle.fill" : "circle")
                             .font(.title3)
@@ -908,6 +928,8 @@ struct TasksView: View {
                     .accessibilityLabel(task.wrappedValue.completed ? "Als offen markieren" : "Als erledigt markieren")
 
                     Menu {
+                        Button("Aufgabe bearbeiten", systemImage: "pencil") { taskDraft = task.wrappedValue }
+                        Button(task.wrappedValue.completed ? "Wieder aufnehmen" : "Als erledigt markieren", systemImage: "checkmark.circle") { store.toggleTask(task.wrappedValue.id) }
                         Button(role: .destructive) {
                             taskToDelete = task.wrappedValue.id
                             confirmDelete = true
@@ -1246,91 +1268,7 @@ struct InsightRow: View {
 
 struct TimelineView: View {
     var searchText = ""
-    @EnvironmentObject private var store: AppStore
-
-    private struct Row: Identifiable {
-        let id: String
-        let date: Date
-        let title: String
-        let subtitle: String
-        let icon: String
-    }
-
-    private var rows: [Row] {
-        var values: [Row] = []
-
-        values += store.data.notes.map {
-            Row(id: "n-" + $0.id.uuidString, date: $0.createdAt, title: $0.title, subtitle: $0.text, icon: "note.text")
-        }
-        values += store.data.media.map {
-            Row(id: "m-" + $0.id.uuidString, date: $0.createdAt, title: $0.title, subtitle: $0.kind.displayName, icon: $0.kind.symbol)
-        }
-        values += store.data.energyEntries.map {
-            Row(id: "e-" + $0.id.uuidString, date: $0.createdAt, title: "Energie-Check \($0.level)/5", subtitle: $0.note, icon: "bolt.heart.fill")
-        }
-        values += store.data.reflections.map {
-            Row(id: "r-" + $0.id.uuidString, date: $0.date, title: "Therapie-Rückblick", subtitle: $0.summary, icon: "clock.arrow.circlepath")
-        }
-        values += store.data.moodCheckIns.map {
-            Row(id: "c-" + $0.id.uuidString, date: $0.date, title: "\($0.moodTitle) · Akku \($0.battery)/5", subtitle: ([$0.note, $0.smallWin, $0.nextNeed] + $0.emotions).joined(separator: " · "), icon: "face.smiling")
-        }
-        values += store.data.batteryPoints.map {
-            Row(id: "p-" + $0.id.uuidString, date: $0.date, title: $0.title, subtitle: "\($0.direction.title) · \($0.category.title) · \($0.note)", icon: $0.direction.symbol)
-        }
-        values += store.data.weekReviews.map {
-            Row(id: "w-" + $0.id.uuidString, date: $0.weekStart, title: "Wochenrückblick KW \($0.weekStart.therapyWeek.week)", subtitle: [$0.summary, $0.therapyQuestion, $0.nextStep].joined(separator: " · "), icon: "calendar.badge.checkmark")
-        }
-
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        return values.filter { query.isEmpty || ($0.title + " " + $0.subtitle).localizedStandardContains(query) }
-            .sorted { $0.date > $1.date }
-    }
-
-    var body: some View {
-        LazyVStack(spacing: 12) {
-            if rows.isEmpty {
-                GlassCard {
-                    ContentUnavailableView(
-                        "Deine Timeline ist noch leer",
-                        systemImage: "clock.arrow.circlepath",
-                        description: Text("Notizen, Medien, Energie-Checks und Rückblicke erscheinen hier automatisch.")
-                    )
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 26)
-                }
-            }
-
-            ForEach(rows) { row in
-                GlassCard {
-                    HStack(alignment: .top, spacing: 12) {
-                        Image(systemName: row.icon)
-                            .font(.headline)
-                            .frame(width: 40, height: 40)
-                            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(row.title)
-                                .font(.headline)
-                                .fixedSize(horizontal: false, vertical: true)
-
-                            if !row.subtitle.isEmpty {
-                                Text(row.subtitle)
-                                    .font(.subheadline)
-                                    .lineLimit(4)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Text(row.date.formatted(date: .abbreviated, time: .shortened))
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                        }
-
-                        Spacer(minLength: 0)
-                    }
-                }
-            }
-        }
-    }
+    var body: some View { TherapyEditableTimeline(searchText: searchText) }
 }
 
 // MARK: - Settings
@@ -1406,6 +1344,7 @@ struct SettingsView: View {
                     guard deletePhrase == deleteConfirmation else { return }
                     CalendarSyncService.shared.removeSyncedEvent(identifier: store.data.schedule.calendarEventIdentifier)
                     AlarmService.shared.cancelAllOwnedAlarms()
+                    TherapySessionController.endAll()
                     WeeklyReminderService.cancel()
                     BackupService.shared.clearFolder()
                     store.resetAllData()
@@ -1668,74 +1607,11 @@ struct SettingsView: View {
 // MARK: - Add / edit sheets
 
 struct AddTaskView: View {
-    @EnvironmentObject private var store: AppStore
-    @Environment(\.dismiss) private var dismiss
-    @State private var title = ""
-    @State private var details = ""
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Aufgabe") {
-                    TextField("Wochenaufgabe", text: $title)
-                    TextField("Beschreibung", text: $details, axis: .vertical)
-                        .lineLimit(3...8)
-                }
-            }
-            .navigationTitle("Neue Aufgabe")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Abbrechen") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Speichern") {
-                        store.addWeeklyTask(title: title, details: details)
-                        dismiss()
-                    }
-                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
-        }
-    }
+    var body: some View { WeeklyTaskEditorView() }
 }
 
 struct AddNoteView: View {
-    @EnvironmentObject private var store: AppStore
-    @Environment(\.dismiss) private var dismiss
-    @State private var title = ""
-    @State private var text = ""
-    @State private var tags = ""
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Notiz") {
-                    TextField("Titel", text: $title)
-                    TextField("Notiz", text: $text, axis: .vertical)
-                        .lineLimit(5...12)
-                }
-                Section("Tags") {
-                    TextField("z. B. Energie, Arbeit, Therapie", text: $tags)
-                }
-            }
-            .navigationTitle("Neue Notiz")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Abbrechen") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Speichern") {
-                        store.addNote(
-                            title: title.isEmpty ? "Notiz" : title,
-                            text: text,
-                            tags: parseTags(tags)
-                        )
-                        dismiss()
-                    }
-                }
-            }
-        }
-    }
+    var body: some View { TherapyNoteEditorView() }
 }
 
 struct AddEnergyView: View {
@@ -1782,42 +1658,7 @@ struct AddEnergyView: View {
 }
 
 struct AddReflectionView: View {
-    @EnvironmentObject private var store: AppStore
-    @Environment(\.dismiss) private var dismiss
-    @State private var summary = ""
-    @State private var helped = ""
-    @State private var nextFocus = ""
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Was haben wir gemacht?") {
-                    TextField("Zusammenfassung", text: $summary, axis: .vertical)
-                        .lineLimit(3...8)
-                }
-                Section("Was hat geholfen?") {
-                    TextField("Hilfreiches festhalten", text: $helped, axis: .vertical)
-                        .lineLimit(3...8)
-                }
-                Section("Bis zur nächsten Therapie") {
-                    TextField("Fokus / nächster Schritt", text: $nextFocus, axis: .vertical)
-                        .lineLimit(3...8)
-                }
-            }
-            .navigationTitle("Therapie-Rückblick")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Abbrechen") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Speichern") {
-                        store.addReflection(summary: summary, helped: helped, nextFocus: nextFocus)
-                        dismiss()
-                    }
-                }
-            }
-        }
-    }
+    var body: some View { TherapyReflectionEditorView() }
 }
 
 struct AddPhotoView: View {

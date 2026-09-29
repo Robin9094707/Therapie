@@ -35,6 +35,8 @@ struct WeeklyTask: Identifiable, Codable, Equatable {
     var details: String
     var completed = false
     var completedAt: Date?
+    var topicID: UUID?
+    var goalID: UUID?
 }
 
 struct TherapyNote: Identifiable, Codable, Equatable {
@@ -43,6 +45,12 @@ struct TherapyNote: Identifiable, Codable, Equatable {
     var title: String
     var text: String
     var tags: [String]
+    var folderID: UUID?
+    var topicID: UUID?
+    var sessionID: UUID?
+    var category: String?
+    var author: String?
+    var isImportant: Bool?
 }
 
 struct EnergyEntry: Identifiable, Codable, Equatable {
@@ -87,6 +95,10 @@ struct MediaItem: Identifiable, Codable, Equatable {
     var latitude: Double?
     var longitude: Double?
     var duration: TimeInterval?
+    var folderID: UUID?
+    var topicID: UUID?
+    var category: String?
+    var source: String?
 }
 
 struct TherapySessionReflection: Identifiable, Codable, Equatable {
@@ -98,7 +110,7 @@ struct TherapySessionReflection: Identifiable, Codable, Equatable {
 }
 
 struct AppData: Codable, Equatable {
-    var schemaVersion = 3
+    var schemaVersion = 4
     var profile = UserProfile()
     var schedule = TherapySchedule()
     var preferences = AppPreferences()
@@ -111,22 +123,30 @@ struct AppData: Codable, Equatable {
     var batteryPoints: [BatteryPoint] = []
     var weekReviews: [WeekReview] = []
     var wellnessSettings = WellnessSettings()
+    var therapyFolders: [TherapyFolder] = []
+    var therapyTopics: [TherapyTopic] = []
+    var therapyGoals: [TherapyGoal] = []
+    var sessionTemplates = [TherapySessionTemplate()]
+    var currentSession: RunningTherapySession?
+    var sessionHistory: [RunningTherapySession] = []
+    var sessionPreferences = SessionPreferences()
 
     init() {}
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion, profile, schedule, preferences, weeklyTasks, notes, energyEntries, media, reflections
         case moodCheckIns, batteryPoints, weekReviews, wellnessSettings
+        case therapyFolders, therapyTopics, therapyGoals, sessionTemplates, currentSession, sessionHistory, sessionPreferences
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let version = try c.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
-        guard (1...3).contains(version) else {
+        guard (1...4).contains(version) else {
             throw DecodingError.dataCorruptedError(forKey: .schemaVersion, in: c,
                                                    debugDescription: "Diese Daten benötigen eine neuere App-Version.")
         }
-        schemaVersion = 3
+        schemaVersion = 4
         profile = try c.decode(UserProfile.self, forKey: .profile)
         schedule = try c.decodeIfPresent(TherapySchedule.self, forKey: .schedule) ?? TherapySchedule()
         preferences = try c.decodeIfPresent(AppPreferences.self, forKey: .preferences) ?? AppPreferences()
@@ -139,6 +159,13 @@ struct AppData: Codable, Equatable {
         batteryPoints = try c.decodeIfPresent([BatteryPoint].self, forKey: .batteryPoints) ?? []
         weekReviews = try c.decodeIfPresent([WeekReview].self, forKey: .weekReviews) ?? []
         wellnessSettings = try c.decodeIfPresent(WellnessSettings.self, forKey: .wellnessSettings) ?? WellnessSettings()
+        therapyFolders = try c.decodeIfPresent([TherapyFolder].self, forKey: .therapyFolders) ?? []
+        therapyTopics = try c.decodeIfPresent([TherapyTopic].self, forKey: .therapyTopics) ?? []
+        therapyGoals = try c.decodeIfPresent([TherapyGoal].self, forKey: .therapyGoals) ?? []
+        sessionTemplates = try c.decodeIfPresent([TherapySessionTemplate].self, forKey: .sessionTemplates) ?? [TherapySessionTemplate()]
+        currentSession = try c.decodeIfPresent(RunningTherapySession.self, forKey: .currentSession)
+        sessionHistory = try c.decodeIfPresent([RunningTherapySession].self, forKey: .sessionHistory) ?? []
+        sessionPreferences = try c.decodeIfPresent(SessionPreferences.self, forKey: .sessionPreferences) ?? SessionPreferences()
     }
 }
 

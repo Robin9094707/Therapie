@@ -20,6 +20,8 @@ enum TherapyAppearance: String, CaseIterable, Identifiable {
 }
 
 struct AppearanceCard: View {
+    @AppStorage("therapy.haptics") private var haptics = true
+    @AppStorage("therapy.confetti") private var confetti = true
     @AppStorage("therapy.appearance") private var appearance = TherapyAppearance.system.rawValue
     @AppStorage("therapy.calmInterface") private var calmInterface = true
 
@@ -35,6 +37,9 @@ struct AppearanceCard: View {
                 }
                 .pickerStyle(.menu)
                 Toggle("Ruhige Oberfläche", isOn: $calmInterface)
+                Toggle("Feine Haptik", isOn: $haptics)
+                Toggle("Konfetti bei erledigten Aufgaben", isOn: $confetti)
+                Text("Bei reduzierter Bewegung erscheint eine ruhige Bestätigung statt Konfetti.").font(.caption).foregroundStyle(.secondary)
                 Text("Weniger Transparenz und Farbverläufe. Die Schriftgröße folgt deinen iPhone-Einstellungen.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)

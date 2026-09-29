@@ -7,6 +7,7 @@ final class AppStore: ObservableObject {
         didSet {
             guard !isLoading else { return }
             save()
+            if lastSaveError == nil { TherapyEffects.shared.changed(from: oldValue, to: data) }
         }
     }
 
@@ -15,6 +16,7 @@ final class AppStore: ObservableObject {
     private var writeBlocked = false
 
     private var isLoading = true
+    lazy var sessionController = TherapySessionController(store: self)
     private var backupWorkItem: DispatchWorkItem?
 
     let rootURL: URL
@@ -44,8 +46,8 @@ final class AppStore: ObservableObject {
                 decoder.dateDecodingStrategy = .iso8601
                 data = try decoder.decode(AppData.self, from: raw)
                 let version = (try JSONSerialization.jsonObject(with: raw) as? [String: Any])?["schemaVersion"] as? Int ?? 1
-                let snapshot = root.appendingPathComponent("therapy-data.pre-3000.json")
-                if version < 3 && !fm.fileExists(atPath: snapshot.path) {
+                let snapshot = root.appendingPathComponent("therapy-data.pre-3001.json")
+                if version < 4 && !fm.fileExists(atPath: snapshot.path) {
                     try raw.write(to: snapshot, options: [.atomic, .completeFileProtection])
                 }
             } catch {
@@ -186,6 +188,59 @@ final class AppStore: ObservableObject {
         var snapshot = data
         snapshot.moodCheckIns.removeAll { $0.id == entry.id }
         snapshot.batteryPoints.removeAll { $0.checkInID == entry.id }
+        data = snapshot
+    }
+
+    func toggleTask(_ id: UUID) {
+        guard let i = data.weeklyTasks.firstIndex(where: { $0.id == id }) else { return }
+        var snapshot = data
+        snapshot.weeklyTasks[i].toggleCompletion()
+        data = snapshot
+        if !snapshot.weeklyTasks[i].completed { TherapyEffects.shared.light() }
+    }
+
+    func saveFolder(_ folder: TherapyFolder) {
+        guard !folder.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let descendants = TherapyHierarchy.descendants(of: folder.id, folders: data.therapyFolders)
+        guard folder.parentID != folder.id, folder.parentID.map({ !descendants.contains($0) }) ?? true else { return }
+        var snapshot = data
+        snapshot.therapyFolders.removeAll { $0.id == folder.id }
+        snapshot.therapyFolders.append(folder)
+        data = snapshot
+    }
+    func saveTopic(_ topic: TherapyTopic) {
+        var clean = topic
+        clean.priority = max(1, min(3, clean.priority))
+        if clean.status == .completed { clean.isCurrent = false }
+        var snapshot = data
+        snapshot.therapyTopics.removeAll { $0.id == clean.id }
+        snapshot.therapyTopics.insert(clean, at: 0)
+        data = snapshot
+    }
+    func saveGoal(_ goal: TherapyGoal) {
+        var clean = goal
+        clean.progress = max(0, min(100, clean.progress))
+        if clean.status == .completed { clean.progress = 100 }
+        var snapshot = data
+        snapshot.therapyGoals.removeAll { $0.id == clean.id }
+        snapshot.therapyGoals.insert(clean, at: 0)
+        data = snapshot
+    }
+    func saveNote(_ note: TherapyNote) {
+        var snapshot = data
+        snapshot.notes.removeAll { $0.id == note.id }
+        snapshot.notes.insert(note, at: 0)
+        data = snapshot
+    }
+    func saveMediaDetails(_ item: MediaItem) {
+        guard let i = data.media.firstIndex(where: { $0.id == item.id }) else { return }
+        data.media[i] = item
+    }
+    func saveSessionTemplate(_ template: TherapySessionTemplate) {
+        guard template.isValid else { return }
+        var snapshot = data
+        snapshot.sessionTemplates.removeAll { $0.id == template.id }
+        snapshot.sessionTemplates.append(template)
         data = snapshot
     }
 
