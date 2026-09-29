@@ -18,6 +18,21 @@ Therapiedaten bleiben standardmäßig auf dem Gerät. Kalender-, Standort- und A
 ## Build
 GitHub Actions erzeugt eine unsignierte IPA, die anschließend mit einem eigenen Sideloading-/Signing-Werkzeug signiert/installiert werden kann.
 
+## Update 3000.0.0
+
+- Eigener Stimmungsbereich mit kurzen und ausführlichen Check-ins: Stimmung, Akku, mehrere Gefühle, freiwilliger Stress, Reizbelastung, Schlaf, kleine Erfolge und nächster Bedarf.
+- Beliebig viele einzelne Akku-Geber und -Nehmer, jeweils mit Datum, Kategorie, Wirkung und Notiz. Auch die letzte Woche lässt sich nachtragen.
+- Interaktive Swift-Charts-Diagramme für 7, 30, 90 Tage, die letzte Kalenderwoche oder alle Einträge. Tagesmittelwerte, echte Lücken, Akku-Auswertung nach Kategorien und zugängliche Wertelisten.
+- Wochen-Serie mit mindestens einem Eintrag pro Woche, längste Serie und freiwilliges Ziel von 1 bis 7 Check-in-Tagen. Eine noch offene aktuelle Woche beendet die bisherige Serie nicht.
+- Wochenrückblicke mit hilfreichen und schwierigen Momenten, Erfolg, nächstem Schritt und Therapiefrage; vorhandene Akku-Punkte direkt im Rückblick ansehen.
+- Bearbeiten, Favoriten, Suche, Richtungsfilter, Einbindung in Kalender und Timeline sowie CSV-Export für den gewählten Zeitraum.
+- Freiwillige wöchentliche Erinnerung mit anpassbarem Tag und Uhrzeit, ohne sensible Inhalte auf dem Sperrbildschirm.
+- Einmalige, automatische Einrichtung der benötigten Systemfreigaben beim Öffnen; nach Ablehnung bleibt der lokale Check-in nutzbar. Kein pauschaler Fotomediathek-Zugriff.
+- Bestätigung vor dem Löschen von Aufgaben, Notizen, Medien, Check-ins, Akku-Punkten und Wochenrückblicken; Schutz vor dem Verwerfen ungespeicherter Änderungen.
+- Bestehende Daten bleiben beim Upgrade erhalten. Vor der ersten neuen Speicherung wird `therapy-data.pre-3000.json` angelegt. Unlesbare oder neuere Daten werden vor automatischem Überschreiben geschützt.
+
+CI prüft Migration, Jahres- und Sommerzeitgrenzen der Wochen-Serie, Diagramm-Aggregation und CSV-Sicherheit mit einem eigenständigen Swift-Testprogramm. Danach wird die iPhone-App gebaut und ihr tatsächlich kompiliertes Bundle auf Vollbild-Konfiguration, Version, Icons und Berechtigungsbeschreibungen geprüft. Die Simulatorprüfung ist wegen wiederholter Boot-Probleme der gehosteten Runner optional über `workflow_dispatch` aktivierbar; ein grüner Standard-Build behauptet deshalb keine ausgeführte UI-Prüfung.
+
 
 ## Version 1.2.0
 - Native iPhone launch storyboard and explicit SwiftUI scene configuration.

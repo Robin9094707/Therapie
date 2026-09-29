@@ -16,6 +16,6 @@ assert primary["CFBundleIconName"] == "AppIcon"
 assert primary.get("CFBundleIconFiles"), "SpringBoard icon registration missing"
 for suffix in ("@2x.png", "@3x.png"):
     assert (app / ("AppIcon60x60" + suffix)).is_file(), f"Home-screen icon {suffix} missing"
-for key in ("NSAlarmKitUsageDescription", "NSCalendarsFullAccessUsageDescription"):
+for key in ("NSAlarmKitUsageDescription", "NSCalendarsFullAccessUsageDescription", "NSLocationWhenInUseUsageDescription", "NSMicrophoneUsageDescription"):
     assert info.get(key), f"Permission description {key} missing"
 print("Verified native iPhone target, compiled launch screen, scenes, 2x/3x icons and permissions.")

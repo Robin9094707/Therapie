@@ -59,6 +59,9 @@ struct WeekOverviewCard: View {
         store.data.energyEntries.filter { $0.createdAt.isSameTherapyDay(as: Date()) }
             .max { $0.createdAt < $1.createdAt }
     }
+    private var latestMood: MoodCheckIn? {
+        store.data.moodCheckIns.filter { $0.date.isSameTherapyDay(as: Date()) }.max { $0.date < $1.date }
+    }
 
     var body: some View {
         GlassCard {
@@ -86,8 +89,12 @@ struct WeekOverviewCard: View {
                         .font(.title2)
                         .foregroundStyle(.indigo)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Energie heute").font(.subheadline.weight(.semibold))
-                        if let entry = latestEnergy {
+                        Text("Stimmung & Akku heute").font(.subheadline.weight(.semibold))
+                        if let entry = latestMood {
+                            Text("\(entry.face) \(entry.moodTitle) · Akku \(entry.battery)/5")
+                            Text(entry.date.formatted(date: .omitted, time: .shortened)).font(.caption).foregroundStyle(.secondary)
+                            if !entry.nextNeed.isEmpty { Text("Jetzt brauche ich: " + entry.nextNeed).font(.footnote).foregroundStyle(.secondary) }
+                        } else if let entry = latestEnergy {
                             Text("\(entry.level) von 5 · " + entry.createdAt.formatted(date: .omitted, time: .shortened))
                                 .foregroundStyle(.secondary)
                             if !entry.givesEnergy.isEmpty {
@@ -96,7 +103,7 @@ struct WeekOverviewCard: View {
                                     .foregroundStyle(.secondary)
                             }
                         } else {
-                            Text("Über den Energie-Check kannst du kurz festhalten, wie es dir geht.")
+                            Text("Über den Stimmungs-Check-in kannst du kurz festhalten, wie es dir geht.")
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         }

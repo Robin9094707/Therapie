@@ -89,10 +89,11 @@ final class AppStore: ObservableObject {
     }
 
     private func scheduleAutomaticBackup(snapshot: AppData) {
+        backupWorkItem?.cancel()
+        backupWorkItem = nil
         guard data.preferences.autoBackupToSelectedFolder,
               BackupService.shared.hasSelectedFolder else { return }
 
-        backupWorkItem?.cancel()
         let root = rootURL
         let work = DispatchWorkItem {
             try? BackupService.shared.backup(snapshot: snapshot, appRoot: root)
@@ -102,10 +103,13 @@ final class AppStore: ObservableObject {
     }
 
     func backupNow() throws {
+        guard !writeBlocked else { throw ServiceError.generic("Solange vorhandene Daten nicht sicher geladen sind, wird kein Backup überschrieben. Bitte verwende Wiederherstellen.") }
         try BackupService.shared.backup(snapshot: data, appRoot: rootURL)
     }
 
     func restoreFromBackup() throws {
+        backupWorkItem?.cancel()
+        backupWorkItem = nil
         let restored = try BackupService.shared.restore(appRoot: rootURL)
         isLoading = true
         data = restored

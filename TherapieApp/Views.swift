@@ -658,6 +658,12 @@ struct TherapyCalendarView: View {
     private var dayEnergy: [EnergyEntry] {
         store.data.energyEntries.filter { $0.createdAt.isSameTherapyDay(as: selectedDate) }
     }
+    private var dayMoods: [MoodCheckIn] {
+        store.data.moodCheckIns.filter { $0.date.isSameTherapyDay(as: selectedDate) }
+    }
+    private var dayPoints: [BatteryPoint] {
+        store.data.batteryPoints.filter { $0.date.isSameTherapyDay(as: selectedDate) }
+    }
 
     var body: some View {
         NavigationStack {
@@ -709,7 +715,7 @@ struct TherapyCalendarView: View {
                     .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
 
-                if dayNotes.isEmpty && dayMedia.isEmpty && dayEnergy.isEmpty && !therapyWeekdayMatch {
+                if dayNotes.isEmpty && dayMedia.isEmpty && dayEnergy.isEmpty && dayMoods.isEmpty && dayPoints.isEmpty && !therapyWeekdayMatch {
                     Text("Für diesen Tag gibt es noch keine Einträge.")
                         .foregroundStyle(.secondary)
                 } else {
@@ -726,7 +732,15 @@ struct TherapyCalendarView: View {
                         if !dayEnergy.isEmpty {
                             DayCountTile(title: "Energie", count: dayEnergy.count, icon: "bolt.fill")
                         }
+                        if !dayMoods.isEmpty { DayCountTile(title: "Check-ins", count: dayMoods.count, icon: "face.smiling") }
+                        if !dayPoints.isEmpty { DayCountTile(title: "Akku-Punkte", count: dayPoints.count, icon: "battery.100percent") }
                     }
+                }
+                ForEach(dayMoods.sorted { $0.date > $1.date }) { entry in
+                    Text("\(entry.face) \(entry.moodTitle) · Akku \(entry.battery)/5").font(.subheadline)
+                }
+                ForEach(dayPoints.sorted { $0.date > $1.date }) { point in
+                    Label(point.title, systemImage: point.direction.symbol).font(.subheadline).foregroundStyle(point.direction == .gives ? .teal : .orange)
                 }
             }
         }
@@ -1360,8 +1374,12 @@ struct SettingsView: View {
                     let urls = try result.get()
                     guard let url = urls.first else { return }
                     try BackupService.shared.selectFolder(url)
-                    try store.backupNow()
-                    statusMessage = "Backup-Ordner verbunden und erste Sicherung erstellt."
+                    if store.loadError == nil {
+                        try store.backupNow()
+                        statusMessage = "Backup-Ordner verbunden und erste Sicherung erstellt."
+                    } else {
+                        statusMessage = "Backup-Ordner verbunden. Bitte stelle deine Daten mit Wiederherstellen wieder her; das vorhandene Backup wurde nicht überschrieben."
+                    }
                 } catch {
                     statusMessage = error.localizedDescription
                 }

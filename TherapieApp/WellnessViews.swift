@@ -325,6 +325,15 @@ struct WellnessChartsView: View {
     @State private var selectedDate: Date?
     private var daily: [DailyWellnessValue] { WellnessAnalytics.daily(store.data, period: period) }
     private var points: [BatteryPoint] { store.data.batteryPoints.filter { period.contains($0.date) } }
+    private var chartDays: [DailyWellnessValue] {
+        var previous: Date?
+        var segment = 0
+        return daily.filter { metric.value($0) != nil }.map { day in
+            if let previous, Calendar.therapyCalendar.dateComponents([.day], from: previous, to: day.date).day != 1 { segment += 1 }
+            previous = day.date
+            return DailyWellnessValue(date: day.date, mood: day.mood, battery: day.battery, stress: day.stress, sensory: day.sensory, count: day.count, segment: segment)
+        }
+    }
     private var selected: DailyWellnessValue? {
         guard let selectedDate else { return nil }
         return daily.filter { metric.value($0) != nil }.min { abs($0.date.timeIntervalSince(selectedDate)) < abs($1.date.timeIntervalSince(selectedDate)) }
@@ -383,7 +392,7 @@ struct WellnessChartsView: View {
     }
     private var trendChart: some View {
         Chart {
-            ForEach(daily) { day in
+            ForEach(chartDays) { day in
                 if let value = metric.value(day) {
                     LineMark(x: .value("Tag", day.date), y: .value(metric.rawValue, value), series: .value("Abschnitt", day.segment))
                         .foregroundStyle(metric.color).interpolationMethod(.linear)
@@ -490,6 +499,7 @@ struct MoodEditorView: View {
                 }
             }
             .interactiveDismissDisabled(dirty)
+            .safeAreaInset(edge: .bottom) { WellnessSaveErrorView() }
             .sheet(item: $pointDraft) { point in
                 BatteryPointEditorView(point: point, showDate: false) { saved in
                     points.removeAll { $0.id == saved.id }; points.append(saved); return true
@@ -565,6 +575,7 @@ struct BatteryPointEditorView: View {
                 }
             }
             .interactiveDismissDisabled(point != initial)
+            .safeAreaInset(edge: .bottom) { WellnessSaveErrorView() }
             .alert("Änderungen verwerfen?", isPresented: $discard) {
                 Button("Weiter bearbeiten", role: .cancel) {}
                 Button("Verwerfen", role: .destructive) { dismiss() }
@@ -625,6 +636,7 @@ struct WeekReviewEditorView: View {
                 }
             }
             .interactiveDismissDisabled(review != initial)
+            .safeAreaInset(edge: .bottom) { WellnessSaveErrorView() }
             .alert("Änderungen verwerfen?", isPresented: $discard) {
                 Button("Weiter bearbeiten", role: .cancel) {}
                 Button("Verwerfen", role: .destructive) { dismiss() }
@@ -694,4 +706,14 @@ struct WellnessShareView: UIViewControllerRepresentable {
         UIActivityViewController(activityItems: [url], applicationActivities: nil)
     }
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+struct WellnessSaveErrorView: View {
+    @EnvironmentObject private var store: AppStore
+    var body: some View {
+        if let error = store.lastSaveError {
+            Label("Speichern nicht möglich: " + error, systemImage: "exclamationmark.triangle")
+                .font(.caption).padding().frame(maxWidth: .infinity, alignment: .leading).background(Color.orange.opacity(0.18))
+        }
+    }
 }
