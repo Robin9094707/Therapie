@@ -51,7 +51,7 @@ struct TherapyCelebrationOverlay: View {
         ZStack(alignment: .top) {
             if let began {
                 if confetti && !reduceMotion {
-                    TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
+                    SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
                         Canvas { drawing, size in
                             let t = context.date.timeIntervalSince(began)
                             for i in 0..<42 {

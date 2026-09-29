@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 private let phaseColors: [Color] = [.indigo, .teal, .orange, .purple, .blue, .pink, .mint, .brown]
 
@@ -24,7 +25,7 @@ struct SessionConductorContent: View {
         TherapyScreen {
             VStack(spacing: 16) {
                 if let session = store.data.currentSession {
-                    TimelineView(.periodic(from: .now, by: 1)) { context in activeCard(session, now: context.date) }
+                    SwiftUI.TimelineView(.periodic(from: .now, by: 1)) { context in activeCard(session, now: context.date) }
                     GlassCard {
                         VStack(alignment: .leading, spacing: 10) {
                             Label("Während der Stunde", systemImage: "square.and.pencil").font(.headline)
@@ -202,9 +203,9 @@ struct SessionClockFace: View {
             Circle().fill(Color(uiColor: .secondarySystemGroupedBackground)).frame(width: 174, height: 174)
             VStack(spacing: 4) {
                 Text(session.pausedAt == nil ? "Restzeit" : "Pausiert").font(.caption).foregroundStyle(.secondary)
-                Text(Self.format(session.remaining(at: now))).font(.system(.title, design: .rounded, weight: .bold)).monospacedDigit()
+                Text(Self.format(session.remaining(at: now))).font(.system(.title, design: .rounded, weight: .bold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
                 Text("\(Int(progress * 100)) % vergangen").font(.caption).foregroundStyle(.secondary)
-            }
+            }.frame(maxWidth: 160)
         }.aspectRatio(1, contentMode: .fit)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Therapiezeit, \(Int(ceil(session.remaining(at: now) / 60))) Minuten verbleibend, \(Int(progress * 100)) Prozent vergangen")
@@ -296,6 +297,7 @@ struct SessionPreferencesView: View {
             }
             Button("Einstellungen für laufende Stunde übernehmen") { controller.synchronize() }.disabled(controller.busy)
             if !controller.liveStatus.isEmpty { Text(controller.liveStatus).font(.caption) }
+            Link("iPhone-Einstellungen öffnen", destination: URL(string: UIApplication.openSettingsURLString)!)
         }
         .navigationTitle("Timer-Einstellungen")
         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { controller.synchronize(); dismiss() } } }

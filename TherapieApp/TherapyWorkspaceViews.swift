@@ -9,7 +9,7 @@ struct TherapyEditorSheet<Content: View>: View {
     let dirty: Bool
     let canSave: Bool
     let save: () -> Void
-    @ViewBuilder let content: Content
+    let content: Content
     init(title: String, dirty: Bool, canSave: Bool = true, save: @escaping () -> Void, @ViewBuilder content: () -> Content) {
         self.title = title; self.dirty = dirty; self.canSave = canSave; self.save = save; self.content = content()
     }
@@ -22,7 +22,7 @@ struct TherapyEditorSheet<Content: View>: View {
                         Button("Abbrechen") { if dirty { confirmDiscard = true } else { dismiss() } }
                     }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Speichern") { save(); if store.lastSaveError == nil { TherapyEffects.shared.light(); dismiss() } }.disabled(!canSave)
+                        Button("Speichern") { save(); if store.lastSaveError == nil { dismiss() } }.disabled(!canSave)
                     }
                 }
                 .safeAreaInset(edge: .bottom) { WellnessSaveErrorView() }

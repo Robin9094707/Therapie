@@ -63,7 +63,7 @@ struct WeeklyTaskEditorView: View {
             clean.completedAt = clean.completed ? (clean.completedAt ?? Date()) : nil
             var snapshot = store.data; snapshot.weeklyTasks.removeAll { $0.id == clean.id }; snapshot.weeklyTasks.insert(clean, at: 0); store.data = snapshot
         }) {
-            Section("Aufgabe") {
+            Section {
                 TextField("Was möchte ich ausprobieren?", text: $task.title, axis: .vertical).lineLimit(2...5)
                 TextField("Beschreibung oder kleine Schritte", text: $task.details, axis: .vertical).lineLimit(3...10)
                 DatePicker("Woche auswählen", selection: $weekDate, displayedComponents: .date)
@@ -77,7 +77,7 @@ struct WeeklyTaskEditorView: View {
                     Text("Ohne Ziel").tag(Optional<UUID>.none)
                     ForEach(store.data.therapyGoals) { Text($0.title).tag(Optional($0.id)) }
                 }
-            } footer: { Text("Erledigte Aufgaben kannst du jederzeit wieder als offen markieren.") }
+            } header: { Text("Aufgabe") } footer: { Text("Erledigte Aufgaben kannst du jederzeit wieder als offen markieren.") }
         }
     }
 }

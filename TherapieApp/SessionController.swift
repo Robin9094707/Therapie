@@ -38,7 +38,6 @@ final class TherapySessionController: ObservableObject {
         Self.cancelNotifications(session.id)
         let id = session.id.uuidString
         Task { for activity in Activity<TherapyActivityAttributes>.activities where activity.attributes.sessionID == id { await activity.end(nil, dismissalPolicy: .immediate) } }
-        TherapyEffects.shared.light()
     }
     func reconcile() {
         guard let session = store?.data.currentSession, session.pausedAt == nil, session.remaining() <= 0 else { return }

@@ -18,6 +18,23 @@ Therapiedaten bleiben standardmäßig auf dem Gerät. Kalender-, Standort- und A
 ## Build
 GitHub Actions erzeugt eine unsignierte IPA, die anschließend mit einem eigenen Sideloading-/Signing-Werkzeug signiert/installiert werden kann.
 
+## Update 3001.0.0 – Therapieraum und Stundenbegleiter
+
+- Verschachtelte Themenordner mit frei wählbaren Symbolen, Umbenennen und Verschieben. Beim Löschen eines Ordners bleiben Inhalte erhalten und rücken eine Ebene nach oben.
+- Eigene Themen in zwölf Bereichen, mit Priorität, aktuellem Fokus, hilfreichen Dingen, Hindernissen und nächstem Gesprächsschritt. Status: geplant, in Bearbeitung, pausiert, abgeschlossen; abgeschlossene Themen lassen sich wieder aufnehmen.
+- Therapieziele mit selbst eingeschätztem Fortschritt, persönlicher Bedeutung, beobachtbaren Fortschritten, kleinem nächsten Schritt, Unterstützung und optionalem Wunschtermin.
+- Wichtige angeheftete Notizen und ein eigener Bereich für Beiträge der Therapeutin/des Therapeuten. Verfasser werden als ich, Therapeutin/Therapeut oder gemeinsam gekennzeichnet; es ist ein lokaler Bereich auf demselben Handy, kein separates Benutzerkonto.
+- Materialsammlung mit elf Kategorien, Beschreibung, Quelle, Tags, Thema und Ordner. Fotos, Dokumente und Audio lassen sich über die Systemvorschau öffnen.
+- Alle gespeicherten Eintragsarten lassen sich in der Timeline öffnen, bearbeiten und mit Bestätigung löschen. Vorherige Energie-Checks und Rückblicke bleiben bearbeitbar. Verknüpfungen werden bei Löschvorgängen bereinigt.
+- Feine abschaltbare Haptik beim Erstellen und Löschen. Kurzes Konfetti bei abgeschlossenen Aufgaben und Zielen; bei reduzierter Bewegung nur eine ruhige Bestätigung. Aufgaben können wieder geöffnet werden.
+- Wiederverwendbare, duplizierbare Stundenpläne mit bis zu zwölf Phasen und frei anpassbaren Minuten, Namen, Farben und Reihenfolge. Die Beispielvorlage enthält 5 Minuten Kaffee, 5 Minuten AirTag, 10 Minuten Wochenrückblick und 40 Minuten Therapie.
+- Persistenter Timer mit farbigen Zeitsegmenten und Zeiger, Pause/Fortsetzen, aktuellem und nächstem Abschnitt, Sitzungsverlauf und schnellen sitzungsbezogenen Notizen. Die Zeit basiert auf Zeitstempeln, nicht auf einem Hintergrund-Countdown.
+- Echte eingebettete WidgetKit-Erweiterung für Live-Aktivitäten auf Sperrbildschirm und Dynamic Island. Restzeit und Gesamtfortschritt werden von iOS zeitgesteuert dargestellt; die ersten vier Phasen erscheinen als zeitgesteuerte Balken auf dem Sperrbildschirm. Standardmäßig neutrale Abschnittsnamen, keine Notizen im Widget. Die aktuelle Phasenbezeichnung wird in der App angezeigt.
+- Optionale End- und Phasenmitteilungen. Beim Pausieren werden geplante Mitteilungen entfernt, beim Fortsetzen zeitlich verschoben.
+- Migration von älteren Versionen auf Schema 4, mit zusätzlicher Datendatei `therapy-data.pre-3001.json`. Bundle-Kennung bleibt erhalten.
+
+CI prüft die Timergrenzen, Pause/Fortsetzen, Wiederherstellung nach App-Beendigung, verschachtelte Ordner, Löschverknüpfungen und Migration. Die Bundle-Prüfung kontrolliert zusätzlich die tatsächliche Einbettung und Version der Live-Aktivitäts-Erweiterung. Systemfreigaben, Haptik, Sperrbildschirm und Dynamic Island benötigen ergänzend einen Test auf einem echten iPhone.
+
 ## Update 3000.0.0
 
 - Eigener Stimmungsbereich mit kurzen und ausführlichen Check-ins: Stimmung, Akku, mehrere Gefühle, freiwilliger Stress, Reizbelastung, Schlaf, kleine Erfolge und nächster Bedarf.
