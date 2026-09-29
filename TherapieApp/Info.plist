@@ -16,10 +16,21 @@
     <string>$(MARKETING_VERSION)</string>
     <key>CFBundleVersion</key>
     <string>$(CURRENT_PROJECT_VERSION)</string>
+    <key>CFBundleIconName</key>
+    <string>AppIcon</string>
     <key>UILaunchScreen</key>
-    <dict/>
+    <dict>
+        <key>UIColorName</key>
+        <string></string>
+    </dict>
     <key>UIApplicationSupportsIndirectInputEvents</key>
     <true/>
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
     <key>NSCalendarsFullAccessUsageDescription</key>
     <string>Therapie synchronisiert deine Therapietermine und Erinnerungen mit deinem iPhone-Kalender.</string>
     <key>NSCalendarsWriteOnlyAccessUsageDescription</key>
