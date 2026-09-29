@@ -25,7 +25,7 @@ struct RootView: View {
         .overlay {
             if ProcessInfo.processInfo.arguments.contains("--ui-testing") {
                 GeometryReader { geometry in
-                    Text("\(Int(geometry.size.width))x\(Int(geometry.size.height + geometry.safeAreaInsets.top + geometry.safeAreaInsets.bottom))")
+                    Text("\(Int(geometry.size.width + geometry.safeAreaInsets.leading + geometry.safeAreaInsets.trailing))x\(Int(geometry.size.height + geometry.safeAreaInsets.top + geometry.safeAreaInsets.bottom))")
                         .font(.system(size: 1))
                         .accessibilityIdentifier("therapy.viewport")
                         .allowsHitTesting(false)
