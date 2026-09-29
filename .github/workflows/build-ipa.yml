@@ -22,15 +22,18 @@ jobs:
           xcodebuild -version
           swift --version
 
-      - name: Install XcodeGen
-        run: brew install xcodegen
-
-      - name: Generate app icon
+      - name: Install build tools
         run: |
+          brew install xcodegen
           python3 -m venv /tmp/therapie-icon
           source /tmp/therapie-icon/bin/activate
           pip install --quiet pillow
+
+      - name: Generate app icon
+        run: |
+          source /tmp/therapie-icon/bin/activate
           python scripts/generate_icon.py
+          file TherapieApp/Assets.xcassets/AppIcon.appiconset/AppIcon.png
 
       - name: Generate Xcode project
         run: xcodegen generate
@@ -38,15 +41,44 @@ jobs:
       - name: Build unsigned iPhone app
         run: |
           set -o pipefail
-          xcodebuild             -project Therapie.xcodeproj             -scheme TherapieApp             -configuration Release             -sdk iphoneos             -derivedDataPath build             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=""             build | tee xcodebuild.log
+          xcodebuild \
+            -project Therapie.xcodeproj \
+            -scheme TherapieApp \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build | tee xcodebuild.log
 
-      - name: Package IPA
+      - name: Validate iPhone bundle
         run: |
           APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" -print -quit)
           if [ -z "$APP" ]; then
             echo "No .app bundle found"
             exit 1
           fi
+
+          echo "Validating: $APP"
+
+          if [ ! -f "$APP/Assets.car" ]; then
+            echo "ERROR: Assets.car missing. App icon/resources were not compiled."
+            exit 1
+          fi
+
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIconName" "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c "Print :NSAlarmKitUsageDescription" "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c "Print :NSCalendarsFullAccessUsageDescription" "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c "Print :UILaunchScreen" "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c "Print :UIDeviceFamily:0" "$APP/Info.plist"
+
+          echo "Bundle resource validation passed."
+          ls -lah "$APP" | head -40
+
+      - name: Package IPA
+        run: |
+          APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" -print -quit)
           rm -rf Payload Therapie.ipa
           mkdir Payload
           cp -R "$APP" Payload/
