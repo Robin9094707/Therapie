@@ -6,12 +6,16 @@ import UIKit
 private let therapyContentMaxWidth: CGFloat = 720
 
 struct RootView: View {
+    @AppStorage("therapy.permissions3000") private var permissionSetupDone = false
+    @State private var showPermissions = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @EnvironmentObject private var store: AppStore
 
     var body: some View {
         Group {
-            if store.data.profile.onboardingCompleted {
+            if store.loadError != nil {
+                SettingsView()
+            } else if store.data.profile.onboardingCompleted {
                 MainTabView()
             } else {
                 OnboardingView()
@@ -21,6 +25,20 @@ struct RootView: View {
         .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
         .tint(.indigo)
         .accessibilityIdentifier("therapy.root")
+        .sheet(isPresented: $showPermissions) { PermissionSetupView() }
+        .task {
+            if !permissionSetupDone && !ProcessInfo.processInfo.arguments.contains("--ui-testing") {
+                showPermissions = true
+            }
+        }
+        .safeAreaInset(edge: .top) {
+            if let error = store.lastSaveError {
+                VStack(alignment: .leading, spacing: 4) {
+                    Label("Daten nicht gespeichert", systemImage: "exclamationmark.triangle.fill").bold()
+                    Text(error).font(.caption)
+                }.padding(12).frame(maxWidth: .infinity, alignment: .leading).background(Color.orange.opacity(0.18))
+            }
+        }
         .environment(\.dynamicTypeSize, ProcessInfo.processInfo.arguments.contains("--large-text") ? .accessibility2 : dynamicTypeSize)
         .overlay {
             if ProcessInfo.processInfo.arguments.contains("--ui-testing") {
@@ -312,12 +330,12 @@ struct MainTabView: View {
                 .tabItem { Label("Heute", systemImage: "sparkles") }
                 .tag(0)
 
-            TherapyCalendarView()
-                .tabItem { Label("Kalender", systemImage: "calendar") }
+            WellnessHubView()
+                .tabItem { Label("Stimmung", systemImage: "face.smiling") }
                 .tag(1)
 
-            TasksView()
-                .tabItem { Label("Aufgaben", systemImage: "checklist") }
+            TherapyCalendarView()
+                .tabItem { Label("Kalender", systemImage: "calendar") }
                 .tag(2)
 
             LibraryView()
@@ -357,6 +375,7 @@ struct DashboardView: View {
                 VStack(spacing: 16) {
                     hero
                     quickActions
+                    WellnessProgressCard()
                     WeekOverviewCard()
                     weeklyTaskCard
                     latestCard
@@ -364,13 +383,18 @@ struct DashboardView: View {
             }
             .navigationTitle("Heute")
             .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink { TasksView() } label: { Label("Aufgaben", systemImage: "checklist") }
+                }
+            }
             .sheet(isPresented: $showNote) {
                 AddNoteView()
                     .presentationDetents([.medium, .large])
             }
             .sheet(isPresented: $showEnergy) {
-                AddEnergyView()
-                    .presentationDetents([.medium, .large])
+                MoodEditorView()
+                    .presentationDetents([.large])
             }
             .sheet(isPresented: $showReflection) {
                 AddReflectionView()
@@ -483,7 +507,7 @@ struct DashboardView: View {
                 QuickActionButton(title: "Notiz", subtitle: "Gedanken", icon: "square.and.pencil") {
                     showNote = true
                 }
-                QuickActionButton(title: "Energie", subtitle: "Check-in", icon: "bolt.heart.fill") {
+                QuickActionButton(title: "Stimmung", subtitle: "Check-in", icon: "face.smiling") {
                     showEnergy = true
                 }
                 QuickActionButton(title: "Rückblick", subtitle: "Therapie", icon: "clock.arrow.circlepath") {
@@ -789,6 +813,8 @@ struct DayCountTile: View {
 // MARK: - Tasks
 
 struct TasksView: View {
+    @State private var taskToDelete: UUID?
+    @State private var confirmDelete = false
     @State private var onlyOpen = false
     @EnvironmentObject private var store: AppStore
     @State private var showAdd = false
@@ -837,6 +863,10 @@ struct TasksView: View {
                 AddTaskView()
                     .presentationDetents([.medium, .large])
             }
+            .alert("Wochenaufgabe löschen?", isPresented: $confirmDelete) {
+                Button("Abbrechen", role: .cancel) {}
+                Button("Löschen", role: .destructive) { store.data.weeklyTasks.removeAll { $0.id == taskToDelete } }
+            } message: { Text("Diese Aufgabe wird endgültig gelöscht.") }
         }
     }
 
@@ -865,7 +895,8 @@ struct TasksView: View {
 
                     Menu {
                         Button(role: .destructive) {
-                            store.data.weeklyTasks.removeAll { $0.id == task.wrappedValue.id }
+                            taskToDelete = task.wrappedValue.id
+                            confirmDelete = true
                         } label: {
                             Label("Löschen", systemImage: "trash")
                         }
@@ -907,6 +938,10 @@ private enum LibrarySection: String, CaseIterable, Identifiable {
 }
 
 struct LibraryView: View {
+    @State private var mediaToDelete: MediaItem?
+    @State private var noteToDelete: UUID?
+    @State private var energyToDelete: UUID?
+    @State private var confirmDelete = false
     @State private var searchText = ""
     @EnvironmentObject private var store: AppStore
     @State private var section: LibrarySection = .timeline
@@ -936,6 +971,15 @@ struct LibraryView: View {
                 }
             }
             .navigationTitle("Therapie-Archiv")
+            .alert("Eintrag endgültig löschen?", isPresented: $confirmDelete) {
+                Button("Abbrechen", role: .cancel) { mediaToDelete = nil; noteToDelete = nil; energyToDelete = nil }
+                Button("Löschen", role: .destructive) {
+                    if let item = mediaToDelete { store.deleteMedia(item) }
+                    if let id = noteToDelete { store.data.notes.removeAll { $0.id == id } }
+                    if let id = energyToDelete { store.data.energyEntries.removeAll { $0.id == id } }
+                    mediaToDelete = nil; noteToDelete = nil; energyToDelete = nil
+                }
+            } message: { Text("Der Eintrag und gegebenenfalls seine lokale Datei werden gelöscht. Das kann nicht rückgängig gemacht werden.") }
             .searchable(text: $searchText, prompt: "Notizen, Medien und Rückblicke suchen")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -1051,7 +1095,8 @@ struct LibraryView: View {
 
                         Menu {
                             Button(role: .destructive) {
-                                store.deleteMedia(item)
+                                mediaToDelete = item
+                                confirmDelete = true
                             } label: {
                                 Label("Löschen", systemImage: "trash")
                             }
@@ -1081,6 +1126,8 @@ struct LibraryView: View {
                     VStack(alignment: .leading, spacing: 9) {
                         TextField("Titel", text: $note.title)
                             .font(.headline)
+                        Button("Notiz löschen", systemImage: "trash", role: .destructive) { noteToDelete = note.id; confirmDelete = true }
+                            .font(.caption)
 
                         TextField("Notiz", text: $note.text, axis: .vertical)
                             .lineLimit(2...8)
@@ -1130,6 +1177,8 @@ struct LibraryView: View {
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
+                        Button("Energie-Check löschen", systemImage: "trash", role: .destructive) { energyToDelete = entry.id; confirmDelete = true }
+                            .font(.caption)
                     }
                 }
             }
@@ -1208,6 +1257,15 @@ struct TimelineView: View {
         values += store.data.reflections.map {
             Row(id: "r-" + $0.id.uuidString, date: $0.date, title: "Therapie-Rückblick", subtitle: $0.summary, icon: "clock.arrow.circlepath")
         }
+        values += store.data.moodCheckIns.map {
+            Row(id: "c-" + $0.id.uuidString, date: $0.date, title: "\($0.moodTitle) · Akku \($0.battery)/5", subtitle: ([$0.note, $0.smallWin, $0.nextNeed] + $0.emotions).joined(separator: " · "), icon: "face.smiling")
+        }
+        values += store.data.batteryPoints.map {
+            Row(id: "p-" + $0.id.uuidString, date: $0.date, title: $0.title, subtitle: "\($0.direction.title) · \($0.category.title) · \($0.note)", icon: $0.direction.symbol)
+        }
+        values += store.data.weekReviews.map {
+            Row(id: "w-" + $0.id.uuidString, date: $0.weekStart, title: "Wochenrückblick KW \($0.weekStart.therapyWeek.week)", subtitle: [$0.summary, $0.therapyQuestion, $0.nextStep].joined(separator: " · "), icon: "calendar.badge.checkmark")
+        }
 
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         return values.filter { query.isEmpty || ($0.title + " " + $0.subtitle).localizedStandardContains(query) }
@@ -1279,6 +1337,11 @@ struct SettingsView: View {
                 VStack(spacing: 16) {
                     profileCard
                     AppearanceCard()
+                    GlassCard {
+                        NavigationLink { WellnessSettingsView() } label: {
+                            Label("Stimmung: Ziele, Erinnerungen & Freigaben", systemImage: "heart.text.clipboard")
+                        }
+                    }
                     scheduleCard
                     reminderCard
                     backupCard
@@ -1325,8 +1388,9 @@ struct SettingsView: View {
                     guard deletePhrase == deleteConfirmation else { return }
                     CalendarSyncService.shared.removeSyncedEvent(identifier: store.data.schedule.calendarEventIdentifier)
                     AlarmService.shared.cancelAllOwnedAlarms()
-                    store.resetAllData()
+                    WeeklyReminderService.cancel()
                     BackupService.shared.clearFolder()
+                    store.resetAllData()
                     deletePhrase = ""
                 }
                 .disabled(deletePhrase != deleteConfirmation)
@@ -2004,4 +2068,3 @@ private func parseTags(_ raw: String) -> [String] {
         }
         .filter { !$0.isEmpty }
 }
-

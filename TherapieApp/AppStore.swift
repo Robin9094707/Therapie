@@ -11,6 +11,8 @@ final class AppStore: ObservableObject {
     }
 
     @Published var lastSaveError: String?
+    @Published private(set) var loadError: String?
+    private var writeBlocked = false
 
     private var isLoading = true
     private var backupWorkItem: DispatchWorkItem?
@@ -34,12 +36,27 @@ final class AppStore: ObservableObject {
         try? fm.createDirectory(at: mediaURL, withIntermediateDirectories: true)
         try? fm.createDirectory(at: recordingsURL, withIntermediateDirectories: true)
 
-        if let loaded = Self.load(from: dataURL) {
-            data = loaded
-        } else {
-            data = AppData()
+        data = AppData()
+        if fm.fileExists(atPath: dataURL.path) {
+            do {
+                let raw = try Data(contentsOf: dataURL)
+                let decoder = JSONDecoder()
+                decoder.dateDecodingStrategy = .iso8601
+                data = try decoder.decode(AppData.self, from: raw)
+                let version = (try JSONSerialization.jsonObject(with: raw) as? [String: Any])?["schemaVersion"] as? Int ?? 1
+                let snapshot = root.appendingPathComponent("therapy-data.pre-3000.json")
+                if version < 3 && !fm.fileExists(atPath: snapshot.path) {
+                    try raw.write(to: snapshot, options: [.atomic, .completeFileProtection])
+                }
+            } catch {
+                writeBlocked = true
+                loadError = "Vorhandene Daten konnten nicht sicher geöffnet werden. Die Originaldatei bleibt unverändert. Bitte stelle ein gültiges Backup wieder her. " + error.localizedDescription
+                lastSaveError = loadError
+            }
         }
         if ProcessInfo.processInfo.arguments.contains("--ui-testing") {
+            writeBlocked = false
+            loadError = nil
             data = AppData()
             if ProcessInfo.processInfo.arguments.contains("--show-dashboard") {
                 data.profile = UserProfile(userName: "Robin", therapistName: "Therapeutin", onboardingCompleted: true)
@@ -52,14 +69,8 @@ final class AppStore: ObservableObject {
         isLoading = false
     }
 
-    private static func load(from url: URL) -> AppData? {
-        guard let raw = try? Data(contentsOf: url) else { return nil }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return try? decoder.decode(AppData.self, from: raw)
-    }
-
     func save() {
+        guard !writeBlocked else { lastSaveError = loadError; return }
         do {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -98,6 +109,8 @@ final class AppStore: ObservableObject {
         let restored = try BackupService.shared.restore(appRoot: rootURL)
         isLoading = true
         data = restored
+        writeBlocked = false
+        loadError = nil
         isLoading = false
         save()
     }
@@ -119,6 +132,65 @@ final class AppStore: ObservableObject {
             EnergyEntry(level: level, givesEnergy: gives, takesEnergy: takes, note: note),
             at: 0
         )
+    }
+
+    func saveCheckIn(_ entry: MoodCheckIn, points: [BatteryPoint]) {
+        var snapshot = data
+        var clean = entry
+        clean.date = min(clean.date, Date())
+        clean.mood = max(1, min(5, clean.mood))
+        clean.battery = max(1, min(5, clean.battery))
+        clean.stress = clean.stress.map { max(1, min(5, $0)) }
+        clean.sensoryLoad = clean.sensoryLoad.map { max(1, min(5, $0)) }
+        clean.sleepHours = clean.sleepHours.map { max(0, min(24, $0)) }
+        snapshot.moodCheckIns.removeAll { $0.id == clean.id }
+        snapshot.moodCheckIns.insert(clean, at: 0)
+        snapshot.batteryPoints.removeAll { $0.checkInID == clean.id }
+        snapshot.batteryPoints += points.filter { !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.map {
+            var point = $0
+            point.title = point.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            point.checkInID = clean.id
+            point.date = clean.date
+            point.impact = max(1, min(5, point.impact))
+            return point
+        }
+        data = snapshot
+    }
+
+    func saveBatteryPoint(_ point: BatteryPoint) {
+        guard !point.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        var snapshot = data
+        var clean = point
+        clean.title = clean.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        clean.date = min(clean.date, Date())
+        clean.impact = max(1, min(5, clean.impact))
+        snapshot.batteryPoints.removeAll { $0.id == clean.id }
+        snapshot.batteryPoints.insert(clean, at: 0)
+        data = snapshot
+    }
+
+    func saveWeekReview(_ review: WeekReview) {
+        var snapshot = data
+        var clean = review
+        clean.weekStart = min(clean.weekStart, Date()).therapyWeekStart
+        snapshot.weekReviews.removeAll { $0.id == clean.id || $0.weekStart == clean.weekStart }
+        snapshot.weekReviews.insert(clean, at: 0)
+        data = snapshot
+    }
+
+    func deleteCheckIn(_ entry: MoodCheckIn) {
+        var snapshot = data
+        snapshot.moodCheckIns.removeAll { $0.id == entry.id }
+        snapshot.batteryPoints.removeAll { $0.checkInID == entry.id }
+        data = snapshot
+    }
+
+    func exportWellnessCSV(period: WellnessPeriod) throws -> URL {
+        let directory = rootURL.appendingPathComponent("Exports", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("Therapie-Auswertung-\(UUID().uuidString).csv")
+        try Data(WellnessExport.csv(data, period: period).utf8).write(to: url, options: [.atomic, .completeFileProtection])
+        return url
     }
 
     func addReflection(summary: String, helped: String, nextFocus: String, date: Date = Date()) {
@@ -215,8 +287,9 @@ final class AppStore: ObservableObject {
         try? FileManager.default.createDirectory(at: recordingsURL, withIntermediateDirectories: true)
         isLoading = true
         data = AppData()
+        writeBlocked = false
+        loadError = nil
         isLoading = false
         save()
     }
 }
-

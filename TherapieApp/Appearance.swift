@@ -38,7 +38,7 @@ struct AppearanceCard: View {
                 Text("Weniger Transparenz und Farbverläufe. Die Schriftgröße folgt deinen iPhone-Einstellungen.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
-                LabeledContent("Version", value: "1.2.0")
+                LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "3000.0.0")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

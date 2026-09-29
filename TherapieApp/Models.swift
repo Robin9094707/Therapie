@@ -1,5 +1,4 @@
 import Foundation
-import CoreLocation
 
 struct UserProfile: Codable, Equatable {
     var userName = ""
@@ -99,7 +98,7 @@ struct TherapySessionReflection: Identifiable, Codable, Equatable {
 }
 
 struct AppData: Codable, Equatable {
-    var schemaVersion = 1
+    var schemaVersion = 3
     var profile = UserProfile()
     var schedule = TherapySchedule()
     var preferences = AppPreferences()
@@ -108,6 +107,39 @@ struct AppData: Codable, Equatable {
     var energyEntries: [EnergyEntry] = []
     var media: [MediaItem] = []
     var reflections: [TherapySessionReflection] = []
+    var moodCheckIns: [MoodCheckIn] = []
+    var batteryPoints: [BatteryPoint] = []
+    var weekReviews: [WeekReview] = []
+    var wellnessSettings = WellnessSettings()
+
+    init() {}
+
+    enum CodingKeys: String, CodingKey {
+        case schemaVersion, profile, schedule, preferences, weeklyTasks, notes, energyEntries, media, reflections
+        case moodCheckIns, batteryPoints, weekReviews, wellnessSettings
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let version = try c.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+        guard (1...3).contains(version) else {
+            throw DecodingError.dataCorruptedError(forKey: .schemaVersion, in: c,
+                                                   debugDescription: "Diese Daten benötigen eine neuere App-Version.")
+        }
+        schemaVersion = 3
+        profile = try c.decode(UserProfile.self, forKey: .profile)
+        schedule = try c.decodeIfPresent(TherapySchedule.self, forKey: .schedule) ?? TherapySchedule()
+        preferences = try c.decodeIfPresent(AppPreferences.self, forKey: .preferences) ?? AppPreferences()
+        weeklyTasks = try c.decodeIfPresent([WeeklyTask].self, forKey: .weeklyTasks) ?? []
+        notes = try c.decodeIfPresent([TherapyNote].self, forKey: .notes) ?? []
+        energyEntries = try c.decodeIfPresent([EnergyEntry].self, forKey: .energyEntries) ?? []
+        media = try c.decodeIfPresent([MediaItem].self, forKey: .media) ?? []
+        reflections = try c.decodeIfPresent([TherapySessionReflection].self, forKey: .reflections) ?? []
+        moodCheckIns = try c.decodeIfPresent([MoodCheckIn].self, forKey: .moodCheckIns) ?? []
+        batteryPoints = try c.decodeIfPresent([BatteryPoint].self, forKey: .batteryPoints) ?? []
+        weekReviews = try c.decodeIfPresent([WeekReview].self, forKey: .weekReviews) ?? []
+        wellnessSettings = try c.decodeIfPresent(WellnessSettings.self, forKey: .wellnessSettings) ?? WellnessSettings()
+    }
 }
 
 extension Calendar {

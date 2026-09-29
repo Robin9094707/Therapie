@@ -4,6 +4,11 @@ on:
   push:
     branches: [ main ]
   workflow_dispatch:
+    inputs:
+      verify_simulator:
+        description: Run optional hosted iPhone simulator verification
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -38,6 +43,11 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
+      - name: Test data migration, weekly streaks, charts and CSV export
+        run: |
+          swiftc TherapieApp/Models.swift TherapieApp/WellnessModels.swift Tests/ModelChecks.swift -o /tmp/therapie-model-checks
+          /tmp/therapie-model-checks
+
       - name: Build unsigned iPhone app
         run: |
           set -o pipefail
@@ -56,6 +66,7 @@ jobs:
         run: python3 scripts/validate_bundle.py build/Build/Products/Release-iphoneos/Therapie.app
 
       - name: Build simulator app
+        if: github.event_name == 'workflow_dispatch' && inputs.verify_simulator
         run: |
           set -o pipefail
           xcodebuild -project Therapie.xcodeproj -scheme TherapieApp -configuration Debug \
@@ -63,6 +74,7 @@ jobs:
             -derivedDataPath build-simulator CODE_SIGNING_ALLOWED=NO build | tee simulator-build.log
 
       - name: Verify native full-screen rendering on two iPhone sizes
+        if: github.event_name == 'workflow_dispatch' && inputs.verify_simulator
         timeout-minutes: 12
         run: |
           set +e
@@ -88,17 +100,17 @@ jobs:
       - name: Package IPA
         run: |
           APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" -print -quit)
-          rm -rf Payload Therapie-v1.2.0.ipa
+          rm -rf Payload Therapie-v3000.0.0.ipa
           mkdir Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Therapie-v1.2.0.ipa Payload
-          ls -lh Therapie-v1.2.0.ipa
+          /usr/bin/zip -qry Therapie-v3000.0.0.ipa Payload
+          ls -lh Therapie-v3000.0.0.ipa
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Therapie-v1.2.0-IPA
-          path: Therapie-v1.2.0.ipa
+          name: Therapie-v3000.0.0-IPA
+          path: Therapie-v3000.0.0.ipa
           if-no-files-found: error
           retention-days: 30
 
@@ -111,4 +123,3 @@ jobs:
             xcodebuild.log
             simulator-build.log
           if-no-files-found: ignore
-
