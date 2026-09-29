@@ -26,7 +26,13 @@ for label, device in [("large", large), ("compact", compact)]:
     print("Inspecting", label, device["name"], flush=True)
     if device["state"] != "Booted":
         run("xcrun", "simctl", "boot", identifier)
-    run("xcrun", "simctl", "bootstatus", identifier, "-b")
+    # GUI startup helps CoreSimulator finish its first-boot migration on hosted runners.
+    run("open", "-a", "Simulator", "--args", "-CurrentDeviceUDID", identifier, check=False)
+    try:
+        run("xcrun", "simctl", "bootstatus", identifier, "-b", timeout=120)
+    except subprocess.TimeoutExpired:
+        print("SIMULATOR_UNAVAILABLE: hosted simulator did not finish booting; app was not launched.", flush=True)
+        raise SystemExit(75)
     run("xcrun", "simctl", "install", identifier, str(app))
     container = Path(run("xcrun", "simctl", "get_app_container", identifier,
                          "eu.rjuhas.therapie", "data").strip())

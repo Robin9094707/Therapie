@@ -304,22 +304,29 @@ struct TherapyLogoMark: View {
 // MARK: - Main navigation
 
 struct MainTabView: View {
+    @State private var selection = 0
+
     var body: some View {
-        TabView {
+        TabView(selection: $selection) {
             DashboardView()
                 .tabItem { Label("Heute", systemImage: "sparkles") }
+                .tag(0)
 
             TherapyCalendarView()
                 .tabItem { Label("Kalender", systemImage: "calendar") }
+                .tag(1)
 
             TasksView()
                 .tabItem { Label("Aufgaben", systemImage: "checklist") }
+                .tag(2)
 
             LibraryView()
                 .tabItem { Label("Archiv", systemImage: "square.stack.3d.up.fill") }
+                .tag(3)
 
             SettingsView()
                 .tabItem { Label("Profil", systemImage: "person.crop.circle.fill") }
+                .tag(4)
         }
     }
 }

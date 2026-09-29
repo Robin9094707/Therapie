@@ -28,3 +28,5 @@ GitHub Actions erzeugt eine unsignierte IPA, die anschließend mit einem eigenen
 - CI validates the compiled device bundle, then boots and measures the actual app on two iPhone sizes in light/dark mode and large-text onboarding. Screenshots and viewport reports are available in the UI verification artifact. The XCTest suite remains available for interactive navigation regression checks.
 
 The bundle identifier stays unchanged so an in-place update preserves existing data. The IPA is unsigned and must be signed by your installation tool.
+
+A simulator first-boot timeout is reported separately as infrastructure unavailable; it does not invalidate the compiled device IPA. App launch failures and viewport mismatches still fail verification. Full interactive XCTest navigation checks can be run using the TherapieApp test scheme.

@@ -22,7 +22,8 @@ final class TherapieUITests: XCTestCase {
             let button = app.tabBars.buttons[tab]
             XCTAssertTrue(button.waitForExistence(timeout: 5))
             button.tap()
-            XCTAssertTrue(button.isSelected)
+            let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isSelected == true"), object: button)
+            XCTAssertEqual(XCTWaiter.wait(for: [selected], timeout: 10), .completed)
             capture(tab)
         }
         app.tabBars.buttons["Heute"].tap()
