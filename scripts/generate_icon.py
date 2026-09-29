@@ -72,3 +72,9 @@ mark = OUT.parent.parent / "TherapyMark.imageset"
 mark.mkdir(exist_ok=True)
 final.resize((312, 312), Image.Resampling.LANCZOS).save(mark / "TherapyMark.png")
 (mark / "Contents.json").write_text(json.dumps({"images": [{"idiom": "universal", "filename": "TherapyMark.png", "scale": "3x"}], "info": {"author": "xcode", "version": 1}}, indent=2) + "\n")
+
+# Xcode 26 may keep the 3x icon only in Assets.car. Also ship the registered
+# loose 3x image so sideloading tools and SpringBoard can resolve it directly.
+resources = Path("TherapieApp/Resources")
+resources.mkdir(exist_ok=True)
+final.resize((180, 180), Image.Resampling.LANCZOS).save(resources / "AppIcon60x60@3x.png")
