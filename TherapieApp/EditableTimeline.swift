@@ -5,6 +5,7 @@ private enum ArchiveRecord: Identifiable {
     case mood(MoodCheckIn), point(BatteryPoint), review(WeekReview), session(RunningTherapySession)
     case task(WeeklyTask), topic(TherapyTopic), goal(TherapyGoal)
     case weeklyEnergy(WeeklyEnergyReview)
+    case guided(GuidedCheckIn)
     var id: String {
         switch self {
         case .note(let value): "note-\(value.id)"
@@ -19,6 +20,7 @@ private enum ArchiveRecord: Identifiable {
         case .topic(let value): "topic-\(value.id)"
         case .goal(let value): "goal-\(value.id)"
         case .weeklyEnergy(let value): "weekly-energy-\(value.id)"
+        case .guided(let value): "guided-\(value.id)"
         }
     }
     var date: Date {
@@ -35,6 +37,7 @@ private enum ArchiveRecord: Identifiable {
         case .topic(let value): value.createdAt
         case .goal(let value): value.createdAt
         case .weeklyEnergy(let value): value.periodEnd
+        case .guided(let value): value.date
         }
     }
     var title: String {
@@ -51,6 +54,7 @@ private enum ArchiveRecord: Identifiable {
         case .topic(let value): value.title
         case .goal(let value): value.title
         case .weeklyEnergy(let value): "Wochenenergie · Akku \(value.energy)/5"
+        case .guided(let value): value.kind.title + (value.isDraft ? " · Entwurf" : "")
         }
     }
     var subtitle: String {
@@ -67,6 +71,7 @@ private enum ArchiveRecord: Identifiable {
         case .topic(let value): [value.status.rawValue, value.description, value.category.rawValue].joined(separator: " · ")
         case .goal(let value): [value.status.rawValue, value.smallStep, value.measure].joined(separator: " · ")
         case .weeklyEnergy(let value): (value.gives.map(\.title) + value.takes.map(\.title) + [value.note, value.therapyQuestion]).joined(separator: " · ")
+        case .guided(let value): [value.summary, value.smallWin, value.therapyQuestion].joined(separator: " · ")
         }
     }
     var symbol: String {
@@ -83,10 +88,12 @@ private enum ArchiveRecord: Identifiable {
         case .topic(let value): value.category.symbol
         case .goal: "scope"
         case .weeklyEnergy: "battery.100percent"
+        case .guided(let value): value.kind.symbol
         }
     }
     var deletionMessage: String {
         switch self {
+        case .guided: "Der Check-in wird gelöscht. Angelegte Aufgaben und Fotos bleiben erhalten."
         case .mood: "Der Check-in und seine zugehörigen Akku-Punkte werden endgültig gelöscht."
         case .media: "Der Eintrag und seine lokale Datei werden endgültig gelöscht."
         case .topic: "Das Thema wird gelöscht. Verknüpfte Inhalte bleiben ohne Themenzuordnung erhalten."
@@ -115,6 +122,7 @@ struct TherapyEditableTimeline: View {
         values += store.data.therapyTopics.map(ArchiveRecord.topic)
         values += store.data.therapyGoals.map(ArchiveRecord.goal)
         values += store.data.weeklyEnergyReviews.map(ArchiveRecord.weeklyEnergy)
+        values += store.data.guidedCheckIns.map(ArchiveRecord.guided)
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         return values.filter { query.isEmpty || ($0.title + " " + $0.subtitle).localizedCaseInsensitiveContains(query) }.sorted { $0.date > $1.date }
     }
@@ -160,6 +168,7 @@ struct TherapyEditableTimeline: View {
         case .topic(let value): TopicEditorView(topic: value)
         case .goal(let value): GoalEditorView(goal: value)
         case .weeklyEnergy(let value): WeeklyEnergyEditorView(review: value)
+        case .guided(let value): GuidedCheckInView(entry: value)
         }
     }
     private func remove(_ record: ArchiveRecord) {
@@ -173,6 +182,7 @@ struct TherapyEditableTimeline: View {
         case .point(let value): snapshot.batteryPoints.removeAll { $0.id == value.id }
         case .review(let value): snapshot.weekReviews.removeAll { $0.id == value.id }
         case .weeklyEnergy(let value): snapshot.weeklyEnergyReviews.removeAll { $0.id == value.id }
+        case .guided(let value): snapshot.guidedCheckIns.removeAll { $0.id == value.id }
         case .session(let value):
             snapshot.sessionHistory.removeAll { $0.id == value.id }
             for i in snapshot.notes.indices where snapshot.notes[i].sessionID == value.id { snapshot.notes[i].sessionID = nil }

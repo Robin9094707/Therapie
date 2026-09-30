@@ -120,7 +120,7 @@ struct TherapySessionReflection: Identifiable, Codable, Equatable {
 }
 
 struct AppData: Codable, Equatable {
-    var schemaVersion = 6
+    var schemaVersion = 7
     var profile = UserProfile()
     var schedule = TherapySchedule()
     var preferences = AppPreferences()
@@ -143,6 +143,12 @@ struct AppData: Codable, Equatable {
     var reminderPreferences = ReminderPreferences()
     var weeklyEnergyReviews: [WeeklyEnergyReview] = []
 
+    var guidedCheckIns: [GuidedCheckIn] = []
+    var routines: [DailyRoutine] = []
+    var routineCompletions: [RoutineCompletion] = []
+    var routineSnoozes: [RoutineSnooze] = []
+    var companionSettings = CompanionSettings()
+
     init() {}
 
     enum CodingKeys: String, CodingKey {
@@ -150,16 +156,22 @@ struct AppData: Codable, Equatable {
         case moodCheckIns, batteryPoints, weekReviews, wellnessSettings
         case therapyFolders, therapyTopics, therapyGoals, sessionTemplates, currentSession, sessionHistory, sessionPreferences
         case reminderPreferences, weeklyEnergyReviews
+        case guidedCheckIns, routines, routineCompletions, routineSnoozes, companionSettings
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let version = try c.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
-        guard (1...6).contains(version) else {
+        guard (1...7).contains(version) else {
             throw DecodingError.dataCorruptedError(forKey: .schemaVersion, in: c,
                                                    debugDescription: "Diese Daten benötigen eine neuere App-Version.")
         }
-        schemaVersion = 6
+        guidedCheckIns = try c.decodeIfPresent([GuidedCheckIn].self, forKey: .guidedCheckIns) ?? []
+        routines = try c.decodeIfPresent([DailyRoutine].self, forKey: .routines) ?? []
+        routineCompletions = try c.decodeIfPresent([RoutineCompletion].self, forKey: .routineCompletions) ?? []
+        routineSnoozes = try c.decodeIfPresent([RoutineSnooze].self, forKey: .routineSnoozes) ?? []
+        companionSettings = try c.decodeIfPresent(CompanionSettings.self, forKey: .companionSettings) ?? CompanionSettings()
+        schemaVersion = 7
         profile = try c.decode(UserProfile.self, forKey: .profile)
         schedule = try c.decodeIfPresent(TherapySchedule.self, forKey: .schedule) ?? TherapySchedule()
         preferences = try c.decodeIfPresent(AppPreferences.self, forKey: .preferences) ?? AppPreferences()

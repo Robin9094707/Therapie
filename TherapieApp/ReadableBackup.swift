@@ -29,6 +29,8 @@ enum ReadableBackup {
         return String(path.dropFirst(prefix.count))
     }
     static let labels: [String: String] = [
+        "guidedCheckIns": "Gefuehrte-Check-ins", "routines": "Alltagsroutinen", "routineCompletions": "Routine-Protokoll", "routineSnoozes": "Verschobene-Routinen", "companionSettings": "Alltags-Einstellungen",
+        "batteryPercent": "Akku in Prozent", "isDraft": "Entwurf", "scheduledAt": "Geplant fuer", "recordedAt": "Bestaetigt am", "outcome": "Ergebnis", "times": "Uhrzeiten", "pauseOnVacation": "Urlaubspause", "retryMinutes": "Erneut erinnern nach Minuten",
         "weeklyTasks": "Wochenaufgaben", "notes": "Notizen", "energyEntries": "Energie-Checks", "media": "Materialien",
         "reflections": "Therapie-Rueckblicke", "moodCheckIns": "Stimmungs-Check-ins", "batteryPoints": "Akku-Punkte",
         "weekReviews": "Wochenrueckblicke", "therapyFolders": "Therapieordner", "therapyTopics": "Therapiethemen",

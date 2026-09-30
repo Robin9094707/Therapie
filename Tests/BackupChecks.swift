@@ -34,6 +34,12 @@ struct BackupChecks {
         for directory in ["Media", "Recordings"] { try fm.createDirectory(at: root.appendingPathComponent(directory), withIntermediateDirectories: true) }
         var data = AppData()
         data.profile = UserProfile(userName: "Robin", therapistName: "Therapeutin", onboardingCompleted: true)
+        let routine = DailyRoutine(title: "Frühstück", symbol: "fork.knife", goalID: nil, times: [RoutineTime(title: "Vor der Arbeit", weekdays: [2, 3, 4, 5, 6], hour: 6, minute: 15, weekendHour: 9, weekendMinute: 0)], urgentAlarm: true)
+        data.routines = [routine]
+        data.routineCompletions = [RoutineCompletion(routineID: routine.id, timeID: routine.times[0].id, scheduledAt: Date(), outcome: .skipped, note: "Pause")]
+        data.routineSnoozes = [RoutineSnooze(id: "portable-occurrence", until: Date())]
+        data.guidedCheckIns = [GuidedCheckIn(kind: .therapy, mood: 4, batteryPercent: 0, stress: 2, sensoryLoad: 3, sleepHours: 7.5, summary: "Geführter Rückblick", therapyQuestion: "Was hilft?", tasks: [CheckInTaskDraft(title: "Erster Schritt", source: "Aus der Therapie")], isDraft: false)]
+        data.companionSettings = CompanionSettings(vacationUntil: Date(), privateRoutineTitles: false, offerTherapyCheckIn: true)
         data.schedule.alarmIDs = ["local-device-only"]
         data.preferences.includeLocationForNewMedia = false
         data.schedule.location = "Praxis"
@@ -152,10 +158,10 @@ struct BackupChecks {
         prefs.apply(defaults)
         try expect(PortablePreferences.capture(defaults) == prefs, "Appearance, calm, haptics and confetti restored")
         var oldJSON = try JSONSerialization.jsonObject(with: BackupArchive.encoder().encode(data)) as! [String: Any]
-        for version in 1...5 {
+        for version in 1...6 {
             oldJSON["schemaVersion"] = version
             let migrated = try BackupArchive.decoder().decode(AppData.self, from: JSONSerialization.data(withJSONObject: oldJSON))
-            try expect(migrated.schemaVersion == 6 && migrated.notes.count == 1 && migrated.media[0].attachmentOmitted == nil, "Schema \(version) migrates for backups")
+            try expect(migrated.schemaVersion == 7 && migrated.notes.count == 1 && migrated.media[0].attachmentOmitted == nil, "Schema \(version) migrates for backups")
         }
         print("Passed \(count) encrypted backup checks: complete model, streaming attachments, password authentication, tampering, paths, omissions, settings and recovery.")
     }

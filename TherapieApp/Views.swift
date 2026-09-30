@@ -32,16 +32,22 @@ struct RootView: View {
         .sheet(isPresented: $openSession) {
             NavigationStack {
                 SessionConductorView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fertig") { openSession = false } } }
+                    .sheet(item: $store.pendingGuidedCheckIn) { GuidedCheckInView(entry: $0) }
             }
         }
         .onOpenURL { url in if url.scheme == "therapie" && url.host == "session" { openSession = true } }
-        .onChange(of: scenePhase) { _, phase in if phase == .active { store.sessionController.synchronize(); TaskNotificationCoordinator.shared.refresh(store) } }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { store.sessionController.synchronize(); store.consumeRoutineAlarmRoute(); TaskNotificationCoordinator.shared.refresh(store) } }
         .sheet(isPresented: Binding(get: { store.notificationTaskID != nil }, set: { if !$0 { store.notificationTaskID = nil } })) {
             if let id = store.notificationTaskID, let task = store.data.weeklyTasks.first(where: { $0.id == id }) { WeeklyTaskEditorView(task: task) }
+        }
+        .sheet(item: Binding(get: { openSession ? nil : store.pendingGuidedCheckIn }, set: { store.pendingGuidedCheckIn = $0 })) { GuidedCheckInView(entry: $0) }
+        .sheet(isPresented: Binding(get: { store.notificationRoutineID != nil }, set: { if !$0 { store.notificationRoutineID = nil } })) {
+            if let id = store.notificationRoutineID { RoutineDetailView(routineID: id) }
         }
         .sheet(isPresented: $store.openEnergyReview) { WeeklyEnergyEditorView() }
         .task {
             store.sessionController.synchronize()
+            store.consumeRoutineAlarmRoute()
             while !Task.isCancelled {
                 store.sessionController.reconcile()
                 do { try await Task.sleep(for: .seconds(1)) } catch { break }
@@ -401,6 +407,7 @@ struct DashboardView: View {
             TherapyScreen {
                 VStack(spacing: 16) {
                     hero
+                    CompanionTodayCard()
                     quickActions
                     WellnessProgressCard()
                     TherapyTodayCard()

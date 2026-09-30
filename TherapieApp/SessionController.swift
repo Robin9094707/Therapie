@@ -37,6 +37,7 @@ final class TherapySessionController: ObservableObject {
         snapshot.sessionHistory.removeAll { $0.id == session.id }
         snapshot.sessionHistory.insert(session, at: 0)
         store.data = snapshot
+        store.offerCheckIn(for: session)
         Self.cancelNotifications(session.id)
         let id = session.id.uuidString
         Task { for activity in Activity<TherapyActivityAttributes>.activities where activity.attributes.sessionID == id { await activity.end(nil, dismissalPolicy: .immediate) } }

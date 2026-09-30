@@ -17,6 +17,10 @@ final class AppStore: ObservableObject {
     @Published var taskReminderStatus = ""
     @Published var notificationTaskID: UUID?
     @Published var openEnergyReview = false
+    @Published var pendingGuidedCheckIn: GuidedCheckIn?
+    @Published var notificationRoutineID: UUID?
+    @Published var routineReminderStatus = ""
+    @Published var routineAlarmStatus = ""
     private var writeBlocked = false
 
     private var isLoading = true
@@ -69,8 +73,8 @@ final class AppStore: ObservableObject {
                 data = try decoder.decode(AppData.self, from: raw)
                 let version = (try JSONSerialization.jsonObject(with: raw) as? [String: Any])?["schemaVersion"] as? Int ?? 1
                 refreshLegacyAlarms = version < 6 && !data.schedule.alarmIDs.isEmpty
-                let snapshot = root.appendingPathComponent("therapy-data.pre-3003.json")
-                if version < 6 && !fm.fileExists(atPath: snapshot.path) {
+                let snapshot = root.appendingPathComponent("therapy-data.pre-3004.json")
+                if version < 7 && !fm.fileExists(atPath: snapshot.path) {
                     try raw.write(to: snapshot, options: [.atomic, .completeFileProtection])
                 }
             } catch {
@@ -163,6 +167,7 @@ final class AppStore: ObservableObject {
         backupWorkItem?.cancel()
         backupWorkItem = nil
         let restored = try BackupService.shared.restore(appRoot: rootURL)
+        RoutineAlarmCoordinator.shared.cancel()
         isLoading = true
         data = restored
         writeBlocked = false
@@ -190,6 +195,7 @@ final class AppStore: ObservableObject {
         try BackupArchive.protect(prepared.directory.appendingPathComponent("therapy-data.json"))
         try BackupArchive.install(directory: prepared.directory, root: rootURL)
         CalendarSyncService.shared.removeSyncedEvent(identifier: data.schedule.calendarEventIdentifier)
+        RoutineAlarmCoordinator.shared.cancel()
         AlarmService.shared.cancelAllOwnedAlarms()
         WeeklyReminderService.cancel()
         BackupService.shared.clearFolder()
@@ -454,6 +460,7 @@ final class AppStore: ObservableObject {
         backupWorkItem?.cancel()
         readableWorkItem?.cancel()
         TaskNotificationCoordinator.shared.cancel()
+        RoutineAlarmCoordinator.shared.cancel()
         let oldRoot = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!.appendingPathComponent(ProcessInfo.processInfo.arguments.contains("--ui-testing") ? "TherapieUITests" : "Therapie")
         if oldRoot != rootURL { try? FileManager.default.removeItem(at: oldRoot) }
         try? FileManager.default.removeItem(at: BackupArchive.recoveryURL(oldRoot))

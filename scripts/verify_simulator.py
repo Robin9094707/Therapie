@@ -36,7 +36,7 @@ for label, device in [("large", large), ("compact", compact)]:
     run("xcrun", "simctl", "install", identifier, str(app))
     container = Path(run("xcrun", "simctl", "get_app_container", identifier,
                          "eu.rjuhas.therapie", "data").strip())
-    report_path = container / "Library/Application Support/TherapieUITests/ui-viewport.json"
+    report_path = container / "Documents/TherapieUITests/ui-viewport.json"
     for mode, args, appearance in [
         ("dashboard-light", ["--ui-testing", "--show-dashboard"], "light"),
         ("dashboard-dark", ["--ui-testing", "--show-dashboard"], "dark"),

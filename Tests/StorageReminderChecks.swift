@@ -16,10 +16,17 @@ struct StorageReminderChecks {
         for folder in ["Media", "Recordings"] { try fm.createDirectory(at: legacy.appendingPathComponent(folder), withIntermediateDirectories: true) }
         var data = AppData()
         data.profile = UserProfile(userName: "Robin", therapistName: "Therapeutin", onboardingCompleted: true)
+        let routine = DailyRoutine(title: "Frühstück", symbol: "fork.knife", goalID: nil, times: [RoutineTime(title: "Vor der Arbeit", weekdays: [2, 3, 4, 5, 6], hour: 6, minute: 15, weekendHour: 9, weekendMinute: 0)], urgentAlarm: true)
+        data.routines = [routine]
+        data.routineCompletions = [RoutineCompletion(routineID: routine.id, timeID: routine.times[0].id, scheduledAt: Date(), outcome: .skipped, note: "Pause")]
+        data.routineSnoozes = [RoutineSnooze(id: "portable-occurrence", until: Date())]
+        data.guidedCheckIns = [GuidedCheckIn(kind: .therapy, mood: 4, batteryPercent: 0, stress: 2, sensoryLoad: 3, sleepHours: 7.5, summary: "Geführter Rückblick", therapyQuestion: "Was hilft?", tasks: [CheckInTaskDraft(title: "Erster Schritt", source: "Aus der Therapie")], isDraft: false)]
+        data.companionSettings = CompanionSettings(vacationUntil: Date(), privateRoutineTitles: false, offerTherapyCheckIn: true)
         data.reminderPreferences.energyReviewEnabled = true
         data.notes = [TherapyNote(title: "Lesbare Notiz", text: "Meine wichtige Zeile\nzweite Zeile", tags: ["wichtig"], isImportant: true)]
         data.therapyFolders = [TherapyFolder(title: "Meine Themen")]
         data.weeklyEnergyReviews = [WeeklyEnergyReview(periodEnd: now, energy: 4, gives: [WeeklyEnergyFactor(title: "Freunde", impact: 4)], takes: [WeeklyEnergyFactor(title: "Viele Reize", impact: 2)], therapyQuestion: "Wie kann ich Pausen planen?")]
+        try expect(data.guidedCheckIns[0].batteryPercent == 0, "Zero battery fixture")
         let week = now.therapyWeek
         data.weeklyTasks = [WeeklyTask(createdAt: now, weekOfYear: week.week, yearForWeekOfYear: week.year, title: "Meine Aufgabe", details: "Kleiner Schritt", reminder: TaskReminder(), smallStep: "Erst anfangen", support: "Therapie", progress: 20)]
         let photo = Data((0..<(BackupArchive.chunkSize * 2 + 5)).map { UInt8($0 % 251) })

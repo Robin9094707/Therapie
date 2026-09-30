@@ -146,7 +146,7 @@ enum WellnessAnalytics {
     static func activityDates(_ data: AppData) -> [Date] {
         data.moodCheckIns.map(\.date) + data.batteryPoints.map(\.date)
             + data.weekReviews.map(\.weekStart) + data.energyEntries.map(\.createdAt)
-            + data.weeklyEnergyReviews.map(\.periodEnd)
+            + data.weeklyEnergyReviews.map(\.periodEnd) + data.guidedCheckIns.filter { !$0.isDraft }.map(\.date)
     }
     static func streak(_ dates: [Date], now: Date = Date()) -> WellnessStreak {
         let currentWeek = now.therapyWeekStart
@@ -173,7 +173,8 @@ enum WellnessAnalytics {
                                by: { calendar.startOfDay(for: $0.date) })
         let legacy = Dictionary(grouping: data.energyEntries.filter { period.contains($0.createdAt) },
                                 by: { calendar.startOfDay(for: $0.createdAt) })
-        let days = Set(moods.keys).union(legacy.keys).sorted()
+        let guided = Dictionary(grouping: data.guidedCheckIns.filter { !$0.isDraft && period.contains($0.date) }, by: { calendar.startOfDay(for: $0.date) })
+        let days = Set(moods.keys).union(legacy.keys).union(guided.keys).sorted()
         var segment = 0
         var previous: Date?
         return days.map { day in
@@ -181,12 +182,13 @@ enum WellnessAnalytics {
             previous = day
             let entries = moods[day] ?? []
             let old = legacy[day] ?? []
+            let new = guided[day] ?? []
             return DailyWellnessValue(date: day,
-                mood: average(entries.map { Double($0.mood) }),
-                battery: average(entries.map { Double($0.battery) } + old.map { Double($0.level) }),
-                stress: average(entries.compactMap { $0.stress.map(Double.init) }),
-                sensory: average(entries.compactMap { $0.sensoryLoad.map(Double.init) }),
-                count: entries.count + old.count, segment: segment)
+                mood: average(entries.map { Double($0.mood) } + new.compactMap { $0.mood.map(Double.init) }),
+                battery: average(entries.map { Double($0.battery) } + old.map { Double($0.level) } + new.compactMap { $0.batteryPercent.map { 1 + Double($0) / 25 } }),
+                stress: average(entries.compactMap { $0.stress.map(Double.init) } + new.compactMap { $0.stress.map(Double.init) }),
+                sensory: average(entries.compactMap { $0.sensoryLoad.map(Double.init) } + new.compactMap { $0.sensoryLoad.map(Double.init) }),
+                count: entries.count + old.count + new.count, segment: segment)
         }
     }
     static func categoryTotals(_ points: [BatteryPoint]) -> [BatteryCategoryTotal] {
@@ -204,7 +206,7 @@ enum WellnessAnalytics {
     }
     static func recordedDays(_ data: AppData, period: WellnessPeriod) -> Int {
         Set(data.moodCheckIns.filter { period.contains($0.date) }
-            .map { Calendar.therapyCalendar.startOfDay(for: $0.date) }).count
+            .map { Calendar.therapyCalendar.startOfDay(for: $0.date) } + data.guidedCheckIns.filter { !$0.isDraft && period.contains($0.date) }.map { Calendar.therapyCalendar.startOfDay(for: $0.date) }).count
     }
 }
 
@@ -231,6 +233,13 @@ enum WellnessExport {
             rows.append(["Wochenrückblick", formatter.string(from: review.weekStart), "", "", "", "", "", "", "", "", "",
                          review.summary, "Hilfreich: " + review.whatHelped + " | Schwierig: " + review.whatWasHard
                          + " | Therapiefrage: " + review.therapyQuestion, review.smallWin, review.nextStep])
+        }
+        for entry in data.guidedCheckIns.filter({ !$0.isDraft && period.contains($0.date) }).sorted(by: { $0.date < $1.date }) {
+            let battery = entry.batteryPercent.map { String(1 + Double($0) / 25) } ?? ""
+            let context = "Akku in Prozent: " + (entry.batteryPercent.map(String.init) ?? "offen") + " | Energiegeber: " + entry.givesEnergy + " | Energienehmer: " + entry.takesEnergy + " | Therapiefrage: " + entry.therapyQuestion
+            rows.append([entry.kind.title, formatter.string(from: entry.date), entry.mood.map(String.init) ?? "", battery,
+                         entry.stress.map(String.init) ?? "", entry.sensoryLoad.map(String.init) ?? "", entry.sleepHours.map { String($0) } ?? "",
+                         "", "", "", "", entry.summary, context, entry.smallWin, entry.nextNeed])
         }
         return "\u{FEFF}" + rows.map { $0.map(cell).joined(separator: ";") }.joined(separator: "\r\n")
     }

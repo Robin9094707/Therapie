@@ -1,0 +1,75 @@
+import Foundation
+import SwiftUI
+import AlarmKit
+import AppIntents
+
+struct OpenRoutineIntent: AppIntent {
+    static var title: LocalizedStringResource = "Routine öffnen"
+    static var openAppWhenRun = true
+    @Parameter(title: "Routine") var routineID: String
+    init() {}
+    init(routineID: UUID) { self.routineID = routineID.uuidString }
+    func perform() async throws -> some IntentResult {
+        UserDefaults.standard.set(routineID, forKey: "therapy.routine.open")
+        return .result()
+    }
+}
+@MainActor
+final class RoutineAlarmCoordinator {
+    static let shared = RoutineAlarmCoordinator()
+    private let storageKey = "therapy.routine.alarms"
+    private var revision = 0
+    func requestAccess(_ store: AppStore) async {
+        do {
+            let granted = try await AlarmService.shared.requestAuthorization()
+            store.routineAlarmStatus = granted ? "Wecker sind freigegeben." : "Bitte Wecker in den iPhone-Einstellungen erlauben."
+            await refresh(store)
+        } catch { store.routineAlarmStatus = error.localizedDescription }
+    }
+    func refresh(_ store: AppStore) async {
+        revision += 1; let generation = revision
+        let snapshot = store.data
+        let candidates = RoutinePlanner.slots(data: snapshot).filter { slot in snapshot.routines.contains { $0.id == slot.occurrence.routineID && $0.urgentAlarm && $0.remindersEnabled } }
+        let desired = Array(candidates.prefix(8))
+        var owned = UserDefaults.standard.dictionary(forKey: storageKey) as? [String: String] ?? [:]
+        let valid = Set(desired.map(\.id))
+        var cancellationFailures = 0
+        for (key, raw) in owned where !valid.contains(key) {
+            if let id = UUID(uuidString: raw) {
+                do { try AlarmManager.shared.cancel(id: id); owned.removeValue(forKey: key) }
+                catch { cancellationFailures += 1 }
+            } else { owned.removeValue(forKey: key) }
+        }
+        UserDefaults.standard.set(owned, forKey: storageKey)
+        guard AlarmManager.shared.authorizationState == .authorized else {
+            store.routineAlarmStatus = desired.isEmpty ? "Keine dringenden Wecker geplant." : "Dringende Wecker benötigen deine AlarmKit-Freigabe."
+            return
+        }
+        // Device IDs live outside AppData and therefore never travel through backups.
+        let live = Set((try? AlarmManager.shared.alarms)?.map(\.id) ?? [])
+        for (key, raw) in owned where UUID(uuidString: raw).map({ !live.contains($0) }) ?? true { owned.removeValue(forKey: key) }
+        do {
+            for slot in desired where owned[slot.id] == nil {
+                guard generation == revision else { return }
+                guard let routine = snapshot.routines.first(where: { $0.id == slot.occurrence.routineID }) else { continue }
+                let id = UUID()
+                let title = snapshot.companionSettings.privateRoutineTitles ? "Deine wichtige Routine" : String(routine.title.prefix(100))
+                let attributes = AlarmAttributes(presentation: AlarmPresentation(alert: AlarmPresentation.Alert(title: LocalizedStringResource(stringLiteral: title))), metadata: TherapyAlarmMetadata(category: "routine", offsetMinutes: 0), tintColor: .indigo)
+                let configuration = AlarmManager.AlarmConfiguration<TherapyAlarmMetadata>.alarm(schedule: .fixed(slot.fireAt), attributes: attributes, stopIntent: OpenRoutineIntent(routineID: routine.id))
+                _ = try await AlarmManager.shared.schedule(id: id, configuration: configuration)
+                guard generation == revision else { try? AlarmManager.shared.cancel(id: id); return }
+                owned[slot.id] = id.uuidString
+                UserDefaults.standard.set(owned, forKey: storageKey)
+            }
+            let end = desired.last?.fireAt.formatted(date: .abbreviated, time: .shortened) ?? "–"
+            store.routineAlarmStatus = desired.isEmpty ? "Keine dringenden Wecker geplant." : "\(desired.count) dringende Wecker eingerichtet. Vorrat bis \(end); Öffnen erneuert ihn."
+            if cancellationFailures > 0 { store.routineAlarmStatus += " \(cancellationFailures) alte Wecker konnten nicht entfernt werden. Bitte in den iPhone-Einstellungen prüfen." }
+        } catch { store.routineAlarmStatus = "Wecker konnten nicht vollständig eingerichtet werden: " + error.localizedDescription }
+    }
+    func cancel() {
+        revision += 1
+        let owned = UserDefaults.standard.dictionary(forKey: storageKey) as? [String: String] ?? [:]
+        for raw in owned.values { if let id = UUID(uuidString: raw) { try? AlarmManager.shared.cancel(id: id) } }
+        UserDefaults.standard.removeObject(forKey: storageKey)
+    }
+}
