@@ -50,9 +50,12 @@ enum ReadableBackup {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try raw.write(to: url, options: .atomic); try BackupArchive.protect(url)
     }
-    static func writeEntries(data: AppData, root: URL) throws {
+    static func writeEntries(data: AppData, root: URL, preferences: PortablePreferences = PortablePreferences()) throws {
         let fm = FileManager.default
-        let object = try JSONSerialization.jsonObject(with: BackupArchive.encoder().encode(data)) as! [String: Any]
+        var object = try JSONSerialization.jsonObject(with: BackupArchive.encoder().encode(data)) as! [String: Any]
+        object["appearancePreferences"] = try JSONSerialization.jsonObject(with: BackupArchive.encoder().encode(preferences))
+        try BackupArchive.encoder().encode(preferences).write(to: root.appendingPathComponent("appearance-preferences.json"), options: .atomic)
+        try BackupArchive.protect(root.appendingPathComponent("appearance-preferences.json"))
         let base = root.appendingPathComponent("Eintraege", isDirectory: true)
         try fm.createDirectory(at: base, withIntermediateDirectories: true)
         var keep = Set<String>(), index = "# Deine Therapiedaten\n\nStand: \(ISO8601DateFormatter().string(from: Date()))\n\n"
@@ -99,6 +102,7 @@ enum ReadableBackup {
         Diese Dateien sind NICHT passwortverschlüsselt.
         UEBERSICHT.md und Eintraege/ enthalten lesbare Einzeldateien für sämtliche gespeicherten Einträge und Einstellungen.
         therapy-data.json enthält den vollständigen maschinenlesbaren Datenstand.
+        appearance-preferences.json enthält Darstellung, ruhige Oberfläche, Haptik und Konfetti-Einstellung.
         Media/ und Recordings/ enthalten vorhandene Fotos, Dokumente und Sprachaufnahmen.
         Therapieordner und Themenzuordnungen stehen in den Einzeldateien; IDs erhalten die Beziehungen eindeutig.
 
@@ -138,7 +142,7 @@ enum ReadableBackup {
         guard rawData.count <= BackupArchive.manifestLimit, rawManifest.count <= BackupArchive.manifestLimit else { throw BackupArchiveError.invalid("Die Eintragsdaten überschreiten die sichere Grenze von 64 MB. Anhänge zählen nicht dazu.") }
         try rawData.write(to: staged.appendingPathComponent("therapy-data.json"), options: .atomic)
         try rawManifest.write(to: staged.appendingPathComponent("manifest.json"), options: .atomic)
-        try writeEntries(data: snapshot, root: staged)
+        try writeEntries(data: snapshot, root: staged, preferences: preferences)
         let url = outputDirectory.appendingPathComponent("Therapie-Klartext-\(Int(Date().timeIntervalSince1970)).zip")
         let fingerprints = try StoredZIP.write(directory: staged, output: url, additionalFiles: sources, progress: progress)
         for attachment in attachments {
@@ -189,6 +193,11 @@ enum StoredZIP {
     }
     static func crc(_ bytes: Data, state: inout UInt32) { for byte in bytes { state = crcTable[Int((state ^ UInt32(byte)) & 255)] ^ (state >> 8) } }
     static func u(_ value: UInt64, _ count: Int) -> Data { Data((0..<count).map { UInt8(truncatingIfNeeded: value >> ($0 * 8)) }) }
+    static func fields(_ values: [(UInt64, Int)]) -> Data {
+        var bytes = Data()
+        for (value, width) in values { bytes.append(u(value, width)) }
+        return bytes
+    }
     static func n(_ data: Data, _ start: Int, _ count: Int) -> UInt64 { data[start..<start + count].enumerated().reduce(0) { $0 | UInt64($1.element) << ($1.offset * 8) } }
     static func path(_ name: String) throws {
         let parts = name.split(separator: "/", omittingEmptySubsequences: false)
@@ -218,30 +227,30 @@ enum StoredZIP {
         for (index, source) in sources.enumerated() {
             let offset = try file.offset(), name = Data(source.0.utf8)
             let extra = u(1, 2) + u(16, 2) + Data(repeating: 0, count: 16)
-            let header = u(0x04034b50, 4) + u(45, 2) + u(UInt64(flags), 2) + u(0, 2) + u(0, 2) + u(33, 2)
-                + u(0, 4) + u(0xffffffff, 4) + u(0xffffffff, 4) + u(UInt64(name.count), 2) + u(UInt64(extra.count), 2)
+            let header = fields([(0x04034b50, 4), (45, 2), (UInt64(flags), 2), (0, 2), (0, 2), (33, 2),
+                                 (0, 4), (0xffffffff, 4), (0xffffffff, 4), (UInt64(name.count), 2), (UInt64(extra.count), 2)])
             try file.write(contentsOf: header + name + extra)
             let input = try FileHandle(forReadingFrom: source.1); defer { try? input.close() }
             var bytes: UInt64 = 0, state: UInt32 = 0xffffffff, hash = SHA256()
             while let chunk = try input.read(upToCount: BackupArchive.chunkSize), !chunk.isEmpty { crc(chunk, state: &state); hash.update(data: chunk); bytes += UInt64(chunk.count); try file.write(contentsOf: chunk) }
             fingerprints[source.0] = (bytes, Data(hash.finalize()))
             let checksum = state ^ 0xffffffff
-            try file.write(contentsOf: u(0x08074b50, 4) + u(UInt64(checksum), 4) + u(bytes, 8) + u(bytes, 8))
+            try file.write(contentsOf: fields([(0x08074b50, 4), (UInt64(checksum), 4), (bytes, 8), (bytes, 8)]))
             entries.append(.init(name: source.0, bytes: bytes, offset: offset, crc: checksum))
             progress(Double(index + 1) / Double(max(1, sources.count)))
         }
         let centralStart = try file.offset()
         for entry in entries {
-            let name = Data(entry.name.utf8), extra = u(1, 2) + u(24, 2) + u(entry.bytes, 8) + u(entry.bytes, 8) + u(entry.offset, 8)
-            let header = u(0x02014b50, 4) + u(45, 2) + u(45, 2) + u(UInt64(flags), 2) + u(0, 2) + u(0, 2) + u(33, 2)
-                + u(UInt64(entry.crc), 4) + u(0xffffffff, 4) + u(0xffffffff, 4) + u(UInt64(name.count), 2) + u(UInt64(extra.count), 2)
-                + u(0, 2) + u(0, 2) + u(0, 2) + u(0, 4) + u(0xffffffff, 4)
+            let name = Data(entry.name.utf8), extra = fields([(1, 2), (24, 2), (entry.bytes, 8), (entry.bytes, 8), (entry.offset, 8)])
+            let header = fields([(0x02014b50, 4), (45, 2), (45, 2), (UInt64(flags), 2), (0, 2), (0, 2), (33, 2),
+                                 (UInt64(entry.crc), 4), (0xffffffff, 4), (0xffffffff, 4), (UInt64(name.count), 2), (UInt64(extra.count), 2),
+                                 (0, 2), (0, 2), (0, 2), (0, 4), (0xffffffff, 4)])
             try file.write(contentsOf: header + name + extra)
         }
         let centralEnd = try file.offset(), count = UInt64(entries.count)
-        try file.write(contentsOf: u(0x06064b50, 4) + u(44, 8) + u(45, 2) + u(45, 2) + u(0, 4) + u(0, 4) + u(count, 8) + u(count, 8) + u(centralEnd - centralStart, 8) + u(centralStart, 8))
-        try file.write(contentsOf: u(0x07064b50, 4) + u(0, 4) + u(centralEnd, 8) + u(1, 4))
-        try file.write(contentsOf: u(0x06054b50, 4) + u(0, 2) + u(0, 2) + u(0xffff, 2) + u(0xffff, 2) + u(0xffffffff, 4) + u(0xffffffff, 4) + u(0, 2))
+        try file.write(contentsOf: fields([(0x06064b50, 4), (44, 8), (45, 2), (45, 2), (0, 4), (0, 4), (count, 8), (count, 8), (centralEnd - centralStart, 8), (centralStart, 8)]))
+        try file.write(contentsOf: fields([(0x07064b50, 4), (0, 4), (centralEnd, 8), (1, 4)]))
+        try file.write(contentsOf: fields([(0x06054b50, 4), (0, 2), (0, 2), (0xffff, 2), (0xffff, 2), (0xffffffff, 4), (0xffffffff, 4), (0, 2)]))
         try file.synchronize()
         return fingerprints
     }

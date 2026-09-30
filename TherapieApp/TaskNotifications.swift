@@ -45,16 +45,15 @@ final class TaskNotificationCoordinator: NSObject, UNUserNotificationCenterDeleg
         let settings = await center.notificationSettings()
         guard revision == generation else { return }
         guard [.authorized, .provisional, .ephemeral].contains(settings.authorizationStatus) else {
+            let pending = await center.pendingNotificationRequests()
+            guard revision == generation else { return }
+            center.removePendingNotificationRequests(withIdentifiers: pending.filter { $0.identifier.hasPrefix("therapy.task.") || $0.identifier == Self.energyIdentifier }.map(\.identifier))
             store?.taskReminderStatus = "Für Aufgabenerinnerungen bitte Mitteilungen freigeben."
             return
         }
         let all = TaskReminderPlanner.slots(tasks: snapshot.weeklyTasks, schedule: snapshot.schedule)
         // Never schedule half of a task's selected days: later tasks remain unscheduled with a visible count.
-        var slots: [TaskReminderSlot] = [], admitted = Set<UUID>()
-        for slot in all where !admitted.contains(slot.taskID) {
-            let group = all.filter { $0.taskID == slot.taskID }
-            if slots.count + group.count <= TaskReminderPlanner.requestBudget { slots += group; admitted.insert(slot.taskID) }
-        }
+        let slots = TaskReminderPlanner.admittedSlots(all), admitted = Set(slots.map(\.taskID))
         var requests: [UNNotificationRequest] = []
         for slot in slots {
             guard let task = snapshot.weeklyTasks.first(where: { $0.id == slot.taskID }) else { continue }

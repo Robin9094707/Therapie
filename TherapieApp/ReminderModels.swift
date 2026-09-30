@@ -59,6 +59,14 @@ enum TaskReminderPlanner {
         task.reminder = reminder
         task.reminderShiftedAt = shifted
     }
+    static func admittedSlots(_ all: [TaskReminderSlot]) -> [TaskReminderSlot] {
+        var result: [TaskReminderSlot] = [], considered = Set<UUID>()
+        for slot in all where considered.insert(slot.taskID).inserted {
+            let group = all.filter { $0.taskID == slot.taskID }
+            if result.count + group.count <= requestBudget { result += group }
+        }
+        return result
+    }
 }
 
 struct WeeklyEnergyReview: Codable, Equatable, Identifiable {

@@ -20,6 +20,7 @@ enum TherapyAppearance: String, CaseIterable, Identifiable {
 }
 
 struct AppearanceCard: View {
+    @EnvironmentObject private var store: AppStore
     @AppStorage("therapy.haptics") private var haptics = true
     @AppStorage("therapy.confetti") private var confetti = true
     @AppStorage("therapy.appearance") private var appearance = TherapyAppearance.system.rawValue
@@ -48,6 +49,10 @@ struct AppearanceCard: View {
                     .foregroundStyle(.secondary)
             }
         }
+        .onChange(of: appearance) { _, _ in store.refreshReadableFiles() }
+        .onChange(of: calmInterface) { _, _ in store.refreshReadableFiles() }
+        .onChange(of: haptics) { _, _ in store.refreshReadableFiles() }
+        .onChange(of: confetti) { _, _ in store.refreshReadableFiles() }
     }
 }
 

@@ -93,7 +93,9 @@ final class AppStore: ObservableObject {
         }
         isLoading = false
         TaskNotificationCoordinator.shared.attach(self)
-        if loadError == nil { refreshReadableFiles(); TaskNotificationCoordinator.shared.refresh(self) }
+        if loadError == nil {
+            if !fm.fileExists(atPath: dataURL.path) { save() } else { refreshReadableFiles(); TaskNotificationCoordinator.shared.refresh(self) }
+        }
         if refreshLegacyAlarms && loadError == nil {
             Task {
                 do { data.schedule.alarmIDs = try await AlarmService.shared.replaceAll(schedule: data.schedule) }
@@ -138,13 +140,13 @@ final class AppStore: ObservableObject {
     }
 
     func refreshReadableFiles() {
-        guard !writeBlocked else { return }
+        guard !writeBlocked, lastSaveError == nil else { return }
         readableWorkItem?.cancel()
-        let snapshot = data, root = rootURL
+        let snapshot = data, root = rootURL, preferences = PortablePreferences.capture()
         let work = DispatchWorkItem { [weak self] in
             BackupDiskAccess.lock.lock(); defer { BackupDiskAccess.lock.unlock() }
             do {
-                try ReadableBackup.writeEntries(data: snapshot, root: root)
+                try ReadableBackup.writeEntries(data: snapshot, root: root, preferences: preferences)
                 Task { @MainActor in self?.readableFileStatus = "Lesbare Dateien sind aktualisiert." }
             } catch { Task { @MainActor in self?.readableFileStatus = "Lesbare Dateien konnten nicht aktualisiert werden: " + error.localizedDescription } }
         }

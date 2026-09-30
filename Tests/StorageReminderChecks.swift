@@ -83,6 +83,12 @@ struct StorageReminderChecks {
         let task = data.weeklyTasks[0]
         let daily = TaskReminderPlanner.slots(tasks: [task], schedule: data.schedule, now: now)
         try expect(daily.count == 1 && daily[0].weekday == nil, "Seven weekdays use one repeating daily notification")
+        let many = (0..<45).map { _ -> WeeklyTask in var copy = task; copy.id = UUID(); return copy }
+        let planned = TaskReminderPlanner.slots(tasks: many, schedule: data.schedule, now: now)
+        try expect(TaskReminderPlanner.admittedSlots(planned).count == 40, "Task notification budget leaves room for session reminders")
+        let grouped = (0..<7).flatMap { _ -> [TaskReminderSlot] in let id = UUID(); return (1...6).map { TaskReminderSlot(taskID: id, weekday: $0, hour: 18, minute: 0) } }
+        let bounded = TaskReminderPlanner.admittedSlots(grouped)
+        try expect(bounded.count == 36 && Set(bounded.map(\.taskID)).count == 6, "Capacity never schedules half a task's weekdays")
         var done = task; done.completed = true
         try expect(TaskReminderPlanner.slots(tasks: [done], schedule: data.schedule, now: now).isEmpty, "Completed task has no reminder")
         var off = task; off.reminder?.enabled = false
