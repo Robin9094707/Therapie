@@ -118,7 +118,7 @@ struct GuidedCheckInView: View {
             field("Was möchtest du beim nächsten Termin besprechen?", text: $entry.therapyQuestion)
             PhotosPicker(selection: $selection, matching: .images) { Label(importing ? "Foto wird gespeichert …" : "Ein Foto ergänzen", systemImage: "photo.badge.plus") }.disabled(importing)
             ForEach(entry.mediaIDs, id: \.self) { id in
-                if let media = store.data.media.first(where: { $0.id == id }) { Label(media.title, systemImage: "photo").font(.subheadline) }
+                if let media = store.data.media.first(where: { $0.id == id }) { Label(media.title + (media.attachmentOmitted == true ? " · Datei nicht im Backup enthalten" : ""), systemImage: "photo").font(.subheadline) }
             }
             Text("Fotos bleiben auch als einzelne Materialien im Archiv erhalten. Deine Einträge werden nicht automatisch versendet.").font(.footnote).foregroundStyle(.secondary)
         default:

@@ -101,8 +101,9 @@ struct GuidedCheckInCard: View {
                 }
                 if !entry.mediaIDs.isEmpty {
                     ForEach(entry.mediaIDs, id: \.self) { id in
-                        if let media = store.data.media.first(where: { $0.id == id }), media.attachmentOmitted != true {
-                            ShareLink(item: store.fileURL(for: media)) { Label(media.title, systemImage: "photo") }.font(.caption)
+                        if let media = store.data.media.first(where: { $0.id == id }) {
+                            if media.attachmentOmitted == true { Label(media.title + " · Datei nicht im Backup enthalten", systemImage: "photo.badge.exclamationmark").font(.caption).foregroundStyle(.secondary) }
+                            else { ShareLink(item: store.fileURL(for: media)) { Label(media.title, systemImage: "photo") }.font(.caption) }
                         }
                     }
                 }

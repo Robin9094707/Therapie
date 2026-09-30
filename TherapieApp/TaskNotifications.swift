@@ -92,7 +92,9 @@ final class TaskNotificationCoordinator: NSObject, UNUserNotificationCenterDeleg
             guard let routine = snapshot.routines.first(where: { $0.id == slot.occurrence.routineID }) else { continue }
             let content = UNMutableNotificationContent()
             content.title = "Deine Routine wartet auf dich"
-            content.body = snapshot.companionSettings.privateRoutineTitles ? "Eine Routine ist noch offen. Öffne sie zum Bestätigen oder verschiebe sie eine Stunde." : String(routine.title.prefix(160))
+            let timeTitle = routine.times.first(where: { $0.id == slot.occurrence.timeID })?.title ?? ""
+            let publicTitle = routine.title + (timeTitle.isEmpty ? "" : " · " + timeTitle)
+            content.body = snapshot.companionSettings.privateRoutineTitles ? "Eine Routine ist noch offen. Öffne sie zum Bestätigen oder verschiebe sie eine Stunde." : String(publicTitle.prefix(160))
             content.sound = .default
             content.categoryIdentifier = Self.routineCategory
             content.userInfo = ["routineID": routine.id.uuidString, "timeID": slot.occurrence.timeID.uuidString, "due": slot.occurrence.due.timeIntervalSince1970]

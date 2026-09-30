@@ -107,6 +107,9 @@ struct RoutineDueCard: View {
             GlassCard(emphasized: true) {
                 VStack(alignment: .leading, spacing: 12) {
                     Label(routine.title, systemImage: routine.symbol).font(.headline)
+                    if let time = routine.times.first(where: { $0.id == occurrence.timeID }), !time.title.isEmpty {
+                        Text(time.title).font(.subheadline.weight(.semibold))
+                    }
                     Text("Fällig " + occurrence.due.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
                     if let snooze = store.data.routineSnoozes.first(where: { $0.id == occurrence.id }), snooze.until > Date() { Text("Verschoben bis " + snooze.until.formatted(date: .omitted, time: .shortened)).font(.caption) }
                     if !routine.details.isEmpty { Text(routine.details).font(.subheadline) }

@@ -39,7 +39,9 @@ final class RoutineAlarmCoordinator {
         desired.sort { $0.fireAt == $1.fireAt ? $0.id < $1.id : $0.fireAt < $1.fireAt }
         var owned = UserDefaults.standard.dictionary(forKey: storageKey) as? [String: String] ?? [:]
         func key(_ slot: RoutineReminderSlot) -> String {
-            let title = snapshot.companionSettings.privateRoutineTitles ? "private" : snapshot.routines.first(where: { $0.id == slot.occurrence.routineID })?.title ?? ""
+            let routine = snapshot.routines.first(where: { $0.id == slot.occurrence.routineID })
+            let timeTitle = routine?.times.first(where: { $0.id == slot.occurrence.timeID })?.title ?? ""
+            let title = snapshot.companionSettings.privateRoutineTitles ? "private" : (routine?.title ?? "") + " · " + timeTitle
             let digest = SHA256.hash(data: Data(title.utf8)).map { String(format: "%02x", $0) }.joined()
             return slot.id + "." + digest
         }
@@ -70,7 +72,9 @@ final class RoutineAlarmCoordinator {
                 guard generation == revision else { return }
                 guard let routine = snapshot.routines.first(where: { $0.id == slot.occurrence.routineID }) else { continue }
                 let id = UUID()
-                let title = snapshot.companionSettings.privateRoutineTitles ? "Deine wichtige Routine" : String(routine.title.prefix(100))
+                let timeTitle = routine.times.first(where: { $0.id == slot.occurrence.timeID })?.title ?? ""
+                let publicTitle = routine.title + (timeTitle.isEmpty ? "" : " · " + timeTitle)
+                let title = snapshot.companionSettings.privateRoutineTitles ? "Deine wichtige Routine" : String(publicTitle.prefix(100))
                 let attributes = AlarmAttributes(presentation: AlarmPresentation(alert: AlarmPresentation.Alert(title: LocalizedStringResource(stringLiteral: title))), metadata: TherapyAlarmMetadata(category: "routine", offsetMinutes: 0), tintColor: .indigo)
                 let configuration = AlarmManager.AlarmConfiguration<TherapyAlarmMetadata>.alarm(schedule: .fixed(slot.fireAt), attributes: attributes, stopIntent: OpenRoutineIntent(routineID: routine.id))
                 _ = try await AlarmManager.shared.schedule(id: id, configuration: configuration)
