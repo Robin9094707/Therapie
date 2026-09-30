@@ -45,14 +45,21 @@ jobs:
 
       - name: Test data migration, weekly streaks, charts and CSV export
         run: |
-          swiftc TherapieApp/Models.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift Tests/ModelChecks.swift -o /tmp/therapie-model-checks
+          swiftc TherapieApp/Models.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift Tests/ModelChecks.swift -o /tmp/therapie-model-checks
           /tmp/therapie-model-checks
 
       - name: Test encrypted portable backups and recovery
         run: |
           set -o pipefail
-          swiftc TherapieApp/Models.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/BackupArchive.swift Tests/BackupChecks.swift -o /tmp/therapie-backup-checks 2>&1 | tee backup-tests.log
+          swiftc TherapieApp/Models.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift TherapieApp/BackupArchive.swift Tests/BackupChecks.swift -o /tmp/therapie-backup-checks 2>&1 | tee backup-tests.log
           /tmp/therapie-backup-checks 2>&1 | tee -a backup-tests.log
+
+      - name: Test readable ZIP, Files migration and task reminders
+        run: |
+          set -o pipefail
+          swiftc TherapieApp/Models.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift TherapieApp/BackupArchive.swift TherapieApp/ReadableBackup.swift Tests/StorageReminderChecks.swift -o /tmp/therapie-storage-checks 2>&1 | tee storage-tests.log
+          /tmp/therapie-storage-checks 2>&1 | tee -a storage-tests.log
+          python3 scripts/verify_readable_zip.py /tmp/therapie-portable-check.zip
 
       - name: Build unsigned iPhone app
         run: |
@@ -106,17 +113,17 @@ jobs:
       - name: Package IPA
         run: |
           APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" -print -quit)
-          rm -rf Payload Therapie-v3002.0.0.ipa
+          rm -rf Payload Therapie-v3003.0.0.ipa
           mkdir Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Therapie-v3002.0.0.ipa Payload
-          ls -lh Therapie-v3002.0.0.ipa
+          /usr/bin/zip -qry Therapie-v3003.0.0.ipa Payload
+          ls -lh Therapie-v3003.0.0.ipa
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Therapie-v3002.0.0-IPA
-          path: Therapie-v3002.0.0.ipa
+          name: Therapie-v3003.0.0-IPA
+          path: Therapie-v3003.0.0.ipa
           if-no-files-found: error
           retention-days: 30
 
@@ -129,4 +136,5 @@ jobs:
             xcodebuild.log
             simulator-build.log
             backup-tests.log
+            storage-tests.log
           if-no-files-found: ignore

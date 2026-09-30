@@ -6,6 +6,7 @@ struct TherapyTodayCard: View {
         GlassCard(emphasized: store.data.currentSession != nil) {
             VStack(alignment: .leading, spacing: 12) {
                 SectionHeader(title: "Deine Therapie", icon: "leaf", subtitle: "Für die nächste Stunde bereitlegen.")
+                Button("Wochenenergie für die Therapie eintragen", systemImage: "battery.100percent") { store.openEnergyReview = true }
                 NavigationLink { SessionConductorView() } label: {
                     Label(store.data.currentSession == nil ? "Therapiestunde starten" : "Laufende Therapiestunde öffnen", systemImage: "timer").font(.headline)
                 }

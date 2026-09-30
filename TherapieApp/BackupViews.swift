@@ -49,12 +49,15 @@ struct BackupCenterView: View {
     @State private var message: String?
     @State private var error: String?
     @State private var confirmImport = false
+    @State private var encryptedExport = true
+    @State private var exportedEncrypted = true
 
     var body: some View {
         NavigationStack {
             TherapyScreen {
                 VStack(spacing: 16) {
                     introduction
+                    filesCard
                     exportCard
                     importCard
                     if let prepared { preview(prepared) }
@@ -76,7 +79,7 @@ struct BackupCenterView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { dismiss() }.disabled(busy != nil) } }
             .interactiveDismissDisabled(busy != nil)
-            .fileImporter(isPresented: $showImporter, allowedContentTypes: [.therapieBackup, .data]) { result in
+            .fileImporter(isPresented: $showImporter, allowedContentTypes: [.therapieBackup, .zip, .data]) { result in
                 do {
                     prepared?.discard(); prepared = nil
                     selectedFile = try result.get(); importPassword = ""; error = nil; message = nil
@@ -85,7 +88,7 @@ struct BackupCenterView: View {
             .sheet(item: $exported) { file in
                 BackupSavePicker(url: file.url) { saved in
                     exported = nil
-                    message = saved ? "Die verschlüsselte Datei wurde im gewählten Ordner gesichert." : "Speichern abgebrochen. Du kannst die fertige Datei erneut sichern."
+                    message = saved ? (exportedEncrypted ? "Die verschlüsselte Datei wurde im gewählten Ordner gesichert." : "Das lesbare Klartext-ZIP wurde im gewählten Ordner gesichert.") : "Speichern abgebrochen. Du kannst die fertige Datei erneut sichern."
                     if saved { TherapyEffects.shared.light() }
                 }.ignoresSafeArea()
             }
@@ -110,7 +113,7 @@ struct BackupCenterView: View {
                               subtitle: "Deine Daten mitnehmen, auch auf ein anderes iPhone.")
                 Text("Einträge, Stimmung, Akku-Punkte, Themen, Ordner, Ziele, Notizen, Stundenpläne und Darstellungseinstellungen werden gemeinsam gesichert.")
                     .font(.subheadline)
-                Text("AES-256-GCM schützt Inhalt und Integrität. Das Passwort wird nicht gespeichert und kann nicht zurückgesetzt werden. Bewahre es getrennt von der Datei auf.")
+                Text("Die Passwortsicherung schützt Inhalt und Integrität mit AES-256-GCM. Das Passwort wird nicht gespeichert und kann nicht zurückgesetzt werden. Bewahre es getrennt von der Datei auf.")
                     .font(.footnote).foregroundStyle(.secondary)
                 Text("\(store.data.media.count) Materialien · \(store.data.notes.count) Notizen · \(store.data.moodCheckIns.count) Check-ins")
                     .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -122,6 +125,14 @@ struct BackupCenterView: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 14) {
                 SectionHeader(title: "Exportieren", icon: "square.and.arrow.up", subtitle: "Alle Eintragsdaten werden immer mitgenommen.")
+                Picker("Dateiformat", selection: $encryptedExport) {
+                    Text("Passwortgeschützte Sicherung").tag(true)
+                    Text("Lesbares Klartext-ZIP").tag(false)
+                }.pickerStyle(.menu)
+                if !encryptedExport {
+                    Label("Dieses ZIP ist unverschlüsselt. Jede Person mit Zugriff auf die Datei kann deine Einträge und Anhänge lesen.", systemImage: "lock.open").font(.footnote).foregroundStyle(.orange)
+                    Text("Mit Einzeldateien für alle Einträge, einer Übersicht und den vollständigen Daten für den Import. Ohne App lesbar; normale ZIP-Programme können es entpacken.").font(.footnote).foregroundStyle(.secondary)
+                }
                 Toggle("Bilder einschließen", isOn: $options.includePhotos)
                 Toggle("Audioaufnahmen einschließen", isOn: $options.includeAudio)
                 Toggle("Dokumente einschließen", isOn: $options.includeDocuments)
@@ -132,7 +143,7 @@ struct BackupCenterView: View {
                 if store.data.media.contains(where: { $0.attachmentOmitted == true }) {
                     Text("Bereits ausgelassene Anhänge können auch mit aktivierten Schaltern nicht erneut mitgesichert werden.").font(.footnote).foregroundStyle(.secondary)
                 }
-                Group {
+                if encryptedExport { Group {
                     if revealPassword {
                         TextField("Neues Sicherungspasswort", text: $password)
                         TextField("Passwort wiederholen", text: $repeatedPassword)
@@ -145,9 +156,10 @@ struct BackupCenterView: View {
                 Toggle("Passwort anzeigen", isOn: $revealPassword)
                 Text("Mindestens 8 Zeichen. Eine längere, einzigartige Passphrase schützt besser.").font(.caption).foregroundStyle(.secondary)
                 if !repeatedPassword.isEmpty && password != repeatedPassword { Text("Die Passwörter stimmen noch nicht überein.").font(.caption).foregroundStyle(.orange) }
-                Button { createExport() } label: { Label("Verschlüsselte Datei erstellen", systemImage: "lock.doc").frame(maxWidth: .infinity).fixedSize(horizontal: false, vertical: true) }
+                }
+                Button { createExport() } label: { Label(encryptedExport ? "Verschlüsselte Datei erstellen" : "Lesbares ZIP erstellen", systemImage: encryptedExport ? "lock.doc" : "doc.zipper").frame(maxWidth: .infinity).fixedSize(horizontal: false, vertical: true) }
                     .buttonStyle(.borderedProminent)
-                    .disabled(password.count < 8 || password != repeatedPassword || store.loadError != nil)
+                    .disabled((encryptedExport && (password.count < 8 || password != repeatedPassword)) || store.loadError != nil)
                 if let exportedURL {
                     Button { exported = ExportedBackup(url: exportedURL) } label: { Label("In Dateien sichern", systemImage: "folder").frame(maxWidth: .infinity) }.buttonStyle(.bordered)
                 }
@@ -162,9 +174,11 @@ struct BackupCenterView: View {
                 Button { showImporter = true } label: { Label("Sicherungsdatei auswählen", systemImage: "doc.badge.arrow.up").frame(maxWidth: .infinity).fixedSize(horizontal: false, vertical: true) }.buttonStyle(.bordered)
                 if let selectedFile {
                     Text(selectedFile.lastPathComponent).font(.footnote).lineLimit(3)
-                    SecureField("Passwort dieser Sicherung", text: $importPassword).textFieldStyle(.roundedBorder).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    Button { verifyImport() } label: { Label("Entschlüsseln & prüfen", systemImage: "checkmark.shield").frame(maxWidth: .infinity) }
-                        .buttonStyle(.borderedProminent).disabled(importPassword.isEmpty)
+                    if selectedFile.pathExtension.lowercased() != "zip" {
+                        SecureField("Passwort dieser Sicherung", text: $importPassword).textFieldStyle(.roundedBorder).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    }
+                    Button { verifyImport() } label: { Label(selectedFile.pathExtension.lowercased() == "zip" ? "ZIP prüfen & Vorschau öffnen" : "Entschlüsseln & prüfen", systemImage: "checkmark.shield").frame(maxWidth: .infinity) }
+                        .buttonStyle(.borderedProminent).disabled(selectedFile.pathExtension.lowercased() != "zip" && importPassword.isEmpty)
                 }
                 Text("Berechtigungen, Kalender-Verknüpfungen und der automatische Backup-Ordner werden auf diesem Gerät neu eingerichtet. Die persönlichen Einstellungen bleiben erhalten.")
                     .font(.footnote).foregroundStyle(.secondary)
@@ -195,18 +209,19 @@ struct BackupCenterView: View {
     private func createExport() {
         do {
             let snapshot = try store.exportSnapshot(), root = store.rootURL, preferences = PortablePreferences.capture()
-            let selectedOptions = options, secret = password
-            let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "3002.0.0"
-            busy = "Sicherung wird verschlüsselt …"; progress = 0; message = nil; error = nil
+            let selectedOptions = options, secret = password, encrypted = encryptedExport
+            let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "3003.0.0"
+            busy = encrypted ? "Sicherung wird verschlüsselt …" : "Lesbare Einträge und ZIP werden erstellt …"; progress = 0; message = nil; error = nil
             Task {
                 do {
                     let url = try await Task.detached(priority: .userInitiated) {
-                        try BackupArchive.export(data: snapshot, root: root, preferences: preferences, options: selectedOptions, password: secret, version: version) { value in
+                        if !encrypted { return try ReadableBackup.export(data: snapshot, root: root, preferences: preferences, options: selectedOptions, version: version) { value in Task { @MainActor in progress = value } } }
+                        return try BackupArchive.export(data: snapshot, root: root, preferences: preferences, options: selectedOptions, password: secret, version: version) { value in
                             Task { @MainActor in progress = value }
                         }
                     }.value
                     if let exportedURL { try? FileManager.default.removeItem(at: exportedURL.deletingLastPathComponent()) }
-                    exportedURL = url; exported = ExportedBackup(url: url)
+                    exportedURL = url; exportedEncrypted = encrypted; exported = ExportedBackup(url: url)
                     password = ""; repeatedPassword = ""
                 } catch { self.error = error.localizedDescription }
                 busy = nil
@@ -218,7 +233,7 @@ struct BackupCenterView: View {
         guard let url = selectedFile else { return }
         let secret = importPassword
         prepared?.discard(); prepared = nil
-        busy = "Datei wird entschlüsselt und geprüft …"; progress = 0; error = nil; message = nil
+        busy = url.pathExtension.lowercased() == "zip" ? "ZIP wird entpackt und geprüft …" : "Datei wird entschlüsselt und geprüft …"; progress = 0; error = nil; message = nil
         Task {
             do {
                 prepared = try await Task.detached(priority: .userInitiated) {
@@ -226,7 +241,10 @@ struct BackupCenterView: View {
                     defer { if access { url.stopAccessingSecurityScopedResource() } }
                     var coordinatorError: NSError?, outcome: Result<PreparedBackup, Error>?
                     NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: &coordinatorError) { coordinated in
-                        outcome = Result { try BackupArchive.prepareImport(url: coordinated, password: secret) { value in Task { @MainActor in progress = value } } }
+                        outcome = Result {
+                            if url.pathExtension.lowercased() == "zip" { return try ReadableBackup.prepareImport(url: coordinated) }
+                            return try BackupArchive.prepareImport(url: coordinated, password: secret) { value in Task { @MainActor in progress = value } }
+                        }
                     }
                     if let coordinatorError { throw coordinatorError }
                     guard let outcome else { throw BackupArchiveError.invalid("Die Datei konnte nicht aus Dateien geladen werden.") }
@@ -246,5 +264,16 @@ struct BackupCenterView: View {
             message = "Alle Daten wurden wiederhergestellt. Richte bei Bedarf Kalender, Erinnerungen und den automatischen Backup-Ordner erneut ein."
             error = nil
         } catch { self.error = error.localizedDescription; prepared.discard(); self.prepared = nil }
+    }
+    private var filesCard: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 12) {
+                SectionHeader(title: "Dein Ordner in Dateien", icon: "folder.fill", subtitle: "Auf meinem iPhone → Therapie → Therapiedaten")
+                Text("Hier liegen deine Datendatei, Anhänge und lesbaren Einträge. Du kannst den Ordner manuell kopieren, auch wenn die App nicht mehr startet.").font(.subheadline)
+                Text(store.readableFileStatus).font(.caption).foregroundStyle(.secondary)
+                Button("Lesbare Dateien jetzt aktualisieren", systemImage: "arrow.clockwise") { store.refreshReadableFiles() }.buttonStyle(.bordered).disabled(busy != nil || store.loadError != nil)
+                Text("Der Ordner gehört zur App und wird mit ihr gelöscht. Kopiere ihn vor einer Deinstallation an einen anderen Speicherort. Kopieren ist sicherer als Änderungen an den laufenden Datendateien.").font(.footnote).foregroundStyle(.secondary)
+            }
+        }
     }
 }

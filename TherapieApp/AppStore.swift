@@ -13,11 +13,16 @@ final class AppStore: ObservableObject {
 
     @Published var lastSaveError: String?
     @Published private(set) var loadError: String?
+    @Published private(set) var readableFileStatus = "Lesbare Dateien werden vorbereitet."
+    @Published var taskReminderStatus = ""
+    @Published var notificationTaskID: UUID?
+    @Published var openEnergyReview = false
     private var writeBlocked = false
 
     private var isLoading = true
     lazy var sessionController = TherapySessionController(store: self)
     private var backupWorkItem: DispatchWorkItem?
+    private var readableWorkItem: DispatchWorkItem?
 
     let rootURL: URL
     let mediaURL: URL
@@ -27,15 +32,19 @@ final class AppStore: ObservableObject {
     init() {
         let fm = FileManager.default
         let folder = ProcessInfo.processInfo.arguments.contains("--ui-testing") ? "TherapieUITests" : "Therapie"
-        let root = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            .appendingPathComponent(folder, isDirectory: true)
+        let support = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let documents = fm.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let root: URL
+        let migrationFailure: String?
+        do { root = try AppFileStorage.root(applicationSupport: support, documents: documents, folder: folder); migrationFailure = nil }
+        catch { root = support.appendingPathComponent(folder); migrationFailure = error.localizedDescription }
         rootURL = root
         mediaURL = root.appendingPathComponent("Media", isDirectory: true)
         recordingsURL = root.appendingPathComponent("Recordings", isDirectory: true)
         dataURL = root.appendingPathComponent("therapy-data.json")
 
         let recoveryFailure: String?
-        do { try BackupArchive.recoverInterruptedRestore(root: root); recoveryFailure = nil }
+        do { try BackupArchive.recoverInterruptedRestore(root: root); recoveryFailure = migrationFailure }
         catch { recoveryFailure = error.localizedDescription }
         BackupArchive.cleanAbandonedTransfers(root: root)
         if recoveryFailure == nil { try? fm.createDirectory(at: root, withIntermediateDirectories: true) }
@@ -46,6 +55,7 @@ final class AppStore: ObservableObject {
         }
 
         data = AppData()
+        var refreshLegacyAlarms = false
         if let recoveryFailure {
             writeBlocked = true
             loadError = "Eine unterbrochene Wiederherstellung konnte nicht abgeschlossen werden. Die vorherige Sicherung bleibt erhalten. " + recoveryFailure
@@ -58,8 +68,9 @@ final class AppStore: ObservableObject {
                 decoder.dateDecodingStrategy = .iso8601
                 data = try decoder.decode(AppData.self, from: raw)
                 let version = (try JSONSerialization.jsonObject(with: raw) as? [String: Any])?["schemaVersion"] as? Int ?? 1
-                let snapshot = root.appendingPathComponent("therapy-data.pre-3002.json")
-                if version < 5 && !fm.fileExists(atPath: snapshot.path) {
+                refreshLegacyAlarms = version < 6 && !data.schedule.alarmIDs.isEmpty
+                let snapshot = root.appendingPathComponent("therapy-data.pre-3003.json")
+                if version < 6 && !fm.fileExists(atPath: snapshot.path) {
                     try raw.write(to: snapshot, options: [.atomic, .completeFileProtection])
                 }
             } catch {
@@ -81,6 +92,14 @@ final class AppStore: ObservableObject {
             }
         }
         isLoading = false
+        TaskNotificationCoordinator.shared.attach(self)
+        if loadError == nil { refreshReadableFiles(); TaskNotificationCoordinator.shared.refresh(self) }
+        if refreshLegacyAlarms && loadError == nil {
+            Task {
+                do { data.schedule.alarmIDs = try await AlarmService.shared.replaceAll(schedule: data.schedule) }
+                catch { taskReminderStatus = "Bitte aktualisiere deine AlarmKit-Erinnerungen im Kalender: " + error.localizedDescription }
+            }
+        }
     }
 
     func save() {
@@ -97,6 +116,8 @@ final class AppStore: ObservableObject {
             )
             lastSaveError = nil
             scheduleAutomaticBackup(snapshot: data)
+            refreshReadableFiles()
+            TaskNotificationCoordinator.shared.refresh(self)
         } catch {
             lastSaveError = error.localizedDescription
         }
@@ -114,6 +135,21 @@ final class AppStore: ObservableObject {
         }
         backupWorkItem = work
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1.2, execute: work)
+    }
+
+    func refreshReadableFiles() {
+        guard !writeBlocked else { return }
+        readableWorkItem?.cancel()
+        let snapshot = data, root = rootURL
+        let work = DispatchWorkItem { [weak self] in
+            BackupDiskAccess.lock.lock(); defer { BackupDiskAccess.lock.unlock() }
+            do {
+                try ReadableBackup.writeEntries(data: snapshot, root: root)
+                Task { @MainActor in self?.readableFileStatus = "Lesbare Dateien sind aktualisiert." }
+            } catch { Task { @MainActor in self?.readableFileStatus = "Lesbare Dateien konnten nicht aktualisiert werden: " + error.localizedDescription } }
+        }
+        readableWorkItem = work
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 0.7, execute: work)
     }
 
     func backupNow() throws {
@@ -142,6 +178,7 @@ final class AppStore: ObservableObject {
 
     func installBackup(_ prepared: PreparedBackup) throws {
         backupWorkItem?.cancel(); backupWorkItem = nil
+        readableWorkItem?.cancel(); readableWorkItem = nil
         BackupDiskAccess.lock.lock(); defer { BackupDiskAccess.lock.unlock() }
         var restored = prepared.manifest.data
         // OS identifiers and security-scoped bookmarks belong to this device.
@@ -161,6 +198,8 @@ final class AppStore: ObservableObject {
         isLoading = false
         TherapyEffects.shared.light()
         sessionController.restoredData()
+        refreshReadableFiles()
+        TaskNotificationCoordinator.shared.refresh(self)
     }
 
     func addWeeklyTask(title: String, details: String) {
@@ -237,8 +276,34 @@ final class AppStore: ObservableObject {
         guard let i = data.weeklyTasks.firstIndex(where: { $0.id == id }) else { return }
         var snapshot = data
         snapshot.weeklyTasks[i].toggleCompletion()
+        if snapshot.weeklyTasks[i].completed { snapshot.weeklyTasks[i].reminderShiftedAt = nil }
         data = snapshot
         if !snapshot.weeklyTasks[i].completed { TherapyEffects.shared.light() }
+    }
+
+    func postponeTask(_ id: UUID, minutes: Int) {
+        guard let index = data.weeklyTasks.firstIndex(where: { $0.id == id }) else { return }
+        var snapshot = data
+        TaskReminderPlanner.postpone(&snapshot.weeklyTasks[index], schedule: snapshot.schedule, minutes: minutes)
+        data = snapshot
+        TherapyEffects.shared.light()
+    }
+
+    func saveEnergyReview(_ entry: WeeklyEnergyReview) {
+        var clean = entry
+        clean.periodEnd = Calendar.therapyCalendar.startOfDay(for: min(entry.periodEnd, Date()))
+        clean.energy = max(1, min(5, clean.energy))
+        func normalized(_ points: [WeeklyEnergyFactor]) -> [WeeklyEnergyFactor] {
+            points.filter { !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.map { value in
+                var point = value; point.title = point.title.trimmingCharacters(in: .whitespacesAndNewlines); point.impact = max(1, min(5, point.impact)); return point
+            }
+        }
+        clean.gives = normalized(clean.gives)
+        clean.takes = normalized(clean.takes)
+        var snapshot = data
+        snapshot.weeklyEnergyReviews.removeAll { $0.id == clean.id || Calendar.therapyCalendar.isDate($0.periodEnd, inSameDayAs: clean.periodEnd) }
+        snapshot.weeklyEnergyReviews.insert(clean, at: 0)
+        data = snapshot
     }
 
     func saveFolder(_ folder: TherapyFolder) {
@@ -385,6 +450,8 @@ final class AppStore: ObservableObject {
     func resetAllData() {
         BackupDiskAccess.lock.lock(); defer { BackupDiskAccess.lock.unlock() }
         backupWorkItem?.cancel()
+        readableWorkItem?.cancel()
+        TaskNotificationCoordinator.shared.cancel()
         try? FileManager.default.removeItem(at: BackupArchive.recoveryURL(rootURL))
         try? FileManager.default.removeItem(at: rootURL)
         try? FileManager.default.createDirectory(at: mediaURL, withIntermediateDirectories: true)

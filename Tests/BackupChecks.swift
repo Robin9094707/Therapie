@@ -36,6 +36,10 @@ struct BackupChecks {
         data.profile = UserProfile(userName: "Robin", therapistName: "Therapeutin", onboardingCompleted: true)
         data.schedule.alarmIDs = ["local-device-only"]
         data.preferences.includeLocationForNewMedia = false
+        data.schedule.location = "Praxis"
+        data.schedule.preparation = "Kaffee vorbereiten"
+        data.reminderPreferences = ReminderPreferences(privateTaskTitles: false, taskSound: false, energyReviewEnabled: true, energyReviewMinutesBeforeTherapy: 45)
+        data.weeklyEnergyReviews = [WeeklyEnergyReview(energy: 4, gives: [WeeklyEnergyFactor(title: "Freunde", impact: 4, category: .people)], takes: [WeeklyEnergyFactor(title: "Viele Termine", impact: 2, category: .work)], nextStep: "Pause einplanen", therapyQuestion: "Besprechen")]
         let folder = TherapyFolder(title: "Autismus")
         data.therapyFolders = [folder]
         let topic = TherapyTopic(title: "Reizregulation")
@@ -43,7 +47,7 @@ struct BackupChecks {
         data.therapyGoals = [TherapyGoal(title: "Pausen")]
         data.notes = [TherapyNote(title: "PRIVATE-NOTE-DO-NOT-LEAK", text: "Wichtig für mich", tags: ["Privat"], folderID: folder.id, topicID: topic.id, author: "Therapeutin", isImportant: true)]
         let week = Date().therapyWeek
-        data.weeklyTasks = [WeeklyTask(weekOfYear: week.week, yearForWeekOfYear: week.year, title: "Aufgabe", details: "Wieder aufnehmen", completed: true, completedAt: Date(), topicID: topic.id)]
+        data.weeklyTasks = [WeeklyTask(weekOfYear: week.week, yearForWeekOfYear: week.year, title: "Aufgabe", details: "Wieder aufnehmen", completed: true, completedAt: Date(), topicID: topic.id, reminder: TaskReminder(), dueDate: Date(), smallStep: "Einmal probieren", support: "Zusammen", progress: 80, reminderShiftedAt: Date())]
         data.energyEntries = [EnergyEntry(level: 3, givesEnergy: "Ruhe", takesEnergy: "Lärm", note: "Altbestand")]
         data.reflections = [TherapySessionReflection(summary: "Stunde", whatHelped: "Kaffee", nextFocus: "AirTag")]
         data.moodCheckIns = [MoodCheckIn(mood: 4, battery: 3)]
@@ -148,10 +152,10 @@ struct BackupChecks {
         prefs.apply(defaults)
         try expect(PortablePreferences.capture(defaults) == prefs, "Appearance, calm, haptics and confetti restored")
         var oldJSON = try JSONSerialization.jsonObject(with: BackupArchive.encoder().encode(data)) as! [String: Any]
-        for version in 1...4 {
+        for version in 1...5 {
             oldJSON["schemaVersion"] = version
             let migrated = try BackupArchive.decoder().decode(AppData.self, from: JSONSerialization.data(withJSONObject: oldJSON))
-            try expect(migrated.schemaVersion == 5 && migrated.notes.count == 1 && migrated.media[0].attachmentOmitted == nil, "Schema \(version) migrates for backups")
+            try expect(migrated.schemaVersion == 6 && migrated.notes.count == 1 && migrated.media[0].attachmentOmitted == nil, "Schema \(version) migrates for backups")
         }
         print("Passed \(count) encrypted backup checks: complete model, streaming attachments, password authentication, tampering, paths, omissions, settings and recovery.")
     }

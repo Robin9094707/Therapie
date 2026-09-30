@@ -31,9 +31,11 @@ final class CalendarSyncService {
 
         let event = EKEvent(eventStore: eventStore)
         event.title = "Autismus-Therapie"
+        event.location = schedule.location
         if !profile.therapistName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             event.notes = "Therapie mit " + profile.therapistName
         }
+        if let preparation = schedule.preparation, !preparation.isEmpty { event.notes = (event.notes ?? "") + "\nVorbereitung: " + preparation }
         event.startDate = start
         event.endDate = start.addingTimeInterval(TimeInterval(schedule.durationMinutes * 60))
         event.calendar = eventStore.defaultCalendarForNewEvents
@@ -72,8 +74,6 @@ final class AlarmService {
     }
 
     func replaceAll(schedule: TherapySchedule) async throws -> [String] {
-        try cancel(ids: schedule.alarmIDs)
-
         let authorized = try await requestAuthorization()
         guard authorized else {
             throw ServiceError.permissionDenied("AlarmKit wurde nicht erlaubt.")
@@ -84,7 +84,8 @@ final class AlarmService {
             return ids
         }
 
-        for offset in schedule.reminderOffsetsMinutes {
+        do {
+        for offset in Set(schedule.reminderOffsetsMinutes).filter({ (0...10080).contains($0) }).sorted() {
             let reminderDate = nextTherapy.addingTimeInterval(TimeInterval(-offset * 60))
             let comps = Calendar.current.dateComponents([.weekday, .hour, .minute], from: reminderDate)
             guard let weekdayNumber = comps.weekday,
@@ -112,33 +113,11 @@ final class AlarmService {
             ids.append(id.uuidString)
         }
 
-        if schedule.taskReminderEnabled {
-            for weekdayNumber in schedule.taskReminderWeekdays {
-                guard let weekday = localeWeekday(from: weekdayNumber) else { continue }
-                let id = UUID()
-                let time = Alarm.Schedule.Relative.Time(
-                    hour: schedule.taskReminderHour,
-                    minute: schedule.taskReminderMinute
-                )
-                let relative = Alarm.Schedule.Relative(
-                    time: time,
-                    repeats: .weekly([weekday])
-                )
-                let presentation = AlarmPresentation(
-                    alert: AlarmPresentation.Alert(title: "Wochenaufgabe ansehen")
-                )
-                let attributes = AlarmAttributes(
-                    presentation: presentation,
-                    metadata: TherapyAlarmMetadata(category: "task", offsetMinutes: 0),
-                    tintColor: .teal
-                )
-                let configuration = AlarmManager.AlarmConfiguration<TherapyAlarmMetadata>.alarm(
-                    schedule: .relative(relative),
-                    attributes: attributes
-                )
-                _ = try await AlarmManager.shared.schedule(id: id, configuration: configuration)
-                ids.append(id.uuidString)
-            }
+        // Task reminders are now individual, actionable notifications and stop at completion.
+        try cancel(ids: schedule.alarmIDs)
+        } catch {
+            try? cancel(ids: ids)
+            throw error
         }
 
         return ids

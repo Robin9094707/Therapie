@@ -4,6 +4,7 @@ private enum ArchiveRecord: Identifiable {
     case note(TherapyNote), media(MediaItem), energy(EnergyEntry), reflection(TherapySessionReflection)
     case mood(MoodCheckIn), point(BatteryPoint), review(WeekReview), session(RunningTherapySession)
     case task(WeeklyTask), topic(TherapyTopic), goal(TherapyGoal)
+    case weeklyEnergy(WeeklyEnergyReview)
     var id: String {
         switch self {
         case .note(let value): "note-\(value.id)"
@@ -17,6 +18,7 @@ private enum ArchiveRecord: Identifiable {
         case .task(let value): "task-\(value.id)"
         case .topic(let value): "topic-\(value.id)"
         case .goal(let value): "goal-\(value.id)"
+        case .weeklyEnergy(let value): "weekly-energy-\(value.id)"
         }
     }
     var date: Date {
@@ -32,6 +34,7 @@ private enum ArchiveRecord: Identifiable {
         case .task(let value): value.createdAt
         case .topic(let value): value.createdAt
         case .goal(let value): value.createdAt
+        case .weeklyEnergy(let value): value.periodEnd
         }
     }
     var title: String {
@@ -47,6 +50,7 @@ private enum ArchiveRecord: Identifiable {
         case .task(let value): value.title
         case .topic(let value): value.title
         case .goal(let value): value.title
+        case .weeklyEnergy(let value): "Wochenenergie · Akku \(value.energy)/5"
         }
     }
     var subtitle: String {
@@ -62,6 +66,7 @@ private enum ArchiveRecord: Identifiable {
         case .task(let value): (value.completed ? "Erledigt · " : "Offen · ") + value.details
         case .topic(let value): [value.status.rawValue, value.description, value.category.rawValue].joined(separator: " · ")
         case .goal(let value): [value.status.rawValue, value.smallStep, value.measure].joined(separator: " · ")
+        case .weeklyEnergy(let value): (value.gives.map(\.title) + value.takes.map(\.title) + [value.note, value.therapyQuestion]).joined(separator: " · ")
         }
     }
     var symbol: String {
@@ -77,6 +82,7 @@ private enum ArchiveRecord: Identifiable {
         case .task: "checklist"
         case .topic(let value): value.category.symbol
         case .goal: "scope"
+        case .weeklyEnergy: "battery.100percent"
         }
     }
     var deletionMessage: String {
@@ -108,6 +114,7 @@ struct TherapyEditableTimeline: View {
         values += store.data.weeklyTasks.map(ArchiveRecord.task)
         values += store.data.therapyTopics.map(ArchiveRecord.topic)
         values += store.data.therapyGoals.map(ArchiveRecord.goal)
+        values += store.data.weeklyEnergyReviews.map(ArchiveRecord.weeklyEnergy)
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         return values.filter { query.isEmpty || ($0.title + " " + $0.subtitle).localizedCaseInsensitiveContains(query) }.sorted { $0.date > $1.date }
     }
@@ -152,6 +159,7 @@ struct TherapyEditableTimeline: View {
         case .task(let value): WeeklyTaskEditorView(task: value)
         case .topic(let value): TopicEditorView(topic: value)
         case .goal(let value): GoalEditorView(goal: value)
+        case .weeklyEnergy(let value): WeeklyEnergyEditorView(review: value)
         }
     }
     private func remove(_ record: ArchiveRecord) {
@@ -164,6 +172,7 @@ struct TherapyEditableTimeline: View {
         case .mood(let value): store.deleteCheckIn(value); return
         case .point(let value): snapshot.batteryPoints.removeAll { $0.id == value.id }
         case .review(let value): snapshot.weekReviews.removeAll { $0.id == value.id }
+        case .weeklyEnergy(let value): snapshot.weeklyEnergyReviews.removeAll { $0.id == value.id }
         case .session(let value):
             snapshot.sessionHistory.removeAll { $0.id == value.id }
             for i in snapshot.notes.indices where snapshot.notes[i].sessionID == value.id { snapshot.notes[i].sessionID = nil }

@@ -19,6 +19,8 @@ struct TherapySchedule: Codable, Equatable {
     var taskReminderMinute = 0
     var calendarEventIdentifier: String?
     var alarmIDs: [String] = []
+    var location: String?
+    var preparation: String?
 }
 
 struct AppPreferences: Codable, Equatable {
@@ -37,6 +39,12 @@ struct WeeklyTask: Identifiable, Codable, Equatable {
     var completedAt: Date?
     var topicID: UUID?
     var goalID: UUID?
+    var reminder: TaskReminder?
+    var dueDate: Date?
+    var smallStep: String?
+    var support: String?
+    var progress: Int?
+    var reminderShiftedAt: Date?
 }
 
 struct TherapyNote: Identifiable, Codable, Equatable {
@@ -112,7 +120,7 @@ struct TherapySessionReflection: Identifiable, Codable, Equatable {
 }
 
 struct AppData: Codable, Equatable {
-    var schemaVersion = 5
+    var schemaVersion = 6
     var profile = UserProfile()
     var schedule = TherapySchedule()
     var preferences = AppPreferences()
@@ -132,6 +140,8 @@ struct AppData: Codable, Equatable {
     var currentSession: RunningTherapySession?
     var sessionHistory: [RunningTherapySession] = []
     var sessionPreferences = SessionPreferences()
+    var reminderPreferences = ReminderPreferences()
+    var weeklyEnergyReviews: [WeeklyEnergyReview] = []
 
     init() {}
 
@@ -139,16 +149,17 @@ struct AppData: Codable, Equatable {
         case schemaVersion, profile, schedule, preferences, weeklyTasks, notes, energyEntries, media, reflections
         case moodCheckIns, batteryPoints, weekReviews, wellnessSettings
         case therapyFolders, therapyTopics, therapyGoals, sessionTemplates, currentSession, sessionHistory, sessionPreferences
+        case reminderPreferences, weeklyEnergyReviews
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let version = try c.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
-        guard (1...5).contains(version) else {
+        guard (1...6).contains(version) else {
             throw DecodingError.dataCorruptedError(forKey: .schemaVersion, in: c,
                                                    debugDescription: "Diese Daten benötigen eine neuere App-Version.")
         }
-        schemaVersion = 5
+        schemaVersion = 6
         profile = try c.decode(UserProfile.self, forKey: .profile)
         schedule = try c.decodeIfPresent(TherapySchedule.self, forKey: .schedule) ?? TherapySchedule()
         preferences = try c.decodeIfPresent(AppPreferences.self, forKey: .preferences) ?? AppPreferences()
@@ -168,6 +179,8 @@ struct AppData: Codable, Equatable {
         currentSession = try c.decodeIfPresent(RunningTherapySession.self, forKey: .currentSession)
         sessionHistory = try c.decodeIfPresent([RunningTherapySession].self, forKey: .sessionHistory) ?? []
         sessionPreferences = try c.decodeIfPresent(SessionPreferences.self, forKey: .sessionPreferences) ?? SessionPreferences()
+        reminderPreferences = try c.decodeIfPresent(ReminderPreferences.self, forKey: .reminderPreferences) ?? ReminderPreferences()
+        weeklyEnergyReviews = try c.decodeIfPresent([WeeklyEnergyReview].self, forKey: .weeklyEnergyReviews) ?? []
     }
 }
 

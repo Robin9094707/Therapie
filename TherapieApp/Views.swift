@@ -35,7 +35,11 @@ struct RootView: View {
             }
         }
         .onOpenURL { url in if url.scheme == "therapie" && url.host == "session" { openSession = true } }
-        .onChange(of: scenePhase) { _, phase in if phase == .active { store.sessionController.synchronize() } }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { store.sessionController.synchronize(); TaskNotificationCoordinator.shared.refresh(store) } }
+        .sheet(isPresented: Binding(get: { store.notificationTaskID != nil }, set: { if !$0 { store.notificationTaskID = nil } })) {
+            if let id = store.notificationTaskID, let task = store.data.weeklyTasks.first(where: { $0.id == id }) { WeeklyTaskEditorView(task: task) }
+        }
+        .sheet(isPresented: $store.openEnergyReview) { WeeklyEnergyEditorView() }
         .task {
             store.sessionController.synchronize()
             while !Task.isCancelled {
@@ -861,6 +865,12 @@ struct TasksView: View {
         NavigationStack {
             TherapyScreen {
                 VStack(spacing: 14) {
+                    GlassCard {
+                        VStack(alignment: .leading, spacing: 10) {
+                            NavigationLink { ReminderCenterView() } label: { Label("Aufgabenerinnerungen einstellen", systemImage: "bell.badge") }
+                            if !store.taskReminderStatus.isEmpty { Text(store.taskReminderStatus).font(.caption).foregroundStyle(.secondary) }
+                        }
+                    }
                     Toggle("Nur offene Aufgaben", isOn: $onlyOpen)
                         .padding(.horizontal, 4)
                     if onlyOpen && !store.data.weeklyTasks.isEmpty && store.data.weeklyTasks.allSatisfy(\.completed) {
@@ -934,6 +944,10 @@ struct TasksView: View {
                     Menu {
                         Button("Aufgabe bearbeiten", systemImage: "pencil") { taskDraft = task.wrappedValue }
                         Button(task.wrappedValue.completed ? "Wieder aufnehmen" : "Als erledigt markieren", systemImage: "checkmark.circle") { store.toggleTask(task.wrappedValue.id) }
+                        if !task.wrappedValue.completed {
+                            Button("Eine Stunde später erinnern", systemImage: "clock") { store.postponeTask(task.wrappedValue.id, minutes: 60) }
+                            Button("Morgen erinnern", systemImage: "sunrise") { store.postponeTask(task.wrappedValue.id, minutes: 1440) }
+                        }
                         Button(role: .destructive) {
                             taskToDelete = task.wrappedValue.id
                             confirmDelete = true
@@ -952,6 +966,10 @@ struct TasksView: View {
                 TextField("Beschreibung", text: task.details, axis: .vertical)
                     .foregroundStyle(.secondary)
                     .lineLimit(2...6)
+                if let step = task.wrappedValue.smallStep, !step.isEmpty { Label(step, systemImage: "figure.walk").font(.subheadline) }
+                if let progress = task.wrappedValue.progress { ProgressView(value: Double(progress), total: 100) { Text("\(progress) % geschafft").font(.caption) } }
+                if let due = task.wrappedValue.dueDate { Label("Ziel: " + due.formatted(date: .abbreviated, time: .omitted), systemImage: "calendar").font(.caption).foregroundStyle(.secondary) }
+                if let shifted = task.wrappedValue.reminderShiftedAt { Text("Verschoben: " + shifted.formatted(date: .abbreviated, time: .shortened) + ". Die regelmäßige Uhrzeit wurde angepasst.").font(.caption).foregroundStyle(.secondary) }
             }
         }
     }
@@ -1301,9 +1319,10 @@ struct SettingsView: View {
                     }
                     scheduleCard
                     reminderCard
+                    GlassCard { NavigationLink { ReminderCenterView() } label: { Label("Aufgaben- & Wochenenergie-Erinnerungen", systemImage: "bell.badge") } }
                     GlassCard(emphasized: true) {
                         VStack(alignment: .leading, spacing: 14) {
-                            SectionHeader(title: "Vollständige Datensicherung", icon: "lock.doc.fill", subtitle: "Eine verschlüsselte Datei – mit oder ohne Bilder.")
+                            SectionHeader(title: "Vollständige Datensicherung", icon: "lock.doc.fill", subtitle: "Passwortsicherung oder lesbares ZIP – mit oder ohne Bilder.")
                             Text("Alle Einträge und Einstellungen exportieren, in Dateien sichern und später auf diesem oder einem anderen iPhone wiederherstellen.").font(.subheadline).foregroundStyle(.secondary)
                             Button { showBackupCenter = true } label: { Label("Export & Import öffnen", systemImage: "externaldrive").frame(maxWidth: .infinity) }.buttonStyle(.borderedProminent)
                         }
@@ -1423,6 +1442,8 @@ struct SettingsView: View {
                     in: 30...180,
                     step: 15
                 )
+                TextField("Ort / Praxis", text: Binding(get: { store.data.schedule.location ?? "" }, set: { store.data.schedule.location = $0 }))
+                TextField("Vorbereitung / mitbringen", text: Binding(get: { store.data.schedule.preparation ?? "" }, set: { store.data.schedule.preparation = $0 }), axis: .vertical).lineLimit(2...6)
             }
         }
     }
@@ -1488,7 +1509,8 @@ struct SettingsView: View {
                         displayedComponents: .hourAndMinute
                     )
 
-                    Text("Die Impulse werden beim nächsten Synchronisieren als AlarmKit-Alarme neu gesetzt.")
+                    WeekdaySelection(days: $store.data.schedule.taskReminderWeekdays)
+                    Text("Für ältere Aufgaben ohne eigene Einstellung. Neue Aufgaben können eigene Tage und Zeiten erhalten.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

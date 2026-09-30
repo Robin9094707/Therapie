@@ -58,6 +58,7 @@ struct WellnessHubView: View {
         NavigationStack {
             TherapyScreen {
                 VStack(spacing: 16) {
+                    WeeklyEnergyCard()
                     WellnessProgressCard()
                     actions
                     Picker("Bereich", selection: $section) {
@@ -76,7 +77,7 @@ struct WellnessHubView: View {
                     }
                     if section == 0 { history }
                     if section == 1 { WellnessChartsView(period: period) }
-                    if section == 2 { weeks }
+                    if section == 2 { WeeklyEnergyHistory(); weeks }
                 }
             }
             .navigationTitle("Stimmung")

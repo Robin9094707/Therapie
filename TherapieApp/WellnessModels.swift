@@ -146,6 +146,7 @@ enum WellnessAnalytics {
     static func activityDates(_ data: AppData) -> [Date] {
         data.moodCheckIns.map(\.date) + data.batteryPoints.map(\.date)
             + data.weekReviews.map(\.weekStart) + data.energyEntries.map(\.createdAt)
+            + data.weeklyEnergyReviews.map(\.periodEnd)
     }
     static func streak(_ dates: [Date], now: Date = Date()) -> WellnessStreak {
         let currentWeek = now.therapyWeekStart

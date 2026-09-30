@@ -4,6 +4,7 @@ import SwiftUI
 struct TherapieApp: App {
     @StateObject private var store = AppStore()
     @AppStorage("therapy.appearance") private var appearance = TherapyAppearance.system.rawValue
+    init() { let store = AppStore(); _store = StateObject(wrappedValue: store) }
 
     var body: some Scene {
         WindowGroup {
@@ -14,4 +15,3 @@ struct TherapieApp: App {
         }
     }
 }
-
