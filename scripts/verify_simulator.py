@@ -40,6 +40,9 @@ for label, device in [("large", large), ("compact", compact)]:
     for mode, args, appearance in [
         ("dashboard-light", ["--ui-testing", "--show-dashboard"], "light"),
         ("dashboard-dark", ["--ui-testing", "--show-dashboard"], "dark"),
+        ("checkin-battery", ["--ui-testing", "--show-dashboard", "--show-checkin"], "light"),
+        ("routines-dark", ["--ui-testing", "--show-dashboard", "--show-routines"], "dark"),
+        ("checkin-large-text", ["--ui-testing", "--show-dashboard", "--show-checkin", "--large-text"], "light"),
         ("onboarding-large-text", ["--ui-testing", "--large-text"], "light"),
     ]:
         run("xcrun", "simctl", "terminate", identifier, "eu.rjuhas.therapie", check=False)

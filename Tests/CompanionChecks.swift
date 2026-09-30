@@ -49,6 +49,10 @@ import Foundation
         try expect(calendar.component(.hour, from: saturday.due) == 9 && calendar.component(.minute, from: saturday.due) == 15, "Weekend clock")
         let original = RoutinePlanner.slots(data: data, now: now, calendar: calendar)
         try expect(original == RoutinePlanner.slots(data: data, now: now, calendar: calendar), "Stable idempotent slots")
+        let admitted = RoutinePlanner.admittedSlots(original, budget: 20)
+        try expect(admitted.count <= 20 && Set(admitted.map(\.id)).count == admitted.count, "Queue admission remains bounded and unique")
+        try expect(Set(admitted.map { $0.occurrence.id }).count == Set(original.map { $0.occurrence.id }).count, "First hint for every occurrence before retry allocation")
+        try expect(RoutinePlanner.admittedSlots(original, budget: 0).isEmpty, "Zero capacity is explicit")
         try expect(Set(original.map(\.id)).count == original.count, "No duplicate notification identifiers")
         try expect(original.allSatisfy { $0.fireAt > now && $0.fireAt < $0.occurrence.end }, "No past or expired reminders")
         data.routineCompletions = [RoutineCompletion(routineID: routine.id, timeID: time.id, scheduledAt: today.due)]

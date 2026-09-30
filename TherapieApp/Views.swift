@@ -19,7 +19,7 @@ struct RootView: View {
             if store.loadError != nil {
                 SettingsView()
             } else if store.data.profile.onboardingCompleted {
-                MainTabView()
+                if ProcessInfo.processInfo.arguments.contains("--show-routines") { NavigationStack { RoutineHubView() } } else { MainTabView() }
             } else {
                 OnboardingView()
             }

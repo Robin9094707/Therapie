@@ -93,6 +93,11 @@ final class AppStore: ObservableObject {
                 data.weeklyTasks = [WeeklyTask(weekOfYear: week.week, yearForWeekOfYear: week.year,
                                                title: "Einen ruhigen Moment festhalten", details: "Ein kleiner Schritt für diese Woche.")]
                 data.energyEntries = [EnergyEntry(level: 3, givesEnergy: "Musik und eine Pause", takesEnergy: "", note: "")]
+                if ProcessInfo.processInfo.arguments.contains("--show-checkin") { pendingGuidedCheckIn = GuidedCheckIn(kind: .morning, mood: 4, batteryPercent: 65, step: 2) }
+                if ProcessInfo.processInfo.arguments.contains("--show-routines") {
+                    let time = RoutineTime(title: "Morgens", hour: 6, minute: 30, weekendHour: 9, weekendMinute: 0)
+                    data.routines = [DailyRoutine(title: "Mein kleiner Morgen-Schritt", symbol: "sun.max.fill", details: "Alles für den Start bereitlegen.", times: [time])]
+                }
             }
         }
         isLoading = false

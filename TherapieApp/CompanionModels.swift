@@ -152,6 +152,19 @@ enum RoutinePlanner {
         }
         return output.sorted { $0.fireAt == $1.fireAt ? $0.id < $1.id : $0.fireAt < $1.fireAt }
     }
+    /// Give each upcoming occurrence a first hint before spending the remaining capacity on retries.
+    static func admittedSlots(_ candidates: [RoutineReminderSlot], budget: Int) -> [RoutineReminderSlot] {
+        var seen = Set<String>(), selected: [RoutineReminderSlot] = []
+        let capacity = max(0, budget)
+        for slot in candidates where seen.insert(slot.occurrence.id).inserted {
+            if selected.count < capacity { selected.append(slot) }
+        }
+        var identifiers = Set(selected.map(\.id))
+        for slot in candidates where selected.count < capacity {
+            if identifiers.insert(slot.id).inserted { selected.append(slot) }
+        }
+        return selected.sorted { $0.fireAt == $1.fireAt ? $0.id < $1.id : $0.fireAt < $1.fireAt }
+    }
     static func due(data: AppData, now: Date = Date()) -> [RoutineOccurrence] {
         occurrences(data.routines, settings: data.companionSettings, now: now, days: 1).filter {
             $0.due <= now && !resolved($0, completions: data.routineCompletions)

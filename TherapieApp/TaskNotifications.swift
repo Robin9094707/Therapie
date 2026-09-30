@@ -87,7 +87,7 @@ final class TaskNotificationCoordinator: NSObject, UNUserNotificationCenterDeleg
             requests.append(UNNotificationRequest(identifier: Self.energyIdentifier, content: content, trigger: UNCalendarNotificationTrigger(dateMatching: parts, repeats: true)))
         }
         let routineCandidates = RoutinePlanner.slots(data: snapshot)
-        let routineSlots = Array(routineCandidates.prefix(max(0, 48 - requests.count)))
+        let routineSlots = RoutinePlanner.admittedSlots(routineCandidates, budget: max(0, 48 - requests.count))
         for slot in routineSlots {
             guard let routine = snapshot.routines.first(where: { $0.id == slot.occurrence.routineID }) else { continue }
             let content = UNMutableNotificationContent()
@@ -113,12 +113,14 @@ final class TaskNotificationCoordinator: NSObject, UNUserNotificationCenterDeleg
                 try await center.add(request)
             }
             guard revision == generation else { return }
-            let coverage = routineSlots.last?.fireAt.formatted(date: .abbreviated, time: .shortened) ?? "–"
-            let candidateRoutines = Set(routineCandidates.map { $0.occurrence.routineID })
-            let scheduledRoutines = Set(routineSlots.map { $0.occurrence.routineID })
+            let coveredIDs = Set(routineSlots.map(\.id))
+            let firstGap = routineCandidates.first { !coveredIDs.contains($0.id) }?.fireAt
+            let coverage = firstGap?.formatted(date: .abbreviated, time: .shortened) ?? routineSlots.last?.fireAt.formatted(date: .abbreviated, time: .shortened) ?? "–"
+            let candidateRoutines = Set(routineCandidates.map { $0.occurrence.id })
+            let scheduledRoutines = Set(routineSlots.map { $0.occurrence.id })
             let unplanned = candidateRoutines.subtracting(scheduledRoutines).count
-            store?.routineReminderStatus = routineSlots.isEmpty ? "Keine Routine-Mitteilungen ausstehend." : "\(routineSlots.count) Hinweise eingerichtet, Vorrat bis \(coverage). Öffnen erneuert den Vorrat."
-            if unplanned > 0 { store?.routineReminderStatus += " \(unplanned) Routinen haben aktuell keinen Platz im Vorrat. Vergrößere Wiederholungsabstände oder reduziere aktive Erinnerungen." }
+            store?.routineReminderStatus = routineSlots.isEmpty ? "Keine Routine-Mitteilungen ausstehend." : "\(routineSlots.count) Hinweise eingerichtet. Vollständige Wiederholungen bis \(coverage). App bis dahin erneut öffnen. Spätere Basis-Hinweise können schon geplant sein."
+            if unplanned > 0 { store?.routineReminderStatus += " \(unplanned) Termine haben aktuell keinen Platz im Vorrat. Vergrößere Wiederholungsabstände oder reduziere aktive Erinnerungen." }
             let missing = Set(all.map(\.taskID)).subtracting(admitted).count
             store?.taskReminderStatus = missing == 0 ? "Erinnerungen für \(admitted.count) offene Aufgaben aktiv. Sie wiederholen sich bis zum Erledigen." : "\(admitted.count) Aufgaben mit Erinnerung; \(missing) weitere passen nicht mehr. Wähle täglich statt vieler einzelner Wochentage oder schalte nicht benötigte Erinnerungen aus."
         } catch { store?.taskReminderStatus = "Erinnerungen konnten nicht vollständig eingerichtet werden: " + error.localizedDescription; store?.routineReminderStatus = "Routine-Mitteilungen unvollständig: " + error.localizedDescription }
