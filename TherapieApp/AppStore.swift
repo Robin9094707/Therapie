@@ -37,10 +37,12 @@ final class AppStore: ObservableObject {
         let recoveryFailure: String?
         do { try BackupArchive.recoverInterruptedRestore(root: root); recoveryFailure = nil }
         catch { recoveryFailure = error.localizedDescription }
+        BackupArchive.cleanAbandonedTransfers(root: root)
         if recoveryFailure == nil { try? fm.createDirectory(at: root, withIntermediateDirectories: true) }
         if recoveryFailure == nil {
             try? fm.createDirectory(at: mediaURL, withIntermediateDirectories: true)
             try? fm.createDirectory(at: recordingsURL, withIntermediateDirectories: true)
+            for directory in [root, mediaURL, recordingsURL] { try? BackupArchive.protect(directory) }
         }
 
         data = AppData()
@@ -150,7 +152,6 @@ final class AppStore: ObservableObject {
         try BackupArchive.install(directory: prepared.directory, root: rootURL)
         CalendarSyncService.shared.removeSyncedEvent(identifier: data.schedule.calendarEventIdentifier)
         AlarmService.shared.cancelAllOwnedAlarms()
-        TherapySessionController.endAll()
         WeeklyReminderService.cancel()
         BackupService.shared.clearFolder()
         prepared.manifest.preferences.apply()
@@ -159,7 +160,7 @@ final class AppStore: ObservableObject {
         writeBlocked = false; loadError = nil; lastSaveError = nil
         isLoading = false
         TherapyEffects.shared.light()
-        sessionController.synchronize()
+        sessionController.restoredData()
     }
 
     func addWeeklyTask(title: String, details: String) {
@@ -339,6 +340,7 @@ final class AppStore: ObservableObject {
         let fileName = UUID().uuidString + "." + ext
         let destination = mediaURL.appendingPathComponent(fileName)
         try FileManager.default.copyItem(at: sourceURL, to: destination)
+        try BackupArchive.protect(destination)
 
         data.media.insert(
             MediaItem(

@@ -305,6 +305,13 @@ enum BackupArchive {
     // are prepared on the same volume. A failed rename rolls back immediately;
     // an interrupted process recovers the old directory before AppStore loads.
     static func recoveryURL(_ root: URL) -> URL { root.deletingLastPathComponent().appendingPathComponent(root.lastPathComponent + ".restore-previous") }
+    static func cleanAbandonedTransfers(root: URL) {
+        let fm = FileManager.default
+        for parent in [fm.temporaryDirectory, root.deletingLastPathComponent()] {
+            guard let children = try? fm.contentsOfDirectory(at: parent, includingPropertiesForKeys: nil) else { continue }
+            for child in children where child.lastPathComponent.hasPrefix("TherapieTransfer-") { try? fm.removeItem(at: child) }
+        }
+    }
     static func recoverInterruptedRestore(root: URL) throws {
         let fm = FileManager.default, previous = recoveryURL(root)
         if !fm.fileExists(atPath: root.path), fm.fileExists(atPath: previous.path) { try fm.moveItem(at: previous, to: root) }

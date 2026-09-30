@@ -8,6 +8,8 @@ final class TherapySessionController: ObservableObject {
     @Published private(set) var busy = false
     @Published private(set) var liveStatus = ""
     private weak var store: AppStore?
+    private var synchronizationGeneration = UUID()
+    private var synchronizationTask: Task<Void, Never>?
     init(store: AppStore) { self.store = store }
 
     func start(_ template: TherapySessionTemplate) {
@@ -48,17 +50,19 @@ final class TherapySessionController: ObservableObject {
         reconcile()
         let session = store.data.currentSession
         let preferences = store.data.sessionPreferences
+        let generation = synchronizationGeneration
         busy = true
-        Task {
-            defer { busy = false }
+        synchronizationTask = Task {
+            defer { if generation == synchronizationGeneration { busy = false } }
             for activity in Activity<TherapyActivityAttributes>.activities {
                 if activity.attributes.sessionID != session?.id.uuidString || !preferences.liveActivityEnabled {
                     await activity.end(nil, dismissalPolicy: .immediate)
                 }
             }
+            guard generation == synchronizationGeneration else { return }
             guard let session else { liveStatus = ""; return }
             await synchronizeNotifications(session, preferences: preferences)
-            guard self.store?.data.currentSession?.id == session.id else { return }
+            guard generation == synchronizationGeneration, self.store?.data.currentSession?.id == session.id else { return }
             guard preferences.liveActivityEnabled else { liveStatus = "Live-Aktivität ausgeschaltet. Der Timer läuft in der App weiter."; return }
             guard ActivityAuthorizationInfo().areActivitiesEnabled else {
                 liveStatus = "Live-Aktivitäten sind in den iPhone-Einstellungen deaktiviert. Der Timer bleibt gespeichert."
@@ -75,6 +79,26 @@ final class TherapySessionController: ObservableObject {
                     liveStatus = "Live-Aktivität aktiv · Sperrbildschirm & Dynamic Island"
                 } catch { liveStatus = "Live-Aktivität konnte nicht gestartet werden: " + error.localizedDescription }
             }
+        }
+    }
+
+    func restoredData() {
+        // Wait for an older synchronization before clearing its notifications.
+        // Otherwise asynchronous cleanup could erase the newly restored timer.
+        let pending = synchronizationTask
+        synchronizationGeneration = UUID()
+        let generation = synchronizationGeneration
+        busy = true
+        synchronizationTask = Task {
+            await pending?.value
+            guard generation == synchronizationGeneration else { return }
+            for activity in Activity<TherapyActivityAttributes>.activities { await activity.end(nil, dismissalPolicy: .immediate) }
+            let center = UNUserNotificationCenter.current()
+            let requests = await center.pendingNotificationRequests()
+            guard generation == synchronizationGeneration else { return }
+            center.removePendingNotificationRequests(withIdentifiers: requests.filter { $0.identifier.hasPrefix("therapy.session.") }.map(\.identifier))
+            busy = false
+            synchronize()
         }
     }
     private func activityState(_ session: RunningTherapySession, privateMode: Bool) -> TherapyActivityAttributes.ContentState {
