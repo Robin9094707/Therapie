@@ -51,6 +51,7 @@ struct RootView: View {
             store.consumeRoutineAlarmRoute()
             while !Task.isCancelled {
                 store.sessionController.reconcile()
+                store.consumeRoutineAlarmRoute()
                 if Date().timeIntervalSince(lastReminderRefresh) >= 300 && store.loadError == nil && store.lastSaveError == nil {
                     lastReminderRefresh = Date()
                     TaskNotificationCoordinator.shared.refresh(store)
