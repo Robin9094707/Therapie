@@ -47,6 +47,9 @@ import Foundation
         try expect(calendar.component(.hour, from: today.due) == 6 && calendar.component(.minute, from: today.due) == 30, "Weekday clock")
         let saturday = occurrences.first { calendar.component(.weekday, from: $0.due) == 7 }!
         try expect(calendar.component(.hour, from: saturday.due) == 9 && calendar.component(.minute, from: saturday.due) == 15, "Weekend clock")
+        let sunday = occurrences.first { calendar.component(.weekday, from: $0.due) == 1 }!
+        let monday = occurrences.first { $0.due > sunday.due && calendar.component(.weekday, from: $0.due) == 2 }!
+        try expect(sunday.end == monday.due, "Earlier Monday clock closes Sunday's reminders without overlap")
         let original = RoutinePlanner.slots(data: data, now: now, calendar: calendar)
         try expect(original == RoutinePlanner.slots(data: data, now: now, calendar: calendar), "Stable idempotent slots")
         let admitted = RoutinePlanner.admittedSlots(original, budget: 20)

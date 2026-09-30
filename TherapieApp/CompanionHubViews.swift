@@ -5,10 +5,18 @@ struct CompanionTodayCard: View {
     @State private var checkIn: GuidedCheckIn?
     @State private var showEntries = false
     @State private var showRoutines = false
+    @AppStorage("therapy.calmInterface") private var calmInterface = true
     var body: some View {
         GlassCard(emphasized: true) {
             VStack(alignment: .leading, spacing: 16) {
-                SectionHeader(title: "Ein Moment für dich", icon: "sparkles", subtitle: "Ankommen, Energie spüren, einen kleinen Schritt wählen.")
+                HStack(alignment: .top) {
+                    SectionHeader(title: "Ein Moment für dich", icon: "sparkles", subtitle: "Ankommen, Energie spüren, einen kleinen Schritt wählen.")
+                    Spacer(minLength: 0)
+                    Menu {
+                        Button("Liquid Glass", systemImage: "sparkles") { calmInterface = false; store.refreshReadableFiles() }
+                        Button("Ruhige Darstellung", systemImage: "leaf") { calmInterface = true; store.refreshReadableFiles() }
+                    } label: { Image(systemName: "slider.horizontal.3").frame(width: 44, height: 44) }.accessibilityLabel("Darstellung wählen")
+                }
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 10) { checkInButton(.morning); checkInButton(.evening); checkInButton(.therapy) }
                     VStack(alignment: .leading, spacing: 10) { checkInButton(.morning); checkInButton(.evening); checkInButton(.therapy) }

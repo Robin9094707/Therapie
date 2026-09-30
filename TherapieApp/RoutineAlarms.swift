@@ -4,7 +4,7 @@ import AlarmKit
 import AppIntents
 import CryptoKit
 
-struct OpenRoutineIntent: AppIntent {
+struct OpenRoutineIntent: LiveActivityIntent {
     static var title: LocalizedStringResource = "Routine öffnen"
     static var openAppWhenRun = true
     @Parameter(title: "Routine") var routineID: String
@@ -39,8 +39,10 @@ final class RoutineAlarmCoordinator {
             return slot.id + "." + digest
         }
         let valid = Set(desired.map(key))
-        let live = Set((try? AlarmManager.shared.alarms)?.map(\.id) ?? [])
-        for (key, raw) in owned where UUID(uuidString: raw).map({ !live.contains($0) }) ?? true { owned.removeValue(forKey: key) }
+        if let alarms = try? AlarmManager.shared.alarms {
+            let live = Set(alarms.map(\.id))
+            for (key, raw) in owned where UUID(uuidString: raw).map({ !live.contains($0) }) ?? true { owned.removeValue(forKey: key) }
+        }
         var cancellationFailures = 0
         for (key, raw) in owned where !valid.contains(key) {
             if let id = UUID(uuidString: raw) {
@@ -51,6 +53,10 @@ final class RoutineAlarmCoordinator {
         UserDefaults.standard.set(owned, forKey: storageKey)
         guard AlarmManager.shared.authorizationState == .authorized else {
             store.routineAlarmStatus = desired.isEmpty ? "Keine dringenden Wecker geplant." : "Dringende Wecker benötigen deine AlarmKit-Freigabe."
+            return
+        }
+        guard cancellationFailures == 0 else {
+            store.routineAlarmStatus = "\(cancellationFailures) alte Wecker konnten nicht entfernt werden. Neue Wecker werden erst nach erfolgreicher Bereinigung ergänzt."
             return
         }
         // Device IDs live outside AppData and therefore never travel through backups.

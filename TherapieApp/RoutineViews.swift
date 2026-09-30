@@ -108,6 +108,13 @@ struct RoutineDueCard: View {
                     Text("Fällig " + occurrence.due.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
                     if let snooze = store.data.routineSnoozes.first(where: { $0.id == occurrence.id }), snooze.until > Date() { Text("Verschoben bis " + snooze.until.formatted(date: .omitted, time: .shortened)).font(.caption) }
                     if !routine.details.isEmpty { Text(routine.details).font(.subheadline) }
+                    if let goal = store.data.therapyGoals.first(where: { $0.id == routine.goalID }) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label(goal.title, systemImage: "scope").font(.subheadline.bold())
+                            if !goal.smallStep.isEmpty { Text("Dein kleiner Schritt: " + goal.smallStep).font(.subheadline) }
+                            if !goal.support.isEmpty { Text("Unterstützung: " + goal.support).font(.caption).foregroundStyle(.secondary) }
+                        }
+                    }
                     ResponsiveButtonRow {
                         Button("Erledigt", systemImage: "checkmark.circle.fill") { confirmDone = true }.buttonStyle(.borderedProminent)
                         Button("1 Stunde später", systemImage: "clock") { store.snoozeRoutine(occurrence) }.buttonStyle(.bordered)

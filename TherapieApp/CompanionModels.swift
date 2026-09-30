@@ -122,7 +122,16 @@ enum RoutinePlanner {
                     guard let due = calendar.date(bySettingHour: clock.hour, minute: clock.minute, second: 0, of: day, matchingPolicy: .nextTime, repeatedTimePolicy: .first, direction: .forward),
                           calendar.isDate(due, inSameDayAs: day), active(routine, settings: settings, at: due),
                           let end = calendar.date(byAdding: .day, value: 1, to: due), end > now else { continue }
-                    output.append(RoutineOccurrence(routineID: routine.id, timeID: time.id, due: due, end: end))
+                    var closes = end
+                    // An earlier weekday/weekend clock replaces yesterday's occurrence instead of overlapping it.
+                    if let tomorrow = calendar.date(byAdding: .day, value: 1, to: day) {
+                        let nextWeekday = calendar.component(.weekday, from: tomorrow)
+                        if time.weekdays.contains(nextWeekday) {
+                            let nextClock = time.clock(weekday: nextWeekday)
+                            if let nextDue = calendar.date(bySettingHour: nextClock.hour, minute: nextClock.minute, second: 0, of: tomorrow, matchingPolicy: .nextTime, repeatedTimePolicy: .first, direction: .forward) { closes = min(closes, nextDue) }
+                        }
+                    }
+                    if closes > now { output.append(RoutineOccurrence(routineID: routine.id, timeID: time.id, due: due, end: closes)) }
                 }
             }
         }

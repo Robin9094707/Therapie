@@ -6,13 +6,14 @@ struct RoutineEditorView: View {
     @State var routine: DailyRoutine
     @State private var error: String?
     private let symbols = ["checkmark.circle", "pills.fill", "shower.fill", "fork.knife", "drop.fill", "figure.walk", "bed.double.fill", "book.fill", "heart.fill", "sun.max.fill", "briefcase.fill", "leaf.fill"]
+    private let symbolTitles = ["Allgemein", "Medikament", "Duschen", "Essen", "Trinken", "Bewegung", "Schlafen", "Lesen", "Wohlbefinden", "Morgen", "Arbeit", "Pause"]
     private var valid: Bool { !routine.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !routine.times.isEmpty && routine.times.allSatisfy { !$0.weekdays.isEmpty } }
     var body: some View {
         NavigationStack {
             Form {
                 Section("Deine Routine") {
                     TextField("Name, z. B. Morgenroutine", text: $routine.title)
-                    Picker("Symbol", selection: $routine.symbol) { ForEach(symbols, id: \.self) { value in Label(value, systemImage: value).tag(value) } }.pickerStyle(.menu)
+                    Picker("Symbol", selection: $routine.symbol) { ForEach(Array(symbols.enumerated()), id: \.element) { index, value in Label(symbolTitles[index], systemImage: value).tag(value) } }.pickerStyle(.menu)
                     TextField("Eigene Hinweise / Vorbereitung", text: $routine.details, axis: .vertical).lineLimit(2...6)
                     Toggle("Aktiv", isOn: $routine.enabled)
                     Toggle("Im Urlaubsmodus pausieren", isOn: $routine.pauseOnVacation)
