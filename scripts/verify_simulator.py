@@ -29,8 +29,11 @@ for label, device in [("large", large), ("compact", compact)]:
     # GUI startup helps CoreSimulator finish its first-boot migration on hosted runners.
     run("open", "-a", "Simulator", "--args", "-CurrentDeviceUDID", identifier, check=False)
     try:
-        run("xcrun", "simctl", "bootstatus", identifier, "-b", timeout=120)
-    except subprocess.TimeoutExpired:
+        run("xcrun", "simctl", "bootstatus", identifier, "-b", timeout=240)
+    except subprocess.TimeoutExpired as error:
+        captured = error.stdout or ""
+        if isinstance(captured, bytes): captured = captured.decode(errors="replace")
+        (output / f"{label}-boot-failure.txt").write_text(str(captured))
         print("SIMULATOR_UNAVAILABLE: hosted simulator did not finish booting; app was not launched.", flush=True)
         raise SystemExit(75)
     run("xcrun", "simctl", "install", identifier, str(app))

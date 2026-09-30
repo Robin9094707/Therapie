@@ -31,7 +31,12 @@ final class RoutineAlarmCoordinator {
         revision += 1; let generation = revision
         let snapshot = store.data
         let candidates = RoutinePlanner.slots(data: snapshot).filter { slot in snapshot.routines.contains { $0.id == slot.occurrence.routineID && $0.urgentAlarm && $0.remindersEnabled } }
-        let desired = Array(candidates.prefix(8))
+        var desired = RoutinePlanner.admittedSlots(candidates, budget: 4)
+        var desiredIDs = Set(desired.map(\.id))
+        for slot in candidates where desired.count < 8 {
+            if desiredIDs.insert(slot.id).inserted { desired.append(slot) }
+        }
+        desired.sort { $0.fireAt == $1.fireAt ? $0.id < $1.id : $0.fireAt < $1.fireAt }
         var owned = UserDefaults.standard.dictionary(forKey: storageKey) as? [String: String] ?? [:]
         func key(_ slot: RoutineReminderSlot) -> String {
             let title = snapshot.companionSettings.privateRoutineTitles ? "private" : snapshot.routines.first(where: { $0.id == slot.occurrence.routineID })?.title ?? ""
@@ -73,8 +78,10 @@ final class RoutineAlarmCoordinator {
                 owned[key(slot)] = id.uuidString
                 UserDefaults.standard.set(owned, forKey: storageKey)
             }
-            let end = desired.last?.fireAt.formatted(date: .abbreviated, time: .shortened) ?? "–"
-            store.routineAlarmStatus = desired.isEmpty ? "Keine dringenden Wecker geplant." : "\(desired.count) dringende Wecker eingerichtet. Vorrat bis \(end); Öffnen erneuert ihn."
+            let planned = Set(desired.map(\.id))
+            let firstGap = candidates.first { !planned.contains($0.id) }?.fireAt
+            let end = firstGap?.formatted(date: .abbreviated, time: .shortened) ?? desired.last?.fireAt.formatted(date: .abbreviated, time: .shortened) ?? "–"
+            store.routineAlarmStatus = desired.isEmpty ? "Keine dringenden Wecker geplant." : "\(desired.count) dringende Wecker eingerichtet. Vollständige Wiederholungen bis \(end); bis dahin App öffnen. Einzelne spätere Basis-Wecker können schon geplant sein."
             if cancellationFailures > 0 { store.routineAlarmStatus += " \(cancellationFailures) alte Wecker konnten nicht entfernt werden. Bitte in den iPhone-Einstellungen prüfen." }
         } catch { store.routineAlarmStatus = "Wecker konnten nicht vollständig eingerichtet werden: " + error.localizedDescription }
     }
