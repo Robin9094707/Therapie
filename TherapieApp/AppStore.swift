@@ -454,6 +454,9 @@ final class AppStore: ObservableObject {
         backupWorkItem?.cancel()
         readableWorkItem?.cancel()
         TaskNotificationCoordinator.shared.cancel()
+        let oldRoot = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!.appendingPathComponent(ProcessInfo.processInfo.arguments.contains("--ui-testing") ? "TherapieUITests" : "Therapie")
+        if oldRoot != rootURL { try? FileManager.default.removeItem(at: oldRoot) }
+        try? FileManager.default.removeItem(at: BackupArchive.recoveryURL(oldRoot))
         try? FileManager.default.removeItem(at: BackupArchive.recoveryURL(rootURL))
         try? FileManager.default.removeItem(at: rootURL)
         try? FileManager.default.createDirectory(at: mediaURL, withIntermediateDirectories: true)

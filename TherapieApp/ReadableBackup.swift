@@ -15,11 +15,19 @@ enum AppFileStorage {
         if !fm.fileExists(atPath: target.path), fm.fileExists(atPath: old.path) {
             try fm.moveItem(at: old, to: target)
         }
+        let oldRecovery = BackupArchive.recoveryURL(old), newRecovery = BackupArchive.recoveryURL(target)
+        if fm.fileExists(atPath: oldRecovery.path), !fm.fileExists(atPath: newRecovery.path) { try fm.moveItem(at: oldRecovery, to: newRecovery) }
         return target
     }
 }
 
 enum ReadableBackup {
+    static func relativePath(_ file: URL, in root: URL) throws -> String {
+        let prefix = root.resolvingSymlinksInPath().path + "/"
+        let path = file.resolvingSymlinksInPath().path
+        guard path.hasPrefix(prefix) else { throw BackupArchiveError.invalid("Eine Datei liegt außerhalb des Sicherungsordners.") }
+        return String(path.dropFirst(prefix.count))
+    }
     static let labels: [String: String] = [
         "weeklyTasks": "Wochenaufgaben", "notes": "Notizen", "energyEntries": "Energie-Checks", "media": "Materialien",
         "reflections": "Therapie-Rueckblicke", "moodCheckIns": "Stimmungs-Check-ins", "batteryPoints": "Akku-Punkte",
@@ -90,7 +98,7 @@ enum ReadableBackup {
                 let values = try file.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
                 guard values.isSymbolicLink != true else { throw BackupArchiveError.invalid("Ein lesbarer Eintragsordner enthält einen Dateiverweis. Bitte sichere ihn in Dateien und entferne den Verweis.") }
                 if values.isRegularFile == true {
-                    let relative = String(file.path.dropFirst(base.path.count + 1))
+                    let relative = try relativePath(file, in: base)
                     if !keep.contains(relative) { try fm.removeItem(at: file) }
                 }
             }
@@ -213,7 +221,7 @@ enum StoredZIP {
                 let value = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
                 guard value.isSymbolicLink != true else { throw BackupArchiveError.invalid("Dateiverweise sind in ZIP-Sicherungen nicht erlaubt.") }
                 if value.isRegularFile == true {
-                    let relative = String(url.path.dropFirst(directory.path.count + 1)); try path(relative); sources.append((relative, url))
+                    let relative = try ReadableBackup.relativePath(url, in: directory); try path(relative); sources.append((relative, url))
                 }
             }
         }
