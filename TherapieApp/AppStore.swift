@@ -452,7 +452,10 @@ final class AppStore: ObservableObject {
 
     func deleteMedia(_ item: MediaItem) {
         try? FileManager.default.removeItem(at: fileURL(for: item))
-        data.media.removeAll { $0.id == item.id }
+        var snapshot = data
+        snapshot.media.removeAll { $0.id == item.id }
+        for index in snapshot.guidedCheckIns.indices { snapshot.guidedCheckIns[index].mediaIDs.removeAll { $0 == item.id } }
+        data = snapshot
     }
 
     func resetAllData() {

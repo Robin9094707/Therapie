@@ -133,7 +133,7 @@ enum RoutinePlanner {
         for occurrence in occurrences(data.routines, settings: data.companionSettings, now: now, calendar: calendar) {
             guard !resolved(occurrence, completions: data.routineCompletions),
                   let routine = data.routines.first(where: { $0.id == occurrence.routineID }), routine.remindersEnabled,
-                  active(routine, settings: data.companionSettings, at: now) else { continue }
+                  active(routine, settings: data.companionSettings, at: max(now, occurrence.due)) else { continue }
             let snooze = data.routineSnoozes.first { $0.id == occurrence.id }?.until
             var fire = occurrence.due
             if let snooze, snooze > fire { fire = snooze }
@@ -159,5 +159,40 @@ enum RoutinePlanner {
             guard let routine = data.routines.first(where: { $0.id == occurrence.routineID }) else { return false }
             return active(routine, settings: data.companionSettings, at: now)
         }
+    }
+}
+
+/// One snapshot mutation makes draft completion and task creation atomic and idempotent.
+enum GuidedCheckInMutation {
+    static func apply(_ entry: GuidedCheckIn, complete: Bool, to data: inout AppData) {
+        var clean = entry
+        if complete {
+            clean.isDraft = false
+            let previous = data.guidedCheckIns.first { $0.id == clean.id }
+            let previousIDs = Set(previous?.taskIDs ?? [])
+            let week = clean.date.therapyWeek
+            var links: [UUID] = []
+            for draft in clean.tasks where !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                let title = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                let details = draft.details + "\nAufgabe: " + draft.source
+                if let index = data.weeklyTasks.firstIndex(where: { $0.id == draft.id }) {
+                    // Only synchronize content after explicit Save, preserving task progress/completion.
+                    data.weeklyTasks[index].title = title
+                    data.weeklyTasks[index].details = details
+                    data.weeklyTasks[index].smallStep = draft.smallStep
+                    data.weeklyTasks[index].dueDate = draft.dueDate
+                    links.append(draft.id)
+                } else if !previousIDs.contains(draft.id) {
+                    data.weeklyTasks.insert(WeeklyTask(id: draft.id, weekOfYear: week.week, yearForWeekOfYear: week.year, title: title, details: details, dueDate: draft.dueDate, smallStep: draft.smallStep), at: 0)
+                    links.append(draft.id)
+                } else {
+                    // A task deleted independently is never resurrected by editing its old check-in.
+                    links.append(draft.id)
+                }
+            }
+            clean.taskIDs = links
+        }
+        data.guidedCheckIns.removeAll { $0.id == clean.id }
+        data.guidedCheckIns.insert(clean, at: 0)
     }
 }

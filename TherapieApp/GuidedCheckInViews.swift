@@ -61,8 +61,9 @@ struct GuidedCheckInView: View {
                 }
             }
             .navigationTitle("Check-in").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Schließen") { persistDraft(); if store.lastSaveError == nil { dismiss() } } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Schließen") { if entry.isDraft { persistDraft(); if store.lastSaveError == nil { dismiss() } } else { showExit = true } } } }
             .safeAreaInset(edge: .bottom) { footer.padding(16).background(.regularMaterial) }
+            .alert("Bearbeitung beenden?", isPresented: $showExit) { Button("Weiter bearbeiten", role: .cancel) {}; Button("Änderungen verwerfen", role: .destructive) { dismiss() } } message: { Text("Änderungen am abgeschlossenen Check-in werden erst beim abschließenden Speichern übernommen. Neu importierte Fotos bleiben als Materialien im Archiv.") }
             .onAppear { battery = entry.batteryPercent ?? 50 }
             .onChange(of: selection) { _, value in if let value { Task { await addPhoto(value) } } }
         }
@@ -112,7 +113,7 @@ struct GuidedCheckInView: View {
                 }.padding(12).background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 16))
             }
             Button("Aufgabe hinzufügen", systemImage: "plus.circle.fill") { entry.tasks.append(CheckInTaskDraft()) }.buttonStyle(.bordered)
-            if !entry.isDraft { Text("Dieser Check-in ist bereits abgeschlossen. Seine Aufgaben bearbeitest du im Aufgabenbereich.").font(.caption).foregroundStyle(.secondary) }
+            if !entry.isDraft { Text("Dieser Check-in ist bereits abgeschlossen. Änderungen werden erst mit Speichern übernommen; erledigte Aufgaben bleiben erledigt.").font(.caption).foregroundStyle(.secondary) }
         case 6:
             field("Was möchtest du beim nächsten Termin besprechen?", text: $entry.therapyQuestion)
             PhotosPicker(selection: $selection, matching: .images) { Label(importing ? "Foto wird gespeichert …" : "Ein Foto ergänzen", systemImage: "photo.badge.plus") }.disabled(importing)
@@ -158,7 +159,7 @@ struct GuidedCheckInView: View {
         }
     }
     private func advance(_ amount: Int) { withAnimation(reduceMotion ? nil : .smooth) { entry.step = max(0, min(7, step + amount)) }; persistDraft() }
-    private func persistDraft() { store.saveGuided(entry, complete: false); error = store.lastSaveError }
+    private func persistDraft() { guard entry.isDraft else { return }; store.saveGuided(entry, complete: false); error = store.lastSaveError }
     private func clearStep() {
         switch step { case 1: entry.mood = nil; case 2: entry.batteryPercent = nil; entry.givesEnergy = ""; entry.takesEnergy = ""; case 3: entry.stress = nil; entry.sensoryLoad = nil; entry.sleepHours = nil; case 4: entry.summary = ""; entry.smallWin = ""; entry.nextNeed = ""; case 5: if entry.isDraft { entry.tasks = [] }; case 6: entry.therapyQuestion = ""; default: break }
     }

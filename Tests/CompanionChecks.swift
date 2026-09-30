@@ -16,7 +16,7 @@ import Foundation
         var entry = GuidedCheckIn(kind: .therapy, batteryPercent: 0, tasks: [CheckInTaskDraft(title: "Kleiner Schritt")], isDraft: false)
         data.guidedCheckIns = [entry]
         let roundtrip = try BackupArchiveCompatible.decode(BackupArchiveCompatible.encode(data))
-        try expect(roundtrip == data, "All new types and zero battery round-trip")
+        try expect(try JSONSerialization.jsonObject(with: BackupArchiveCompatible.encode(roundtrip)) as! NSDictionary == JSONSerialization.jsonObject(with: BackupArchiveCompatible.encode(data)) as! NSDictionary, "All new types and zero battery round-trip")
         var object = try JSONSerialization.jsonObject(with: BackupArchiveCompatible.encode(data)) as! [String: Any]
         object["schemaVersion"] = 6
         for key in ["guidedCheckIns", "routines", "routineCompletions", "routineSnoozes", "companionSettings"] { object.removeValue(forKey: key) }
@@ -24,6 +24,24 @@ import Foundation
         try expect(migrated.schemaVersion == 7 && migrated.routines.isEmpty && migrated.guidedCheckIns.isEmpty, "Schema 6 migration defaults")
         entry.mood = nil; entry.batteryPercent = nil; data.guidedCheckIns = [entry]
         try expect(try BackupArchiveCompatible.decode(BackupArchiveCompatible.encode(data)).guidedCheckIns[0].batteryPercent == nil, "Skipped answers stay absent")
+        var mutationData = AppData()
+        var draftEntry = GuidedCheckIn(kind: .therapy, tasks: [CheckInTaskDraft(title: "Kleiner Schritt")])
+        GuidedCheckInMutation.apply(draftEntry, complete: false, to: &mutationData)
+        try expect(mutationData.weeklyTasks.isEmpty, "Draft never creates tasks")
+        GuidedCheckInMutation.apply(draftEntry, complete: true, to: &mutationData)
+        try expect(mutationData.weeklyTasks.count == 1 && !mutationData.guidedCheckIns[0].isDraft, "Finish commits check-in and tasks together")
+        GuidedCheckInMutation.apply(draftEntry, complete: true, to: &mutationData)
+        try expect(mutationData.weeklyTasks.count == 1, "Repeated finish does not duplicate tasks")
+        mutationData.weeklyTasks[0].completed = true
+        draftEntry.tasks[0].title = "Bearbeiteter Schritt"
+        GuidedCheckInMutation.apply(draftEntry, complete: true, to: &mutationData)
+        try expect(mutationData.weeklyTasks[0].completed && mutationData.weeklyTasks[0].title == "Bearbeiteter Schritt", "Editing task details preserves completion")
+        mutationData.weeklyTasks = []
+        GuidedCheckInMutation.apply(draftEntry, complete: true, to: &mutationData)
+        try expect(mutationData.weeklyTasks.isEmpty, "Deleted task cannot resurrect")
+        draftEntry.tasks.append(CheckInTaskDraft(title: "Zusätzliche Aufgabe"))
+        GuidedCheckInMutation.apply(draftEntry, complete: true, to: &mutationData)
+        try expect(mutationData.weeklyTasks.count == 1, "New task in existing check-in creates exactly one task")
         let occurrences = RoutinePlanner.occurrences([routine], settings: data.companionSettings, now: now, calendar: calendar)
         let today = occurrences.first { calendar.isDate($0.due, inSameDayAs: now) }!
         try expect(calendar.component(.hour, from: today.due) == 6 && calendar.component(.minute, from: today.due) == 30, "Weekday clock")

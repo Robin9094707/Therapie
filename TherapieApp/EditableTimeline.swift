@@ -191,6 +191,7 @@ struct TherapyEditableTimeline: View {
         case .goal(let value):
             snapshot.therapyGoals.removeAll { $0.id == value.id }
             for i in snapshot.weeklyTasks.indices where snapshot.weeklyTasks[i].goalID == value.id { snapshot.weeklyTasks[i].goalID = nil }
+            for i in snapshot.routines.indices where snapshot.routines[i].goalID == value.id { snapshot.routines[i].goalID = nil }
         }
         store.data = snapshot
     }

@@ -9,23 +9,7 @@ extension AppStore {
         clean.stress = clean.stress.map { max(1, min(5, $0)) }
         clean.sensoryLoad = clean.sensoryLoad.map { max(1, min(5, $0)) }
         clean.sleepHours = clean.sleepHours.map { max(0, min(24, $0)) }
-        if complete {
-            clean.isDraft = false
-            let existing = snapshot.guidedCheckIns.first { $0.id == clean.id }
-            if existing?.isDraft != false {
-                let week = clean.date.therapyWeek
-                clean.taskIDs = []
-                for draft in clean.tasks where !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    let task = WeeklyTask(id: draft.id, weekOfYear: week.week, yearForWeekOfYear: week.year,
-                                         title: draft.title.trimmingCharacters(in: .whitespacesAndNewlines),
-                                         details: draft.details + "\nAufgabe: " + draft.source,
-                                         dueDate: draft.dueDate, smallStep: draft.smallStep)
-                    snapshot.weeklyTasks.insert(task, at: 0); clean.taskIDs.append(task.id)
-                }
-            }
-        }
-        snapshot.guidedCheckIns.removeAll { $0.id == clean.id }
-        snapshot.guidedCheckIns.insert(clean, at: 0)
+        GuidedCheckInMutation.apply(clean, complete: complete, to: &snapshot)
         data = snapshot
     }
     func offerCheckIn(for session: RunningTherapySession) {

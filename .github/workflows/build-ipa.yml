@@ -84,7 +84,7 @@ jobs:
         run: python3 scripts/validate_bundle.py build/Build/Products/Release-iphoneos/Therapie.app
 
       - name: Build simulator app
-        if: github.event_name == 'workflow_dispatch' && inputs.verify_simulator
+        if: github.event_name == 'push' || inputs.verify_simulator
         run: |
           set -o pipefail
           xcodebuild -project Therapie.xcodeproj -scheme TherapieApp -configuration Debug \
@@ -92,7 +92,7 @@ jobs:
             -derivedDataPath build-simulator CODE_SIGNING_ALLOWED=NO build | tee simulator-build.log
 
       - name: Verify native full-screen rendering on two iPhone sizes
-        if: github.event_name == 'workflow_dispatch' && inputs.verify_simulator
+        if: github.event_name == 'push' || inputs.verify_simulator
         timeout-minutes: 12
         run: |
           set +e

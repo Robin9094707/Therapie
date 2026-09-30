@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import AlarmKit
 import AppIntents
+import CryptoKit
 
 struct OpenRoutineIntent: AppIntent {
     static var title: LocalizedStringResource = "Routine öffnen"
@@ -32,7 +33,14 @@ final class RoutineAlarmCoordinator {
         let candidates = RoutinePlanner.slots(data: snapshot).filter { slot in snapshot.routines.contains { $0.id == slot.occurrence.routineID && $0.urgentAlarm && $0.remindersEnabled } }
         let desired = Array(candidates.prefix(8))
         var owned = UserDefaults.standard.dictionary(forKey: storageKey) as? [String: String] ?? [:]
-        let valid = Set(desired.map(\.id))
+        func key(_ slot: RoutineReminderSlot) -> String {
+            let title = snapshot.companionSettings.privateRoutineTitles ? "private" : snapshot.routines.first(where: { $0.id == slot.occurrence.routineID })?.title ?? ""
+            let digest = SHA256.hash(data: Data(title.utf8)).map { String(format: "%02x", $0) }.joined()
+            return slot.id + "." + digest
+        }
+        let valid = Set(desired.map(key))
+        let live = Set((try? AlarmManager.shared.alarms)?.map(\.id) ?? [])
+        for (key, raw) in owned where UUID(uuidString: raw).map({ !live.contains($0) }) ?? true { owned.removeValue(forKey: key) }
         var cancellationFailures = 0
         for (key, raw) in owned where !valid.contains(key) {
             if let id = UUID(uuidString: raw) {
@@ -46,10 +54,8 @@ final class RoutineAlarmCoordinator {
             return
         }
         // Device IDs live outside AppData and therefore never travel through backups.
-        let live = Set((try? AlarmManager.shared.alarms)?.map(\.id) ?? [])
-        for (key, raw) in owned where UUID(uuidString: raw).map({ !live.contains($0) }) ?? true { owned.removeValue(forKey: key) }
         do {
-            for slot in desired where owned[slot.id] == nil {
+            for slot in desired where owned[key(slot)] == nil {
                 guard generation == revision else { return }
                 guard let routine = snapshot.routines.first(where: { $0.id == slot.occurrence.routineID }) else { continue }
                 let id = UUID()
@@ -58,7 +64,7 @@ final class RoutineAlarmCoordinator {
                 let configuration = AlarmManager.AlarmConfiguration<TherapyAlarmMetadata>.alarm(schedule: .fixed(slot.fireAt), attributes: attributes, stopIntent: OpenRoutineIntent(routineID: routine.id))
                 _ = try await AlarmManager.shared.schedule(id: id, configuration: configuration)
                 guard generation == revision else { try? AlarmManager.shared.cancel(id: id); return }
-                owned[slot.id] = id.uuidString
+                owned[key(slot)] = id.uuidString
                 UserDefaults.standard.set(owned, forKey: storageKey)
             }
             let end = desired.last?.fireAt.formatted(date: .abbreviated, time: .shortened) ?? "–"
