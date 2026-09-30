@@ -108,7 +108,7 @@ struct SessionConductorContent: View {
                         if index == session.phaseIndex(at: now) { Image(systemName: "arrow.left").font(.caption).accessibilityLabel("Aktueller Abschnitt") }
                     }
                 }
-                HStack(spacing: 12) {
+                ResponsiveButtonRow {
                     Button(session.pausedAt == nil ? "Pausieren" : "Fortsetzen", systemImage: session.pausedAt == nil ? "pause.fill" : "play.fill") { controller.pauseOrResume() }.buttonStyle(.borderedProminent)
                     Button("Beenden", systemImage: "stop") { finish = true }.buttonStyle(.bordered)
                 }.disabled(controller.busy)

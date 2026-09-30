@@ -5,13 +5,15 @@ import sys
 
 app = Path(sys.argv[1])
 info = plistlib.loads((app / "Info.plist").read_bytes())
-assert info["CFBundleShortVersionString"] == "3001.0.0"
+assert info["CFBundleShortVersionString"] == "3002.0.0"
 assert info["UIDeviceFamily"] == [1], "Expected a native iPhone target"
 assert info["UILaunchStoryboardName"] == "LaunchScreen"
 assert (app / "LaunchScreen.storyboardc").is_dir(), "Compiled launch storyboard missing"
 assert "UIApplicationSceneManifest" in info, "SwiftUI scene declaration missing"
 assert (app / "Assets.car").is_file(), "Compiled asset catalog missing"
 assert info.get("NSSupportsLiveActivities") is True, "Live Activity capability missing"
+backup_type = next(item for item in info["UTExportedTypeDeclarations"] if item["UTTypeIdentifier"] == "eu.rjuhas.therapie.backup")
+assert "therapiebackup" in backup_type["UTTypeTagSpecification"]["public.filename-extension"]
 extension = app / "PlugIns" / "TherapieLiveActivity.appex"
 assert extension.is_dir(), "Live Activity extension not embedded"
 widget = plistlib.loads((extension / "Info.plist").read_bytes())

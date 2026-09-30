@@ -222,6 +222,7 @@ final class BackupService {
     }
 
     func backup(snapshot: AppData, appRoot: URL) throws {
+        BackupDiskAccess.lock.lock(); defer { BackupDiskAccess.lock.unlock() }
         let folder = try resolveFolder()
         let didAccess = folder.startAccessingSecurityScopedResource()
         defer { if didAccess { folder.stopAccessingSecurityScopedResource() } }
@@ -265,6 +266,7 @@ final class BackupService {
     }
 
     func restore(appRoot: URL) throws -> AppData {
+        BackupDiskAccess.lock.lock(); defer { BackupDiskAccess.lock.unlock() }
         let folder = try resolveFolder()
         let didAccess = folder.startAccessingSecurityScopedResource()
         defer { if didAccess { folder.stopAccessingSecurityScopedResource() } }
@@ -277,19 +279,22 @@ final class BackupService {
         let restored = try decoder.decode(AppData.self, from: raw)
 
         let fm = FileManager.default
+        let staged = try BackupArchive.privateDirectory()
+        defer { try? fm.removeItem(at: staged) }
         for directory in ["Media", "Recordings"] {
-            let source = backupRoot.appendingPathComponent(directory, isDirectory: true)
-            let target = appRoot.appendingPathComponent(directory, isDirectory: true)
-            if fm.fileExists(atPath: target.path) {
-                try fm.removeItem(at: target)
-            }
-            if fm.fileExists(atPath: source.path) {
-                try fm.copyItem(at: source, to: target)
-            } else {
-                try fm.createDirectory(at: target, withIntermediateDirectories: true)
-            }
+            try fm.createDirectory(at: staged.appendingPathComponent(directory), withIntermediateDirectories: true)
         }
-
+        for item in restored.media {
+            try BackupArchive.validatePath(item.relativePath)
+            if item.attachmentOmitted == true { continue }
+            let source = try BackupArchive.sourceURL(item.relativePath, root: backupRoot)
+            let target = staged.appendingPathComponent(item.relativePath)
+            try fm.copyItem(at: source, to: target)
+            try BackupArchive.protect(target)
+        }
+        try raw.write(to: staged.appendingPathComponent("therapy-data.json"), options: .atomic)
+        try BackupArchive.protect(staged.appendingPathComponent("therapy-data.json"))
+        try BackupArchive.install(directory: staged, root: appRoot)
         return restored
     }
 }

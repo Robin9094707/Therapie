@@ -48,6 +48,12 @@ jobs:
           swiftc TherapieApp/Models.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift Tests/ModelChecks.swift -o /tmp/therapie-model-checks
           /tmp/therapie-model-checks
 
+      - name: Test encrypted portable backups and recovery
+        run: |
+          set -o pipefail
+          swiftc TherapieApp/Models.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/BackupArchive.swift Tests/BackupChecks.swift -o /tmp/therapie-backup-checks 2>&1 | tee backup-tests.log
+          /tmp/therapie-backup-checks 2>&1 | tee -a backup-tests.log
+
       - name: Build unsigned iPhone app
         run: |
           set -o pipefail
@@ -100,17 +106,17 @@ jobs:
       - name: Package IPA
         run: |
           APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" -print -quit)
-          rm -rf Payload Therapie-v3001.0.0.ipa
+          rm -rf Payload Therapie-v3002.0.0.ipa
           mkdir Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Therapie-v3001.0.0.ipa Payload
-          ls -lh Therapie-v3001.0.0.ipa
+          /usr/bin/zip -qry Therapie-v3002.0.0.ipa Payload
+          ls -lh Therapie-v3002.0.0.ipa
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Therapie-v3001.0.0-IPA
-          path: Therapie-v3001.0.0.ipa
+          name: Therapie-v3002.0.0-IPA
+          path: Therapie-v3002.0.0.ipa
           if-no-files-found: error
           retention-days: 30
 
@@ -122,4 +128,5 @@ jobs:
           path: |
             xcodebuild.log
             simulator-build.log
+            backup-tests.log
           if-no-files-found: ignore

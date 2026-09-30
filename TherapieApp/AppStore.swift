@@ -34,11 +34,21 @@ final class AppStore: ObservableObject {
         recordingsURL = root.appendingPathComponent("Recordings", isDirectory: true)
         dataURL = root.appendingPathComponent("therapy-data.json")
 
-        try? fm.createDirectory(at: root, withIntermediateDirectories: true)
-        try? fm.createDirectory(at: mediaURL, withIntermediateDirectories: true)
-        try? fm.createDirectory(at: recordingsURL, withIntermediateDirectories: true)
+        let recoveryFailure: String?
+        do { try BackupArchive.recoverInterruptedRestore(root: root); recoveryFailure = nil }
+        catch { recoveryFailure = error.localizedDescription }
+        if recoveryFailure == nil { try? fm.createDirectory(at: root, withIntermediateDirectories: true) }
+        if recoveryFailure == nil {
+            try? fm.createDirectory(at: mediaURL, withIntermediateDirectories: true)
+            try? fm.createDirectory(at: recordingsURL, withIntermediateDirectories: true)
+        }
 
         data = AppData()
+        if let recoveryFailure {
+            writeBlocked = true
+            loadError = "Eine unterbrochene Wiederherstellung konnte nicht abgeschlossen werden. Die vorherige Sicherung bleibt erhalten. " + recoveryFailure
+            lastSaveError = loadError
+        }
         if fm.fileExists(atPath: dataURL.path) {
             do {
                 let raw = try Data(contentsOf: dataURL)
@@ -46,8 +56,8 @@ final class AppStore: ObservableObject {
                 decoder.dateDecodingStrategy = .iso8601
                 data = try decoder.decode(AppData.self, from: raw)
                 let version = (try JSONSerialization.jsonObject(with: raw) as? [String: Any])?["schemaVersion"] as? Int ?? 1
-                let snapshot = root.appendingPathComponent("therapy-data.pre-3001.json")
-                if version < 4 && !fm.fileExists(atPath: snapshot.path) {
+                let snapshot = root.appendingPathComponent("therapy-data.pre-3002.json")
+                if version < 5 && !fm.fileExists(atPath: snapshot.path) {
                     try raw.write(to: snapshot, options: [.atomic, .completeFileProtection])
                 }
             } catch {
@@ -119,6 +129,37 @@ final class AppStore: ObservableObject {
         loadError = nil
         isLoading = false
         save()
+    }
+
+    func exportSnapshot() throws -> AppData {
+        guard !writeBlocked, lastSaveError == nil else {
+            throw ServiceError.generic("Bitte behebe zuerst den Speicherfehler oder importiere eine gültige Sicherung. Ungeladene Daten werden nicht exportiert.")
+        }
+        return data
+    }
+
+    func installBackup(_ prepared: PreparedBackup) throws {
+        backupWorkItem?.cancel(); backupWorkItem = nil
+        BackupDiskAccess.lock.lock(); defer { BackupDiskAccess.lock.unlock() }
+        var restored = prepared.manifest.data
+        // OS identifiers and security-scoped bookmarks belong to this device.
+        restored.schedule.calendarEventIdentifier = nil
+        restored.schedule.alarmIDs = []
+        try BackupArchive.encoder().encode(restored).write(to: prepared.directory.appendingPathComponent("therapy-data.json"), options: .atomic)
+        try BackupArchive.protect(prepared.directory.appendingPathComponent("therapy-data.json"))
+        try BackupArchive.install(directory: prepared.directory, root: rootURL)
+        CalendarSyncService.shared.removeSyncedEvent(identifier: data.schedule.calendarEventIdentifier)
+        AlarmService.shared.cancelAllOwnedAlarms()
+        TherapySessionController.endAll()
+        WeeklyReminderService.cancel()
+        BackupService.shared.clearFolder()
+        prepared.manifest.preferences.apply()
+        isLoading = true
+        data = restored
+        writeBlocked = false; loadError = nil; lastSaveError = nil
+        isLoading = false
+        TherapyEffects.shared.light()
+        sessionController.synchronize()
     }
 
     func addWeeklyTask(title: String, details: String) {
@@ -340,7 +381,9 @@ final class AppStore: ObservableObject {
     }
 
     func resetAllData() {
+        BackupDiskAccess.lock.lock(); defer { BackupDiskAccess.lock.unlock() }
         backupWorkItem?.cancel()
+        try? FileManager.default.removeItem(at: BackupArchive.recoveryURL(rootURL))
         try? FileManager.default.removeItem(at: rootURL)
         try? FileManager.default.createDirectory(at: mediaURL, withIntermediateDirectories: true)
         try? FileManager.default.createDirectory(at: recordingsURL, withIntermediateDirectories: true)

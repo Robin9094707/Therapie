@@ -1,0 +1,158 @@
+import Foundation
+import CryptoKit
+
+@main
+struct BackupChecks {
+    enum Failure: Error { case assertion(String) }
+    static var count = 0
+    static let password = "Kaffee ☕ und sichere Therapie 2026!"
+    static func expect(_ value: @autoclosure () throws -> Bool, _ text: String) throws {
+        count += 1; if try !value() { throw Failure.assertion(text) }
+    }
+    static func rejects(_ text: String, _ work: () throws -> Void) throws {
+        do { try work() } catch { count += 1; return }
+        throw Failure.assertion(text)
+    }
+    static func json(_ data: AppData) throws -> NSDictionary {
+        try JSONSerialization.jsonObject(with: BackupArchive.encoder().encode(data)) as! NSDictionary
+    }
+    static func malicious(_ manifest: BackupManifest, at url: URL) throws {
+        let salt = Data(repeating: 42, count: 16)
+        let header = BackupArchive.magic + BackupArchive.integer(BackupArchive.rounds) + salt
+        let key = try BackupArchive.deriveKey(password: password, salt: salt, iterations: BackupArchive.rounds)
+        FileManager.default.createFile(atPath: url.path, contents: header)
+        let output = try FileHandle(forWritingTo: url); defer { try? output.close() }
+        try output.seekToEnd()
+        var sequence: UInt64 = 0
+        try BackupArchive.seal(BackupArchive.encoder().encode(manifest), to: output, key: key, header: header, sequence: &sequence)
+        try BackupArchive.seal(BackupArchive.endMarker, to: output, key: key, header: header, sequence: &sequence)
+    }
+    static func main() throws {
+        let fm = FileManager.default, base = try BackupArchive.privateDirectory()
+        defer { try? fm.removeItem(at: base) }
+        let root = base.appendingPathComponent("Therapie")
+        for directory in ["Media", "Recordings"] { try fm.createDirectory(at: root.appendingPathComponent(directory), withIntermediateDirectories: true) }
+        var data = AppData()
+        data.profile = UserProfile(userName: "Robin", therapistName: "Therapeutin", onboardingCompleted: true)
+        data.schedule.alarmIDs = ["local-device-only"]
+        data.preferences.includeLocationForNewMedia = false
+        let folder = TherapyFolder(title: "Autismus")
+        data.therapyFolders = [folder]
+        let topic = TherapyTopic(title: "Reizregulation")
+        data.therapyTopics = [topic]
+        data.therapyGoals = [TherapyGoal(title: "Pausen")]
+        data.notes = [TherapyNote(title: "PRIVATE-NOTE-DO-NOT-LEAK", text: "Wichtig für mich", tags: ["Privat"], folderID: folder.id, topicID: topic.id, author: "Therapeutin", isImportant: true)]
+        let week = Date().therapyWeek
+        data.weeklyTasks = [WeeklyTask(weekOfYear: week.week, yearForWeekOfYear: week.year, title: "Aufgabe", details: "Wieder aufnehmen", completed: true, completedAt: Date(), topicID: topic.id)]
+        data.energyEntries = [EnergyEntry(level: 3, givesEnergy: "Ruhe", takesEnergy: "Lärm", note: "Altbestand")]
+        data.reflections = [TherapySessionReflection(summary: "Stunde", whatHelped: "Kaffee", nextFocus: "AirTag")]
+        data.moodCheckIns = [MoodCheckIn(mood: 4, battery: 3)]
+        data.batteryPoints = [BatteryPoint(title: "Wald", direction: .gives)]
+        data.weekReviews = [WeekReview(weekStart: Date().therapyWeekStart, summary: "Gut")]
+        data.wellnessSettings.weeklyGoal = 3
+        data.currentSession = RunningTherapySession.start(data.sessionTemplates[0])
+        data.sessionHistory = [RunningTherapySession.start(data.sessionTemplates[0])]
+        data.sessionPreferences.privateLiveActivity = false
+        let photo = Data((0..<(BackupArchive.chunkSize * 3 + 19)).map { UInt8($0 % 251) })
+        let audio = Data("Realistic audio placeholder bytes".utf8), document = Data()
+        let files: [(MediaKind, String, Data)] = [(.photo, "Media/photo.jpg", photo), (.audio, "Recordings/speech.m4a", audio), (.document, "Media/empty.pdf", document)]
+        for (kind, path, bytes) in files {
+            try bytes.write(to: root.appendingPathComponent(path))
+            data.media.append(MediaItem(kind: kind, title: kind.displayName, note: "Metadaten bleiben erhalten", tags: ["Therapie"], relativePath: path, folderID: folder.id, topicID: topic.id))
+        }
+        try BackupArchive.encoder().encode(data).write(to: root.appendingPathComponent("therapy-data.json"))
+        let prefs = PortablePreferences(appearance: "dark", calmInterface: false, haptics: false, confetti: false)
+        let archive = try BackupArchive.export(data: data, root: root, preferences: prefs, options: BackupOptions(), password: password, version: "3002.0.0")
+        defer { try? fm.removeItem(at: archive.deletingLastPathComponent()) }
+        let original = try Data(contentsOf: archive)
+        try expect(original.range(of: Data(data.notes[0].title.utf8)) == nil, "Notes encrypted")
+        try expect(original.range(of: Data("Media/photo.jpg".utf8)) == nil, "Filenames encrypted")
+        let prepared = try BackupArchive.prepareImport(url: archive, password: password)
+        defer { prepared.discard() }
+        try expect(try json(prepared.manifest.data) == json(data), "All AppData fields round-trip")
+        try expect(prepared.manifest.preferences == prefs, "Portable preferences round-trip")
+        try expect(prepared.manifest.attachments.count == 3 && prepared.manifest.omittedAttachments == 0, "All attachment kinds included")
+        for (_, path, bytes) in files { try expect(try Data(contentsOf: prepared.directory.appendingPathComponent(path)) == bytes, "Exact attachment bytes: " + path) }
+        let second = try BackupArchive.export(data: data, root: root, preferences: prefs, options: BackupOptions(), password: password, version: "3002.0.0")
+        defer { try? fm.removeItem(at: second.deletingLastPathComponent()) }
+        try expect(try Data(contentsOf: second) != original, "Fresh salt and nonces")
+        let derived = try BackupArchive.deriveKey(password: "password", salt: Data("salt".utf8), iterations: 1)
+        let hex = derived.withUnsafeBytes { $0.map { String(format: "%02x", $0) }.joined() }
+        try expect(hex == "120fb6cffcf8b32c43e7225256c4f837a86548c92ccc35480805987cb70be17b", "PBKDF2-HMAC-SHA256 known answer")
+        try rejects("Wrong password accepted") { let value = try BackupArchive.prepareImport(url: archive, password: "incorrect"); value.discard() }
+        let corrupted = base.appendingPathComponent("bad.therapiebackup")
+        for offset in [0, 27, 35, original.count / 2, original.count - 1, original.count - 28] {
+            try original.prefix(offset).write(to: corrupted)
+            try rejects("Truncation accepted at \(offset)") { let value = try BackupArchive.prepareImport(url: corrupted, password: password); value.discard() }
+        }
+        var altered = original; altered[altered.count / 2] ^= 1
+        try altered.write(to: corrupted)
+        try rejects("Changed ciphertext accepted") { let value = try BackupArchive.prepareImport(url: corrupted, password: password); value.discard() }
+        try (original + Data([0])).write(to: corrupted)
+        try rejects("Trailing bytes accepted") { let value = try BackupArchive.prepareImport(url: corrupted, password: password); value.discard() }
+        altered = original; altered[12] ^= 1; try altered.write(to: corrupted)
+        try rejects("Changed salt accepted") { let value = try BackupArchive.prepareImport(url: corrupted, password: password); value.discard() }
+        altered = original; altered[8] = 255; try altered.write(to: corrupted)
+        try rejects("Hostile KDF count accepted") { let value = try BackupArchive.prepareImport(url: corrupted, password: password); value.discard() }
+        var ranges: [Range<Int>] = [], cursor = 28
+        while cursor < original.count {
+            let length = Int(BackupArchive.number(Data(original[cursor..<cursor + 4])))
+            ranges.append(cursor..<cursor + 4 + length); cursor += 4 + length
+        }
+        var reordered = original.prefix(28) + original[ranges[0]] + original[ranges[2]] + original[ranges[1]]
+        for range in ranges.dropFirst(3) { reordered.append(original[range]) }
+        try reordered.write(to: corrupted)
+        try rejects("Reordered frames accepted") { let value = try BackupArchive.prepareImport(url: corrupted, password: password); value.discard() }
+        try expect(try Data(contentsOf: root.appendingPathComponent("Media/photo.jpg")) == photo, "Rejected imports leave originals intact")
+        for path in ["../outside", "/Media/a", "Media/../a", "Media//a", "Media/a/b", "Other/a", "Recordings/..", "Media/a\\b"] {
+            try rejects("Unsafe path accepted: " + path) { try BackupArchive.validatePath(path) }
+        }
+        var hostile = prepared.manifest
+        hostile.attachments[0].path = "../outside"
+        try malicious(hostile, at: corrupted)
+        try rejects("Authenticated hostile path accepted") { let value = try BackupArchive.prepareImport(url: corrupted, password: password); value.discard() }
+        hostile = prepared.manifest; hostile.formatVersion = 999; try malicious(hostile, at: corrupted)
+        try rejects("Future format accepted") { let value = try BackupArchive.prepareImport(url: corrupted, password: password); value.discard() }
+        hostile = prepared.manifest; hostile.attachments[0].bytes = UInt64.max
+        try malicious(hostile, at: corrupted)
+        try rejects("Overflow size accepted") { let value = try BackupArchive.prepareImport(url: corrupted, password: password); value.discard() }
+        var noPhotos = BackupOptions(); noPhotos.includePhotos = false
+        let small = try BackupArchive.export(data: data, root: root, preferences: prefs, options: noPhotos, password: password, version: "3002.0.0")
+        defer { try? fm.removeItem(at: small.deletingLastPathComponent()) }
+        let withoutPhotos = try BackupArchive.prepareImport(url: small, password: password)
+        defer { withoutPhotos.discard() }
+        try expect(withoutPhotos.manifest.data.media.count == 3, "Excluded photo metadata preserved")
+        try expect(withoutPhotos.manifest.data.media[0].attachmentOmitted == true && withoutPhotos.manifest.omittedAttachments == 1, "Photo omission explicit")
+        try expect(!fm.fileExists(atPath: withoutPhotos.directory.appendingPathComponent("Media/photo.jpg").path), "No excluded image bytes restored")
+        try expect(try Data(contentsOf: withoutPhotos.directory.appendingPathComponent("Recordings/speech.m4a")) == audio, "Audio retained without photos")
+        try BackupArchive.install(directory: withoutPhotos.directory, root: root)
+        try expect(!fm.fileExists(atPath: root.appendingPathComponent("Media/photo.jpg").path), "Import replaces attachment set")
+        try expect(fm.fileExists(atPath: BackupArchive.recoveryURL(root).appendingPathComponent("Media/photo.jpg").path), "Pre-import recovery copy retained")
+        let reexport = try BackupArchive.export(data: withoutPhotos.manifest.data, root: root, preferences: prefs, options: BackupOptions(), password: password, version: "3002.0.0")
+        defer { try? fm.removeItem(at: reexport.deletingLastPathComponent()) }
+        let reimport = try BackupArchive.prepareImport(url: reexport, password: password); defer { reimport.discard() }
+        try expect(reimport.manifest.omittedAttachments == 1, "Omissions survive subsequent full export")
+        let invalidDirectory = try BackupArchive.privateDirectory(in: base)
+        defer { try? fm.removeItem(at: invalidDirectory) }
+        try Data("{}".utf8).write(to: invalidDirectory.appendingPathComponent("therapy-data.json"))
+        let before = try Data(contentsOf: root.appendingPathComponent("therapy-data.json"))
+        try rejects("Invalid staging installed") { try BackupArchive.install(directory: invalidDirectory, root: root) }
+        try expect(try Data(contentsOf: root.appendingPathComponent("therapy-data.json")) == before, "Failed install leaves current data unchanged")
+        try fm.removeItem(at: root)
+        try BackupArchive.recoverInterruptedRestore(root: root)
+        try expect(try Data(contentsOf: root.appendingPathComponent("Media/photo.jpg")) == photo, "Interrupted import recovers original directory")
+        try fm.removeItem(at: root.appendingPathComponent("Media/photo.jpg"))
+        try fm.createSymbolicLink(at: root.appendingPathComponent("Media/photo.jpg"), withDestinationURL: base.appendingPathComponent("bad.therapiebackup"))
+        try rejects("Symlink exported") { _ = try BackupArchive.export(data: data, root: root, preferences: prefs, options: BackupOptions(), password: password, version: "3002.0.0") }
+        let defaults = UserDefaults(suiteName: "TherapieBackupTests-" + UUID().uuidString)!
+        prefs.apply(defaults)
+        try expect(PortablePreferences.capture(defaults) == prefs, "Appearance, calm, haptics and confetti restored")
+        var oldJSON = try JSONSerialization.jsonObject(with: BackupArchive.encoder().encode(data)) as! [String: Any]
+        for version in 1...4 {
+            oldJSON["schemaVersion"] = version
+            let migrated = try BackupArchive.decoder().decode(AppData.self, from: JSONSerialization.data(withJSONObject: oldJSON))
+            try expect(migrated.schemaVersion == 5 && migrated.notes.count == 1 && migrated.media[0].attachmentOmitted == nil, "Schema \(version) migrates for backups")
+        }
+        print("Passed \(count) encrypted backup checks: complete model, streaming attachments, password authentication, tampering, paths, omissions, settings and recovery.")
+    }
+}

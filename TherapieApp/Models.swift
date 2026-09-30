@@ -99,6 +99,8 @@ struct MediaItem: Identifiable, Codable, Equatable {
     var topicID: UUID?
     var category: String?
     var source: String?
+    /// Metadata remains usable when its binary attachment was intentionally excluded.
+    var attachmentOmitted: Bool?
 }
 
 struct TherapySessionReflection: Identifiable, Codable, Equatable {
@@ -110,7 +112,7 @@ struct TherapySessionReflection: Identifiable, Codable, Equatable {
 }
 
 struct AppData: Codable, Equatable {
-    var schemaVersion = 4
+    var schemaVersion = 5
     var profile = UserProfile()
     var schedule = TherapySchedule()
     var preferences = AppPreferences()
@@ -142,11 +144,11 @@ struct AppData: Codable, Equatable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let version = try c.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
-        guard (1...4).contains(version) else {
+        guard (1...5).contains(version) else {
             throw DecodingError.dataCorruptedError(forKey: .schemaVersion, in: c,
                                                    debugDescription: "Diese Daten benötigen eine neuere App-Version.")
         }
-        schemaVersion = 4
+        schemaVersion = 5
         profile = try c.decode(UserProfile.self, forKey: .profile)
         schedule = try c.decodeIfPresent(TherapySchedule.self, forKey: .schedule) ?? TherapySchedule()
         preferences = try c.decodeIfPresent(AppPreferences.self, forKey: .preferences) ?? AppPreferences()

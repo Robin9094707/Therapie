@@ -189,6 +189,9 @@ struct TherapyMediaEditorView: View {
             var clean = item; clean.tags = tags.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }; store.saveMediaDetails(clean)
         }) {
             Section("Material & Informationen") {
+                if item.attachmentOmitted == true {
+                    Label("Die Datei wurde beim Export ausgelassen. Ihre Informationen bleiben bearbeitbar.", systemImage: "doc.badge.ellipsis").font(.footnote).foregroundStyle(.secondary)
+                }
                 TextField("Titel", text: $item.title)
                 TextField("Beschreibung, Verwendung oder Hinweis", text: $item.note, axis: .vertical).lineLimit(3...10)
                 TextField("Quelle / erhalten von", text: Binding(get: { item.source ?? "" }, set: { item.source = $0 }))
@@ -587,7 +590,12 @@ struct TherapyMaterialsView: View {
                         Text(item.category ?? item.kind.displayName).font(.caption).foregroundStyle(.secondary)
                         if !item.note.isEmpty { Text(item.note).font(.subheadline).lineLimit(4) }
                         if let source = item.source, !source.isEmpty { Text("Quelle: " + source).font(.caption).foregroundStyle(.secondary) }
-                        Button("Material öffnen", systemImage: "arrow.up.right.square") { preview = store.fileURL(for: item) }
+                        if item.attachmentOmitted == true {
+                            Label("Anhang beim Export ausgelassen", systemImage: "doc.badge.ellipsis").font(.footnote).foregroundStyle(.secondary)
+                            Text("Informationen und Notizen kannst du weiterhin bearbeiten. Die Datei ist in dieser Sicherung nicht enthalten.").font(.caption).foregroundStyle(.secondary)
+                        } else {
+                            Button("Material öffnen", systemImage: "arrow.up.right.square") { preview = store.fileURL(for: item) }
+                        }
                         if item.folderID != nil { Text(TherapyHierarchy.path(for: item.folderID, folders: store.data.therapyFolders)).font(.caption).foregroundStyle(.secondary) }
                     }
                 }

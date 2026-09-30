@@ -1,0 +1,8 @@
+# Therapie maintenance
+
+- Preserve the bundle identifier and all existing user data. New fields require additive Codable defaults and migration checks; unsupported future schemas must fail without overwriting data.
+- Every new persistent feature must round-trip through the encrypted `.therapiebackup` export/import. `BackupManifest` encodes the entire `AppData`; never build a separate hand-maintained domain export. Persist new appearance/settings preferences in `AppData` or extend `PortablePreferences` with migration defaults.
+- Update `Tests/BackupChecks.swift` when adding new record types, attachment kinds, app settings, or changing the backup/container format. Keep earlier supported data schemas importable. Bump the container version for incompatible framing, cryptography, or manifest changes; do not reinterpret v1.
+- Photos, recordings and documents must use validated relative paths. Stream attachments; never load the whole archive into a `Data` or `FileDocument` for export. Use CryptoKit authenticated encryption and CommonCrypto PBKDF2, with fresh salt/nonces. Never persist passwords or export permission grants/security-scoped bookmarks/device-specific OS identifiers.
+- Verify imports fully in protected staging before explicit user confirmation replaces data. Maintain interruption recovery and rollback. Excluded files must preserve their editable metadata and be clearly marked unavailable.
+- Run model and encrypted backup checks, compile the iPhone app, and validate its actual bundle in CI. Report device-only checks accurately; compilation does not prove haptics, Files providers or Live Activities work on a physical iPhone.

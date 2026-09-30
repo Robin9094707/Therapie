@@ -19,6 +19,15 @@
 	<key>CFBundleIconName</key>
 	<string>AppIcon</string>
 	<key>NSSupportsLiveActivities</key><true/>
+	<key>UTExportedTypeDeclarations</key><array><dict>
+		<key>UTTypeIdentifier</key><string>eu.rjuhas.therapie.backup</string>
+		<key>UTTypeDescription</key><string>Verschlüsselte Therapie-Sicherung</string>
+		<key>UTTypeConformsTo</key><array><string>public.data</string></array>
+		<key>UTTypeTagSpecification</key><dict>
+			<key>public.filename-extension</key><array><string>therapiebackup</string></array>
+			<key>public.mime-type</key><string>application/vnd.therapie.backup</string>
+		</dict>
+	</dict></array>
 	<key>CFBundleURLTypes</key><array><dict>
 		<key>CFBundleURLSchemes</key><array><string>therapie</string></array>
 	</dict></array>

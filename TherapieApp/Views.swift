@@ -250,6 +250,7 @@ struct OnboardingView: View {
     @EnvironmentObject private var store: AppStore
     @State private var userName = ""
     @State private var therapistName = ""
+    @State private var showBackup = false
 
     var body: some View {
         ZStack {
@@ -316,6 +317,8 @@ struct OnboardingView: View {
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: 520, alignment: .leading)
+                    Button("Vorhandene Sicherung importieren", systemImage: "square.and.arrow.down") { showBackup = true }
+                        .buttonStyle(.bordered)
                 }
                 .frame(maxWidth: 600)
                 .frame(maxWidth: .infinity)
@@ -324,6 +327,7 @@ struct OnboardingView: View {
             }
             .scrollDismissesKeyboard(.interactively)
         }
+        .sheet(isPresented: $showBackup) { BackupCenterView() }
     }
 }
 
@@ -1280,6 +1284,7 @@ struct SettingsView: View {
     @State private var deletePhrase = ""
     @State private var showDeleteDialog = false
     @State private var showRestoreDialog = false
+    @State private var showBackupCenter = false
 
     private let deleteConfirmation = "ALLE THERAPIEDATEN LÖSCHEN"
 
@@ -1296,6 +1301,13 @@ struct SettingsView: View {
                     }
                     scheduleCard
                     reminderCard
+                    GlassCard(emphasized: true) {
+                        VStack(alignment: .leading, spacing: 14) {
+                            SectionHeader(title: "Vollständige Datensicherung", icon: "lock.doc.fill", subtitle: "Eine verschlüsselte Datei – mit oder ohne Bilder.")
+                            Text("Alle Einträge und Einstellungen exportieren, in Dateien sichern und später auf diesem oder einem anderen iPhone wiederherstellen.").font(.subheadline).foregroundStyle(.secondary)
+                            Button { showBackupCenter = true } label: { Label("Export & Import öffnen", systemImage: "externaldrive").frame(maxWidth: .infinity) }.buttonStyle(.borderedProminent)
+                        }
+                    }
                     backupCard
                     privacyCard
                     dangerCard
@@ -1303,6 +1315,7 @@ struct SettingsView: View {
             }
             .navigationTitle("Profil")
             .navigationBarTitleDisplayMode(.large)
+            .sheet(isPresented: $showBackupCenter) { BackupCenterView() }
             .fileImporter(
                 isPresented: $showFolderPicker,
                 allowedContentTypes: [.folder],
@@ -1507,9 +1520,9 @@ struct SettingsView: View {
         GlassCard(emphasized: true) {
             VStack(alignment: .leading, spacing: 14) {
                 SectionHeader(
-                    title: "Backup",
+                    title: "Automatische Ordnersicherung",
                     icon: "icloud.and.arrow.up.fill",
-                    subtitle: "iCloud Drive oder ein Ordner auf deinem iPhone"
+                    subtitle: "Zusätzliche Sicherung ohne Passwortverschlüsselung."
                 )
 
                 if let folder = BackupService.shared.selectedFolderName() {

@@ -125,9 +125,8 @@ struct TherapyEditableTimeline: View {
                                 Text(record.date.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
                             }
                         }
-                        HStack {
+                        ResponsiveButtonRow {
                             Button("Öffnen & bearbeiten", systemImage: "pencil") { editing = record }
-                            Spacer()
                             Button(role: .destructive) { deleting = record; confirmDelete = true } label: { Image(systemName: "trash").frame(width: 44, height: 44) }.accessibilityLabel("Eintrag löschen")
                         }.font(.caption.bold())
                     }
