@@ -5,6 +5,7 @@ struct RoutineHubView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var draft: DailyRoutine?
     @State private var goal: TherapyGoal?
+    @State private var historyRoutine: DailyRoutine?
     @State private var deleting: DailyRoutine?
     @State private var confirmDelete = false
     @State private var vacationEnd = Date().addingTimeInterval(7 * 86400)
@@ -48,7 +49,7 @@ struct RoutineHubView: View {
                             if let paused = routine.pausedUntil, paused > Date() { Text("Pausiert bis " + paused.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.orange) }
                             ResponsiveButtonRow {
                                 Button("Bearbeiten", systemImage: "pencil") { draft = routine }.buttonStyle(.bordered)
-                                Button("Verlauf", systemImage: "clock.arrow.circlepath") { store.notificationRoutineID = routine.id }.buttonStyle(.bordered)
+                                Button("Verlauf", systemImage: "clock.arrow.circlepath") { historyRoutine = routine }.buttonStyle(.bordered)
                                 Button("Löschen", systemImage: "trash", role: .destructive) { deleting = routine; confirmDelete = true }.buttonStyle(.bordered)
                             }
                         }
@@ -69,6 +70,7 @@ struct RoutineHubView: View {
         }.navigationTitle("Routinen & Ziele").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fertig") { dismiss() } } }
             .sheet(item: $draft) { RoutineEditorView(routine: $0) }
+            .sheet(item: $historyRoutine) { RoutineDetailView(routineID: $0.id) }
             .sheet(item: $goal) { GoalEditorView(goal: $0) }
             .alert("Routine löschen?", isPresented: $confirmDelete) { Button("Abbrechen", role: .cancel) {}; Button("Löschen", role: .destructive) { if let item = deleting { store.deleteRoutine(item.id) } } } message: { Text("Ihre Erinnerungen werden entfernt. Bestätigungen bleiben in deinen Sicherungen erhalten.") }
     }

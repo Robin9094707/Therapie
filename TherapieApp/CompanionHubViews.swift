@@ -56,7 +56,7 @@ struct EntryHubView: View {
     var body: some View {
         NavigationStack {
             TherapyScreen {
-                VStack(alignment: .leading, spacing: 16) {
+                LazyVStack(alignment: .leading, spacing: 16) {
                     Text("Was möchtest du festhalten?").font(.system(.title2, design: .rounded, weight: .bold))
                     Text("Ein Foto, eine Stimmung oder ein kompletter Check-in. Alles bleibt in deinem persönlichen Archiv.").foregroundStyle(.secondary)
                     GlassCard {

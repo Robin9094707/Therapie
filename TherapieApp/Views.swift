@@ -9,6 +9,7 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var openSession = false
+    @State private var lastReminderRefresh = Date()
     @AppStorage("therapy.permissions3000") private var permissionSetupDone = false
     @State private var showPermissions = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -50,6 +51,10 @@ struct RootView: View {
             store.consumeRoutineAlarmRoute()
             while !Task.isCancelled {
                 store.sessionController.reconcile()
+                if Date().timeIntervalSince(lastReminderRefresh) >= 300 && store.loadError == nil && store.lastSaveError == nil {
+                    lastReminderRefresh = Date()
+                    TaskNotificationCoordinator.shared.refresh(store)
+                }
                 do { try await Task.sleep(for: .seconds(1)) } catch { break }
             }
         }

@@ -73,6 +73,10 @@ struct WeekOverviewCard: View {
         store.data.moodCheckIns.filter { $0.date.isSameTherapyDay(as: Date()) }.max { $0.date < $1.date }
     }
 
+    private var latestGuided: GuidedCheckIn? {
+        store.data.guidedCheckIns.filter { !$0.isDraft && $0.date.isSameTherapyDay(as: Date()) }.max { $0.date < $1.date }
+    }
+
     var body: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 16) {
@@ -100,7 +104,12 @@ struct WeekOverviewCard: View {
                         .foregroundStyle(.indigo)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Stimmung & Akku heute").font(.subheadline.weight(.semibold))
-                        if let entry = latestMood {
+                        if let entry = latestGuided, entry.date >= max(latestMood?.date ?? .distantPast, latestEnergy?.createdAt ?? .distantPast) {
+                            Text(entry.mood.map { MoodCheckIn.moodTitles[max(0, min(4, $0 - 1))] } ?? "Stimmung offen")
+                            Text(entry.batteryPercent.map { "Akku \($0) %" } ?? "Akku offen").font(.subheadline.weight(.semibold))
+                            Text(entry.date.formatted(date: .omitted, time: .shortened)).font(.caption).foregroundStyle(.secondary)
+                            if !entry.nextNeed.isEmpty { Text("Jetzt brauche ich: " + entry.nextNeed).font(.footnote).foregroundStyle(.secondary) }
+                        } else if let entry = latestMood {
                             Text("\(entry.face) \(entry.moodTitle) · Akku \(entry.battery)/5")
                             Text(entry.date.formatted(date: .omitted, time: .shortened)).font(.caption).foregroundStyle(.secondary)
                             if !entry.nextNeed.isEmpty { Text("Jetzt brauche ich: " + entry.nextNeed).font(.footnote).foregroundStyle(.secondary) }
