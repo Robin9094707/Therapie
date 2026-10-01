@@ -11,7 +11,7 @@ on:
         default: false
 
       verify_checkin:
-        description: Run focused check-in task removal UI regression
+        description: Run saved check-in overview and safe task removal UI regressions
         type: boolean
         default: false
 
@@ -77,6 +77,11 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
+      - name: Test real Live Activity phase names and boundaries
+        run: |
+          swiftc TherapieApp/Models.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift TherapieApp/CompanionModels.swift TherapieApp/InsightsModels.swift Shared/TherapyPhaseTimeline.swift Shared/TherapyActivityAttributes.swift Tests/LivePhaseChecks.swift -o /tmp/therapie-live-phase-checks
+          /tmp/therapie-live-phase-checks
+
       - name: Test encrypted portable backups and recovery
         run: |
           set -o pipefail
@@ -107,7 +112,7 @@ jobs:
       - name: Validate actual iPhone bundle
         run: python3 scripts/validate_bundle.py build/Build/Products/Release-iphoneos/Therapie.app
 
-      - name: Verify check-in task removal with keyboard
+      - name: Verify saved check-in overview and safe task removal
         if: contains(github.event.head_commit.message, '[checkin-ui]') || (github.event_name == 'workflow_dispatch' && inputs.verify_checkin)
         timeout-minutes: 10
         run: |
@@ -165,17 +170,17 @@ jobs:
       - name: Package IPA
         run: |
           APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" -print -quit)
-          rm -rf Payload Therapie-v3006.0.0.ipa
+          rm -rf Payload Therapie-v3006.0.1.ipa
           mkdir Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Therapie-v3006.0.0.ipa Payload
-          ls -lh Therapie-v3006.0.0.ipa
+          /usr/bin/zip -qry Therapie-v3006.0.1.ipa Payload
+          ls -lh Therapie-v3006.0.1.ipa
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Therapie-v3006.0.0-IPA
-          path: Therapie-v3006.0.0.ipa
+          name: Therapie-v3006.0.1-IPA
+          path: Therapie-v3006.0.1.ipa
           if-no-files-found: error
           retention-days: 30
 

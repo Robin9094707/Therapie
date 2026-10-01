@@ -157,7 +157,10 @@ struct RunningTherapySession: Codable, Equatable, Identifiable {
 
 struct SessionPreferences: Codable, Equatable {
     var liveActivityEnabled = true
-    var privateLiveActivity = true
+    var privateLiveActivity = true // Retained for older portable snapshots.
+    var namedLiveActivity: Bool?
+    var usesPrivateLiveActivity: Bool { namedLiveActivity == false }
+    mutating func showLiveActivityNames(_ enabled: Bool) { namedLiveActivity = enabled; privateLiveActivity = !enabled }
     var notifyAtEnd = true
     var notifyAtPhases = false
 }

@@ -38,8 +38,9 @@ command = ['xcodebuild', '-project', 'Therapie.xcodeproj', '-scheme', 'TherapieA
            '-destination-timeout', '60', '-parallel-testing-enabled', 'NO',
            '-derivedDataPath', 'build-checkin-ui', '-resultBundlePath', str(output / 'CheckInTests.xcresult'),
            '-only-testing:TherapieUITests/TherapieUITests/testCheckInTaskRemovalWithKeyboardAndMultipleRows',
+           '-only-testing:TherapieUITests/TherapieUITests/testSavedCheckInOpensReadOnlyAndEditsExplicitly',
            'CODE_SIGNING_ALLOWED=NO', 'test']
-print('Testing real task removal on', phone['name'], flush=True)
+print('Testing saved overview and real task removal on', phone['name'], flush=True)
 with (output / 'test.log').open('w') as log:
     process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
     try:
@@ -57,4 +58,4 @@ run('xcrun', 'simctl', 'shutdown', udid, check=False)
 if code:
     print((output / 'test.log').read_text()[-16000:], flush=True)
     raise SystemExit(1)
-print('Check-in task removal UI regression passed: focused keyboard, first/last/all rows, repeat add/remove, saved draft resume.', flush=True)
+print('Check-in UI regressions passed: read-only overview, explicit edit/save, focused keyboard, first/last/all rows, repeat add/remove and saved draft resume.', flush=True)

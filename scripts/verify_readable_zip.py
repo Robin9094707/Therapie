@@ -33,4 +33,6 @@ with zipfile.ZipFile(sys.argv[1]) as archive:
     assert data["guidedCheckIns"][0]["energyPoints"][0]["title"] == "Technik"
     assert data["companionSettings"]["taskAlarmsEnabled"] is True
     assert len(data["companionSettings"]["dayCheckInSlots"]) == 6
+    assert data["sessionPreferences"]["namedLiveActivity"] is False
+    assert "Echte Abschnittsnamen" in archive.read("Eintraege/Einstellungen/sessionPreferences.txt").decode()
 print("Independent Python ZIP64, CRC, attachment and human-readable record verification passed.")

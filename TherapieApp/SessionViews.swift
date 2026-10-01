@@ -113,7 +113,7 @@ struct SessionConductorContent: View {
                     Button("Beenden", systemImage: "stop") { finish = true }.buttonStyle(.bordered)
                 }.disabled(controller.busy)
                 if !controller.liveStatus.isEmpty { Text(controller.liveStatus).font(.caption).foregroundStyle(.secondary) }
-                Text("Notizen und Themen bleiben in der App. In der Live-Aktivität erscheinen standardmäßig neutrale Abschnittsnamen.").font(.caption2).foregroundStyle(.secondary)
+                Text(store.data.sessionPreferences.usesPrivateLiveActivity ? "Die Live-Aktivität zeigt neutrale Abschnittsnamen. Echte Namen kannst du in den Timer-Einstellungen einschalten." : "Die Live-Aktivität zeigt deine Abschnittsnamen. Notizen bleiben in der App; neutrale Namen sind in den Timer-Einstellungen wählbar.").font(.caption2).foregroundStyle(.secondary)
             }
         }
     }
@@ -288,8 +288,8 @@ struct SessionPreferencesView: View {
         Form {
             Section("Live-Aktivität") {
                 Toggle("Sperrbildschirm & Dynamic Island", isOn: $store.data.sessionPreferences.liveActivityEnabled)
-                Toggle("Neutrale Abschnittsnamen anzeigen", isOn: $store.data.sessionPreferences.privateLiveActivity)
-                Text("Die Restzeit und der Gesamtfortschritt laufen auch ohne geöffnete App weiter. Die ersten vier Abschnitte erscheinen zusätzlich als zeitgesteuerte Balken auf dem Sperrbildschirm.").font(.caption).foregroundStyle(.secondary)
+                Toggle("Echte Abschnittsnamen anzeigen", isOn: Binding(get: { !store.data.sessionPreferences.usesPrivateLiveActivity }, set: { store.data.sessionPreferences.showLiveActivityNames($0); controller.synchronize() }))
+                Text("Die Restzeit und der Gesamtfortschritt laufen auch ohne geöffnete App weiter. Deine Abschnitte erscheinen mit Namen, Zeitfenster und zeitgesteuertem Fortschritt auf dem Sperrbildschirm.").font(.caption).foregroundStyle(.secondary)
             }
             Section("Mitteilungen") {
                 Toggle("Am Ende der Stunde erinnern", isOn: $store.data.sessionPreferences.notifyAtEnd)

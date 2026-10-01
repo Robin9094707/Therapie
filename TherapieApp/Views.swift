@@ -33,7 +33,7 @@ struct RootView: View {
         .sheet(isPresented: $openSession) {
             NavigationStack {
                 SessionConductorView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fertig") { openSession = false } } }
-                    .sheet(item: $store.pendingGuidedCheckIn) { GuidedCheckInView(entry: $0) }
+                    .sheet(item: $store.pendingGuidedCheckIn) { GuidedCheckInDestination(entry: $0) }
             }
         }
         .onOpenURL { url in if url.scheme == "therapie" && url.host == "session" { openSession = true } }
@@ -41,7 +41,7 @@ struct RootView: View {
         .sheet(isPresented: Binding(get: { store.notificationTaskID != nil }, set: { if !$0 { store.notificationTaskID = nil } })) {
             if let id = store.notificationTaskID, let task = store.data.weeklyTasks.first(where: { $0.id == id }) { WeeklyTaskEditorView(task: task) }
         }
-        .sheet(item: Binding(get: { openSession ? nil : store.pendingGuidedCheckIn }, set: { store.pendingGuidedCheckIn = $0 })) { GuidedCheckInView(entry: $0) }
+        .sheet(item: Binding(get: { openSession ? nil : store.pendingGuidedCheckIn }, set: { store.pendingGuidedCheckIn = $0 })) { GuidedCheckInDestination(entry: $0) }
         .sheet(isPresented: Binding(get: { store.notificationRoutineID != nil }, set: { if !$0 { store.notificationRoutineID = nil } })) {
             if let id = store.notificationRoutineID { RoutineDetailView(routineID: id) }
         }

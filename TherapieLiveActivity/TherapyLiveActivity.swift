@@ -10,32 +10,21 @@ struct TherapyLiveActivityBundle: WidgetBundle {
 struct TherapyLiveActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: TherapyActivityAttributes.self) { context in
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Label(context.state.paused ? "Therapiezeit · Pause" : "Therapiezeit", systemImage: context.state.paused ? "pause.circle" : "timer").font(.headline)
+                    Label(context.state.paused ? "Therapiezeit · Pause" : "Therapiezeit", systemImage: context.state.paused ? "pause.circle" : "timer").font(.subheadline.weight(.semibold))
                     Spacer()
-                    SessionActivityClock(state: context.state).font(.title2.monospacedDigit().bold())
+                    SessionActivityClock(state: context.state).font(.title3.monospacedDigit().bold())
                 }
-                if !context.state.paused {
-                    ProgressView(timerInterval: context.state.start...context.state.end, countsDown: false).tint(.indigo)
-                    if !context.state.phases.isEmpty {
-                        HStack(alignment: .top, spacing: 8) {
-                            ForEach(Array(context.state.phases.prefix(4).enumerated()), id: \.offset) { _, phase in
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(phase.title).font(.caption2).lineLimit(1)
-                                    ProgressView(timerInterval: phase.start...phase.end, countsDown: false).tint(.teal).labelsHidden()
-                                }.frame(maxWidth: .infinity)
-                            }
-                        }
-                    }
-                    HStack {
-                        Text("Geplantes Ende").font(.caption)
-                        Spacer()
-                        Text(context.state.end, style: .time).font(.caption.monospacedDigit())
-                    }
-                } else { Text("Zum Fortsetzen die App öffnen.").font(.caption) }
+                SessionActivityPhaseHeading(state: context.state, isStale: context.isStale)
+                if !context.state.paused && context.state.phases.count <= 8 { ProgressView(timerInterval: context.state.start...context.state.end, countsDown: false).tint(.indigo).labelsHidden() }
+                SessionActivityPhasePlan(state: context.state)
+                if context.state.paused { Text("Zum Fortsetzen die App öffnen.").font(.caption) }
+                else if context.state.phases.count <= 8 {
+                    HStack { Text("Geplantes Ende"); Spacer(); Text(context.state.end, style: .time).monospacedDigit() }.font(.caption2)
+                }
             }
-            .padding(16)
+            .padding(12)
             .activityBackgroundTint(Color(uiColor: .secondarySystemBackground))
             .activitySystemActionForegroundColor(.indigo)
             .widgetURL(URL(string: "therapie://session"))
@@ -44,17 +33,16 @@ struct TherapyLiveActivityWidget: Widget {
                 DynamicIslandExpandedRegion(.leading) { Label("Therapiezeit", systemImage: "timer").font(.headline) }
                 DynamicIslandExpandedRegion(.trailing) { SessionActivityClock(state: context.state).font(.headline.monospacedDigit()) }
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(spacing: 8) {
-                        if context.state.paused { Text("Pausiert · in der App fortsetzen").font(.caption) }
-                        else {
-                            ProgressView(timerInterval: context.state.start...context.state.end, countsDown: false).tint(.indigo)
-                            HStack { Text("Geplantes Ende"); Spacer(); Text(context.state.end, style: .time) }.font(.caption)
-                        }
-                        Link("Stunde öffnen", destination: URL(string: "therapie://session")!).font(.caption.bold())
+                    VStack(alignment: .leading, spacing: 6) {
+                        SessionActivityPhaseHeading(state: context.state, isStale: context.isStale)
+                        SessionActivityPhasePlan(state: context.state)
+                        Link(context.state.paused ? "Pausiert · Stunde öffnen" : "Stunde öffnen", destination: URL(string: "therapie://session")!).font(.caption.bold())
                     }
                 }
             } compactLeading: {
-                Image(systemName: context.state.paused ? "pause.fill" : "timer").foregroundStyle(.indigo)
+                if !context.isStale, let phase = context.state.currentPhase() {
+                    Text(phase.title).font(.caption.weight(.semibold)).lineLimit(1).frame(maxWidth: 88).accessibilityLabel(phase.title)
+                } else { Image(systemName: context.state.paused ? "pause.fill" : "timer").foregroundStyle(.indigo) }
             } compactTrailing: {
                 SessionActivityClock(state: context.state).font(.caption.monospacedDigit()).frame(width: 52)
             } minimal: {
@@ -65,7 +53,43 @@ struct TherapyLiveActivityWidget: Widget {
         }
     }
 }
-
+struct SessionActivityPhaseHeading: View {
+    let state: TherapyActivityAttributes.ContentState
+    let isStale: Bool
+    var body: some View {
+        if !isStale, let phase = state.currentPhase() {
+            Text((state.paused ? "Pausiert: " : "Jetzt: ") + phase.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+        } else if !state.phases.isEmpty {
+            Text("Dein Zeitplan · Abschnitt an den Zeitfenstern ablesen").font(.caption2).foregroundStyle(.secondary)
+        }
+    }
+}
+struct SessionActivityPhasePlan: View {
+    let state: TherapyActivityAttributes.ContentState
+    var body: some View {
+        let phases = Array(state.phases.prefix(12))
+        Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 6) {
+            ForEach(0..<((phases.count + 3) / 4), id: \.self) { row in
+                GridRow {
+                    ForEach(0..<4, id: \.self) { column in
+                        let index = row * 4 + column
+                        if index < phases.count {
+                            let phase = phases[index]
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(phase.title).font(.caption2.weight(.medium)).lineLimit(1)
+                                if state.paused {
+                                    let clock = state.referenceDate ?? state.end.addingTimeInterval(-Double(state.remaining))
+                                    ProgressView(value: max(0, min(1, clock.timeIntervalSince(phase.start) / max(1, phase.end.timeIntervalSince(phase.start))))).tint(.teal).labelsHidden()
+                                } else { ProgressView(timerInterval: phase.start...phase.end, countsDown: false).tint(.teal).labelsHidden() }
+                                HStack(spacing: 1) { Text(phase.start, style: .time); Text("–"); Text(phase.end, style: .time) }.font(.system(size: 8)).monospacedDigit().foregroundStyle(.secondary).lineLimit(1)
+                            }.frame(maxWidth: .infinity, alignment: .leading)
+                        } else { Color.clear.frame(maxWidth: .infinity, maxHeight: 0) }
+                    }
+                }
+            }
+        }
+    }
+}
 struct SessionActivityClock: View {
     let state: TherapyActivityAttributes.ContentState
     var body: some View {

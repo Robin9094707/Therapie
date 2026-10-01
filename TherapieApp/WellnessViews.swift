@@ -35,6 +35,7 @@ struct WellnessHubView: View {
     @State private var favoritesOnly = false
     @State private var direction: BatteryDirection?
     @State private var moodDraft: MoodCheckIn?
+    @State private var moodViewing: MoodCheckIn?
     @State private var pointDraft: BatteryPoint?
     @State private var reviewDraft: WeekReview?
     @State private var deletion: WellnessDeletion?
@@ -96,6 +97,7 @@ struct WellnessHubView: View {
             .sheet(item: $moodDraft) { entry in
                 MoodEditorView(entry: entry, points: store.data.batteryPoints.filter { $0.checkInID == entry.id })
             }
+            .sheet(item: $moodViewing) { MoodCheckInDetailView(entryID: $0.id) }
             .sheet(item: $pointDraft) { BatteryPointEditorView(point: $0) { store.saveBatteryPoint($0); return store.lastSaveError == nil } }
             .sheet(item: $reviewDraft) { WeekReviewEditorView(review: $0) }
             .sheet(isPresented: $showExport) {
@@ -176,7 +178,7 @@ struct WellnessHubView: View {
                         if !entry.note.isEmpty { Text(entry.note).lineLimit(4) }
                         if !entry.smallWin.isEmpty { Label(entry.smallWin, systemImage: "sparkles").font(.subheadline) }
                         if !entry.nextNeed.isEmpty { Label(entry.nextNeed, systemImage: "heart").font(.subheadline).foregroundStyle(.secondary) }
-                        Button("Check-in öffnen") { moodDraft = entry }.font(.subheadline.bold())
+                        Button("Check-in öffnen") { moodViewing = entry }.font(.subheadline.bold())
                     }
                 }
             }

@@ -54,7 +54,7 @@ private enum ArchiveRecord: Identifiable {
         case .topic(let value): value.title
         case .goal(let value): value.title
         case .weeklyEnergy(let value): "Wochenenergie · Akku \(value.energy)/5"
-        case .guided(let value): value.kind.title + (value.isDraft ? " · Entwurf" : "")
+        case .guided(let value): value.displayTitle + (value.isDraft ? " · Entwurf" : "")
         }
     }
     var subtitle: String {
@@ -91,6 +91,7 @@ private enum ArchiveRecord: Identifiable {
         case .guided(let value): value.kind.symbol
         }
     }
+    var isCheckIn: Bool { switch self { case .guided, .mood: true; default: false } }
     var deletionMessage: String {
         switch self {
         case .guided: "Der Check-in wird gelöscht. Angelegte Aufgaben und Fotos bleiben erhalten."
@@ -128,7 +129,7 @@ struct TherapyEditableTimeline: View {
     }
     var body: some View {
         LazyVStack(spacing: 12) {
-            if records.isEmpty { GlassCard { ContentUnavailableView("Deine Timeline ist noch leer", systemImage: "clock.arrow.circlepath", description: Text("Alle Einträge erscheinen hier. Tippe später einen Eintrag an, um ihn zu bearbeiten.")) } }
+            if records.isEmpty { GlassCard { ContentUnavailableView("Deine Timeline ist noch leer", systemImage: "clock.arrow.circlepath", description: Text("Alle Einträge erscheinen hier. Öffne einen Eintrag, um ihn anzusehen. Check-ins zeigen zuerst ihre Übersicht.")) } }
             ForEach(records) { record in
                 GlassCard {
                     VStack(alignment: .leading, spacing: 10) {
@@ -141,7 +142,7 @@ struct TherapyEditableTimeline: View {
                             }
                         }
                         ResponsiveButtonRow {
-                            Button("Öffnen & bearbeiten", systemImage: "pencil") { editing = record }
+                            Button(record.isCheckIn ? "Übersicht öffnen" : "Öffnen & bearbeiten", systemImage: record.isCheckIn ? "doc.text.magnifyingglass" : "pencil") { editing = record }
                             Button(role: .destructive) { deleting = record; confirmDelete = true } label: { Image(systemName: "trash").frame(width: 44, height: 44) }.accessibilityLabel("Eintrag löschen")
                         }.font(.caption.bold())
                     }
@@ -160,7 +161,7 @@ struct TherapyEditableTimeline: View {
         case .media(let value): TherapyMediaEditorView(item: value)
         case .energy(let value): LegacyEnergyEditorView(entry: value)
         case .reflection(let value): TherapyReflectionEditorView(entry: value)
-        case .mood(let value): MoodEditorView(entry: value, points: store.data.batteryPoints.filter { $0.checkInID == value.id })
+        case .mood(let value): MoodCheckInDetailView(entryID: value.id)
         case .point(let value): BatteryPointEditorView(point: value) { store.saveBatteryPoint($0); return store.lastSaveError == nil }
         case .review(let value): WeekReviewEditorView(review: value)
         case .session(let value): SessionHistoryEditorView(session: value)
@@ -168,7 +169,7 @@ struct TherapyEditableTimeline: View {
         case .topic(let value): TopicEditorView(topic: value)
         case .goal(let value): GoalEditorView(goal: value)
         case .weeklyEnergy(let value): WeeklyEnergyEditorView(review: value)
-        case .guided(let value): GuidedCheckInView(entry: value)
+        case .guided(let value): GuidedCheckInDestination(entry: value)
         }
     }
     private func remove(_ record: ArchiveRecord) {

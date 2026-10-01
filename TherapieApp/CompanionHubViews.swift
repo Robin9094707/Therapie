@@ -49,7 +49,7 @@ struct CompanionTodayCard: View {
         .sheet(isPresented: $showPDF) { WeeklyPDFReportView() }
         .sheet(isPresented: $showPlanning) { CheckInReminderSettingsView(reminders: store.data.companionSettings.checkInReminders ?? [], slots: DayCheckInPolicy.slots(store.data.companionSettings)) }
         .sheet(isPresented: $showReport) { TherapyReportView() }
-        .sheet(item: $checkIn) { GuidedCheckInView(entry: $0) }
+        .sheet(item: $checkIn) { GuidedCheckInDestination(entry: $0) }
         .sheet(isPresented: $showEntries) { EntryHubView() }
         .sheet(isPresented: $showRoutines) { NavigationStack { RoutineHubView() } }
     }
@@ -86,7 +86,7 @@ struct EntryHubView: View {
                 }
             }.navigationTitle("Deine Einträge").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fertig") { dismiss() } } }
-                .sheet(item: $checkIn) { GuidedCheckInView(entry: $0) }
+                .sheet(item: $checkIn) { GuidedCheckInDestination(entry: $0) }
                 .sheet(isPresented: $showPhoto) { AddPhotoView() }
                 .sheet(isPresented: $showMood) { MoodEditorView() }
                 .sheet(isPresented: $showBattery) { BatteryPointEditorView { store.saveBatteryPoint($0); return store.lastSaveError == nil } }
@@ -106,7 +106,7 @@ struct GuidedCheckInCard: View {
                 HStack { Label(entry.displayTitle, systemImage: entry.kind.symbol).font(.headline); Spacer(); if entry.isDraft { Text("Entwurf").font(.caption).foregroundStyle(.secondary) } }
                 GuidedCheckInSummary(entry: entry)
                 ResponsiveButtonRow {
-                    Button(entry.isDraft ? "Fortsetzen" : "Bearbeiten", systemImage: "pencil", action: edit).buttonStyle(.bordered)
+                    Button(entry.isDraft ? "Fortsetzen" : "Übersicht öffnen", systemImage: entry.isDraft ? "pencil" : "doc.text.magnifyingglass", action: edit).buttonStyle(.bordered)
                     ShareLink(item: GuidedCheckInExport.text(entry), subject: Text(entry.displayTitle)) { Label("Teilen", systemImage: "square.and.arrow.up") }.buttonStyle(.bordered)
                     Button("Löschen", systemImage: "trash", role: .destructive) { deleting = true }.buttonStyle(.bordered)
                 }

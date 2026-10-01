@@ -96,6 +96,29 @@ final class TherapieUITests: XCTestCase {
         XCTAssertTrue(count.waitForExistence(timeout: 5)); XCTAssertEqual(count.label, "0 Aufgaben")
     }
 
+    @MainActor
+    func testSavedCheckInOpensReadOnlyAndEditsExplicitly() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--show-dashboard", "--show-saved-checkin"]
+        app.launch()
+        let edit = app.buttons["checkin.detail.edit"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 15))
+        XCTAssertEqual(app.textFields.count, 0, "Viewing a saved check-in must not open editable input fields.")
+        XCTAssertEqual(app.sliders.count, 0)
+        XCTAssertTrue(app.staticTexts["Mein gespeicherter Rückblick"].exists)
+        capture("Saved check-in read-only overview")
+        edit.tap()
+        let text = app.textFields["Ein Gedanke zum Einstieg"]
+        XCTAssertTrue(text.waitForExistence(timeout: 5))
+        text.tap(); text.typeText(" Ergänzt")
+        for _ in 0..<7 { app.buttons["Weiter"].tap() }
+        app.buttons["Check-in speichern"].tap()
+        XCTAssertTrue(edit.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Mein gespeicherter Rückblick Ergänzt"].exists, "Saved changes must appear immediately in the overview.")
+        XCTAssertEqual(app.textFields.count, 0)
+        capture("Updated saved check-in overview")
+    }
+
     private func waitForViewport(_ element: XCUIElement, width: Int, height: Int) -> Bool {
         let predicate = NSPredicate(format: "label == %@", "\(width)x\(height)")
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)

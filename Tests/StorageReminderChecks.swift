@@ -43,6 +43,7 @@ struct StorageReminderChecks {
         data.companionSettings.dayCheckInSlots = DailyCheckInSlot.defaults + [DailyCheckInSlot(name: "Mein Moment", startHour: 12, endHour: 13)]
         data.companionSettings.taskAlarmsEnabled = true
         data.companionSettings.energyReviewAlarm = true
+        data.sessionPreferences.showLiveActivityNames(false)
         data.companionSettings.sessionAlarmsEnabled = true
         data.companionSettings.wellnessAlarmEnabled = true
         data.companionSettings.checkInReminders?[0].alarmEnabled = true

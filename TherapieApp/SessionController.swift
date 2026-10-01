@@ -8,6 +8,7 @@ final class TherapySessionController: ObservableObject {
     @Published private(set) var busy = false
     @Published private(set) var liveStatus = ""
     private weak var store: AppStore?
+    private var lastPresentedPhase: String?
     private var synchronizationGeneration = UUID()
     private var synchronizationTask: Task<Void, Never>?
     init(store: AppStore) { self.store = store }
@@ -42,14 +43,19 @@ final class TherapySessionController: ObservableObject {
         let id = session.id.uuidString
         Task { for activity in Activity<TherapyActivityAttributes>.activities where activity.attributes.sessionID == id { await activity.end(nil, dismissalPolicy: .immediate) } }
     }
+    private func phaseSignature(_ session: RunningTherapySession) -> String {
+        session.id.uuidString + ":" + String(session.phaseIndex() ?? -1) + ":" + String(session.pausedAt != nil) + ":" + String(store?.data.sessionPreferences.usesPrivateLiveActivity ?? false) + ":" + String(store?.data.sessionPreferences.liveActivityEnabled ?? false)
+    }
     func reconcile() {
-        guard let session = store?.data.currentSession, session.pausedAt == nil, session.remaining() <= 0 else { return }
-        finish(early: false)
+        guard let session = store?.data.currentSession else { lastPresentedPhase = nil; return }
+        if session.pausedAt == nil, session.remaining() <= 0 { finish(early: false); return }
+        if !busy, lastPresentedPhase != phaseSignature(session) { synchronize() }
     }
     func synchronize() {
         guard !busy, let store else { return }
-        reconcile()
+        if let active = store.data.currentSession, active.pausedAt == nil, active.remaining() <= 0 { finish(early: false) }
         let session = store.data.currentSession
+        lastPresentedPhase = session.map(phaseSignature)
         let preferences = store.data.sessionPreferences
         let generation = synchronizationGeneration
         busy = true
@@ -69,8 +75,8 @@ final class TherapySessionController: ObservableObject {
                 liveStatus = "Live-Aktivitäten sind in den iPhone-Einstellungen deaktiviert. Der Timer bleibt gespeichert."
                 return
             }
-            let state = activityState(session, privateMode: preferences.privateLiveActivity)
-            let content = ActivityContent(state: state, staleDate: session.pausedAt == nil ? session.expectedEnd : nil)
+            let state = activityState(session, privateMode: preferences.usesPrivateLiveActivity)
+            let content = ActivityContent(state: state, staleDate: session.pausedAt == nil ? state.currentPhase()?.end ?? session.expectedEnd : nil)
             if let activity = Activity<TherapyActivityAttributes>.activities.first(where: { $0.attributes.sessionID == session.id.uuidString }) {
                 await activity.update(content)
                 liveStatus = "Live-Aktivität aktiv · Sperrbildschirm & Dynamic Island"
@@ -107,10 +113,10 @@ final class TherapySessionController: ObservableObject {
         let phases = session.phases.enumerated().map { index, phase in
             let end = cursor.addingTimeInterval(TimeInterval(max(1, phase.minutes) * 60))
             defer { cursor = end }
-            return TherapyActivityAttributes.Phase(title: privateMode ? "Abschnitt \(index + 1)" : String(phase.title.prefix(48)), start: cursor, end: end)
+            return TherapyActivityAttributes.Phase(title: TherapyPhaseTimeline.displayTitle(phase.title, index: index, privateMode: privateMode), start: cursor, end: end)
         }
         var state = TherapyActivityAttributes.ContentState(start: session.clockStart, end: session.expectedEnd,
-            paused: session.pausedAt != nil, remaining: Int(ceil(session.remaining())), phases: phases)
+            paused: session.pausedAt != nil, remaining: Int(ceil(session.remaining())), phases: phases, referenceDate: session.pausedAt ?? Date())
         if let bytes = try? JSONEncoder().encode(state), bytes.count > 3500 { state.phases = [] }
         return state
     }

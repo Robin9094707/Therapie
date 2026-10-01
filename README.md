@@ -1,3 +1,11 @@
+## Update 3006.0.1
+
+- Abgeschlossene geführte Check-ins öffnen zuerst eine lesbare Übersicht mit getrennten Bereichen für Werte, Rückblick, Akku-Punkte, Aufgaben und Anhänge. Bearbeiten ist eine ausdrückliche Aktion; Entwürfe werden direkt fortgesetzt.
+- Auch gespeicherte Stimmungs-Check-ins öffnen aus Verlauf und Archiv zunächst ihre Übersicht. Die Übersicht liest aktuelle Daten, sodass gespeicherte Änderungen sofort sichtbar werden.
+- Live-Aktivitäten zeigen standardmäßig die tatsächlichen Abschnittsnamen. Die Einstellung für neutrale Namen bleibt verfügbar und wird vollständig gesichert.
+- Sperrbildschirm und erweiterte Dynamic Island zeigen alle bis zu zwölf Phasen mit Zeitfenstern und zeitgesteuertem Fortschritt. Die offene App aktualisiert die hervorgehobene Phase an ihren Grenzen. Bei veraltetem Systemzustand erscheint der benannte Zeitplan statt eines irreführenden „Jetzt“-Labels. Hintergrundwechsel werden von iOS gesteuert und brauchen einen Gerätetest.
+- Bestehende Daten und Bundle-ID bleiben erhalten; Sicherungsbranch: `backup/before-3006-0-1-2026-10-01`.
+
 ## Update 3006.0.0
 
 - Insights bündelt Diagramme, persönliche Stimmungsvergleiche, Trends, Akku-Stichwörter und den Einstieg zum Wochenbericht. Das Stimmungsbarometer lässt sich von 0 bis 100 einstellen; frühere Werte bleiben erhalten.
