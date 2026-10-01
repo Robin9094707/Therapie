@@ -5,9 +5,9 @@ import sys
 
 app = Path(sys.argv[1])
 info = plistlib.loads((app / "Info.plist").read_bytes())
-assert info["CFBundleShortVersionString"] == "3005.0.0"
+assert info["CFBundleShortVersionString"] == "3005.0.1"
 assert info["CFBundleIdentifier"] == "eu.rjuhas.therapie", "Existing app identity must be preserved"
-assert info["CFBundleVersion"] == "9", "Expected release build number"
+assert info["CFBundleVersion"] == "10", "Expected release build number"
 assert info["UIDeviceFamily"] == [1], "Expected a native iPhone target"
 assert info["UILaunchStoryboardName"] == "LaunchScreen"
 assert (app / "LaunchScreen.storyboardc").is_dir(), "Compiled launch storyboard missing"

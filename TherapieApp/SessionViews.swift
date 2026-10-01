@@ -231,16 +231,17 @@ struct SessionTemplateEditorView: View {
                 TextField("Hinweis für mich", text: $template.note, axis: .vertical).lineLimit(2...5)
             } footer: { Text("1 bis 12 Phasen, insgesamt bis zu 4 Stunden. Änderungen gelten für die nächste Stunde; ein laufender Timer behält seinen Plan.") }
             Section("Phasen · mit den Pfeilen sortieren") {
-                ForEach($template.phases) { $phase in
+                ForEach(template.phases) { value in
+                    let phase = identifiedEditorBinding($template.phases, to: value)
                     VStack(alignment: .leading, spacing: 9) {
-                        TextField("Phasenname", text: $phase.title)
-                        Stepper("\(phase.minutes) Minuten", value: $phase.minutes, in: 1...180)
+                        TextField("Phasenname", text: phase.title)
+                        Stepper("\(phase.wrappedValue.minutes) Minuten", value: phase.minutes, in: 1...180)
                         HStack {
-                            Picker("Farbe", selection: $phase.colorIndex) { ForEach(0..<phaseColors.count, id: \.self) { Text("Farbe \($0 + 1)").tag($0) } }.labelsHidden()
+                            Picker("Farbe", selection: phase.colorIndex) { ForEach(0..<phaseColors.count, id: \.self) { Text("Farbe \($0 + 1)").tag($0) } }.labelsHidden()
                             Spacer()
-                            Button { move(phase.id, by: -1) } label: { Image(systemName: "arrow.up").frame(width: 36, height: 36) }.buttonStyle(.borderless).accessibilityLabel("Phase nach oben")
-                            Button { move(phase.id, by: 1) } label: { Image(systemName: "arrow.down").frame(width: 36, height: 36) }.buttonStyle(.borderless).accessibilityLabel("Phase nach unten")
-                            Button(role: .destructive) { deletingPhase = phase.id; confirmDelete = true } label: { Image(systemName: "trash").frame(width: 36, height: 36) }.buttonStyle(.borderless).disabled(template.phases.count <= 1)
+                            Button { move(value.id, by: -1) } label: { Image(systemName: "arrow.up").frame(width: 36, height: 36) }.buttonStyle(.borderless).accessibilityLabel("Phase nach oben")
+                            Button { move(value.id, by: 1) } label: { Image(systemName: "arrow.down").frame(width: 36, height: 36) }.buttonStyle(.borderless).accessibilityLabel("Phase nach unten")
+                            Button(role: .destructive) { deletingPhase = value.id; confirmDelete = true } label: { Image(systemName: "trash").frame(width: 36, height: 36) }.buttonStyle(.borderless).disabled(template.phases.count <= 1)
                         }
                     }.padding(.vertical, 4)
                 }

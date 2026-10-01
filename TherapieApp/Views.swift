@@ -901,9 +901,9 @@ struct TasksView: View {
                             .padding(.vertical, 26)
                         }
                     } else {
-                        ForEach($store.data.weeklyTasks) { $task in
+                        ForEach(store.data.weeklyTasks) { task in
                             if !onlyOpen || !task.completed {
-                                taskCard(task: $task)
+                                taskCard(task: identifiedEditorBinding($store.data.weeklyTasks, to: task))
                             }
                         }
                     }

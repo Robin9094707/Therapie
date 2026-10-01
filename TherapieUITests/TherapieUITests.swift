@@ -57,6 +57,45 @@ final class TherapieUITests: XCTestCase {
         capture("Dashboard large text")
     }
 
+    @MainActor
+    func testCheckInTaskRemovalWithKeyboardAndMultipleRows() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--show-dashboard", "--show-checkin-tasks"]
+        app.launch()
+        let count = app.staticTexts["checkin.tasks.count"]
+        XCTAssertTrue(count.waitForExistence(timeout: 15))
+        let add = app.buttons["checkin.task.add"]
+        let fields = app.textFields.matching(NSPredicate(format: "identifier BEGINSWITH %@", "checkin.task.title."))
+        let removeButtons = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "checkin.task.remove."))
+        func tapVisible(_ element: XCUIElement) {
+            if !element.isHittable { for _ in 0..<4 { app.swipeDown() } }
+            for _ in 0..<10 where !element.isHittable { app.swipeUp() }
+            XCTAssertTrue(element.isHittable); element.tap()
+        }
+        tapVisible(add)
+        let first = fields.firstMatch
+        XCTAssertTrue(first.waitForExistence(timeout: 5)); tapVisible(first); first.typeText("Aus Versehen")
+        tapVisible(removeButtons.firstMatch)
+        XCTAssertTrue(count.waitForExistence(timeout: 5)); XCTAssertEqual(count.label, "0 Aufgaben")
+        for _ in 0..<2 { tapVisible(add) }
+        XCTAssertEqual(fields.count, 2)
+        let remainingID = fields.element(boundBy: 1).identifier
+        tapVisible(removeButtons.firstMatch)
+        XCTAssertEqual(fields.count, 1)
+        XCTAssertEqual(fields.firstMatch.identifier, remainingID)
+        tapVisible(fields.firstMatch); fields.firstMatch.typeText("Bleibt erhalten")
+        tapVisible(removeButtons.firstMatch)
+        XCTAssertEqual(count.label, "0 Aufgaben")
+        tapVisible(add); tapVisible(removeButtons.firstMatch)
+        XCTAssertEqual(count.label, "0 Aufgaben")
+        capture("Check-in tasks removed safely")
+        app.buttons["Schließen"].tap()
+        XCTAssertTrue(app.tabBars.buttons["Heute"].waitForExistence(timeout: 5))
+        let resume = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Morgen-Check-in fortsetzen")).firstMatch
+        tapVisible(resume)
+        XCTAssertTrue(count.waitForExistence(timeout: 5)); XCTAssertEqual(count.label, "0 Aufgaben")
+    }
+
     private func waitForViewport(_ element: XCUIElement, width: Int, height: Int) -> Bool {
         let predicate = NSPredicate(format: "label == %@", "\(width)x\(height)")
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)

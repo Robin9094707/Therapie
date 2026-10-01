@@ -10,6 +10,11 @@ on:
         type: boolean
         default: false
 
+      verify_checkin:
+        description: Run focused check-in task removal UI regression
+        type: boolean
+        default: false
+
 permissions:
   contents: read
 
@@ -83,6 +88,29 @@ jobs:
       - name: Validate actual iPhone bundle
         run: python3 scripts/validate_bundle.py build/Build/Products/Release-iphoneos/Therapie.app
 
+      - name: Verify check-in task removal with keyboard
+        if: contains(github.event.head_commit.message, '[checkin-ui]') || (github.event_name == 'workflow_dispatch' && inputs.verify_checkin)
+        timeout-minutes: 10
+        run: |
+          set +e
+          python3 scripts/verify_checkin_removal.py
+          VERIFY_STATUS=$?
+          if [ "$VERIFY_STATUS" -eq 75 ]; then
+            echo "::warning::Hosted simulator unavailable; focused UI regression was not executed. Model regression and device build passed."
+            echo "Check-in UI regression: hosted simulator unavailable; not executed." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          exit "$VERIFY_STATUS"
+
+      - name: Upload check-in regression results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Therapie-CheckIn-Regression
+          path: build/checkin-regression
+          if-no-files-found: ignore
+          retention-days: 30
+
       - name: Build simulator app
         if: github.event_name == 'workflow_dispatch' && inputs.verify_simulator
         run: |
@@ -118,17 +146,17 @@ jobs:
       - name: Package IPA
         run: |
           APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" -print -quit)
-          rm -rf Payload Therapie-v3005.0.0.ipa
+          rm -rf Payload Therapie-v3005.0.1.ipa
           mkdir Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Therapie-v3005.0.0.ipa Payload
-          ls -lh Therapie-v3005.0.0.ipa
+          /usr/bin/zip -qry Therapie-v3005.0.1.ipa Payload
+          ls -lh Therapie-v3005.0.1.ipa
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Therapie-v3005.0.0-IPA
-          path: Therapie-v3005.0.0.ipa
+          name: Therapie-v3005.0.1-IPA
+          path: Therapie-v3005.0.1.ipa
           if-no-files-found: error
           retention-days: 30
 

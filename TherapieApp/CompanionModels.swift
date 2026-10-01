@@ -381,3 +381,17 @@ enum TherapyReport {
         return lines.joined(separator: "\n\n")
     }
 }
+
+/// Editors may outlive their row during deletion, animation or keyboard callbacks.
+/// Read by identity and ignore writes for removed records instead of indexing stale positions.
+enum IdentifiedDraftAccess {
+    static func read<Value: Identifiable>(id: Value.ID, fallback: Value, from values: [Value]) -> Value {
+        values.first { $0.id == id } ?? fallback
+    }
+    @discardableResult
+    static func replace<Value: Identifiable>(_ value: Value, id: Value.ID, in values: inout [Value]) -> Bool {
+        guard value.id == id, let index = values.firstIndex(where: { $0.id == id }) else { return false }
+        values[index] = value
+        return true
+    }
+}

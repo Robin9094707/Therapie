@@ -22,16 +22,17 @@ struct RoutineEditorView: View {
                     Picker("Verknüpftes Ziel", selection: $routine.goalID) { Text("Kein Ziel").tag(UUID?.none); ForEach(store.data.therapyGoals) { Text($0.title).tag(Optional($0.id)) } }
                 }
                 Section("Wann möchtest du erinnert werden?") {
-                    ForEach($routine.times) { $time in
+                    ForEach(routine.times) { value in
+                        let time = identifiedEditorBinding($routine.times, to: value)
                         VStack(alignment: .leading, spacing: 14) {
-                            TextField("Name dieses Termins (optional)", text: $time.title)
-                            DatePicker("Uhrzeit", selection: clockBinding(hour: $time.hour, minute: $time.minute), displayedComponents: .hourAndMinute)
-                            weekdayPicker(days: $time.weekdays)
-                            Toggle("Andere Wochenendzeit", isOn: Binding(get: { time.weekendHour != nil }, set: { enabled in time.weekendHour = enabled ? time.hour : nil; time.weekendMinute = enabled ? time.minute : nil }))
-                            if time.weekendHour != nil {
-                                DatePicker("Samstag & Sonntag", selection: clockBinding(hour: Binding(get: { time.weekendHour ?? time.hour }, set: { time.weekendHour = $0 }), minute: Binding(get: { time.weekendMinute ?? time.minute }, set: { time.weekendMinute = $0 })), displayedComponents: .hourAndMinute)
+                            TextField("Name dieses Termins (optional)", text: time.title)
+                            DatePicker("Uhrzeit", selection: clockBinding(hour: time.hour, minute: time.minute), displayedComponents: .hourAndMinute)
+                            weekdayPicker(days: time.weekdays)
+                            Toggle("Andere Wochenendzeit", isOn: Binding(get: { time.wrappedValue.weekendHour != nil }, set: { enabled in time.wrappedValue.weekendHour = enabled ? time.wrappedValue.hour : nil; time.wrappedValue.weekendMinute = enabled ? time.wrappedValue.minute : nil }))
+                            if time.wrappedValue.weekendHour != nil {
+                                DatePicker("Samstag & Sonntag", selection: clockBinding(hour: Binding(get: { time.wrappedValue.weekendHour ?? time.wrappedValue.hour }, set: { time.wrappedValue.weekendHour = $0 }), minute: Binding(get: { time.wrappedValue.weekendMinute ?? time.wrappedValue.minute }, set: { time.wrappedValue.weekendMinute = $0 })), displayedComponents: .hourAndMinute)
                             }
-                            if routine.times.count > 1 { Button("Uhrzeit entfernen", role: .destructive) { routine.times.removeAll { $0.id == time.id } } }
+                            if routine.times.count > 1 { Button("Uhrzeit entfernen", role: .destructive) { routine.times.removeAll { $0.id == value.id } } }
                         }.padding(.vertical, 8)
                     }
                     Button("Weitere Uhrzeit", systemImage: "plus.circle") { routine.times.append(RoutineTime(hour: 20, minute: 30)) }

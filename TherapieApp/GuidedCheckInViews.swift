@@ -74,7 +74,7 @@ struct GuidedCheckInView: View {
             Text(intro).font(.body).foregroundStyle(.secondary)
             Label("Jede Frage ist freiwillig", systemImage: "hand.raised").font(.subheadline)
             Text("Du kannst überspringen, zurückgehen und später weitermachen. Nur beim Abschließen werden neue Aufgaben angelegt.").font(.footnote).foregroundStyle(.secondary)
-            TextField("Ein Gedanke zum Einstieg", text: $entry.summary, axis: .vertical).textFieldStyle(.roundedBorder)
+            TherapyInputField(title: "Ein Gedanke zum Einstieg", symbol: "thought.bubble", text: $entry.summary)
         case 1:
             Text("Wie geht es dir gerade?")
             VStack(spacing: 8) {
@@ -101,18 +101,18 @@ struct GuidedCheckInView: View {
             field("Was brauchst du jetzt?", text: $entry.nextNeed)
         case 5:
             Text("Aufgaben von dir, aus der Therapie oder gemeinsam. Du kannst beliebig viele Schritte sammeln.").font(.subheadline).foregroundStyle(.secondary)
-            ForEach($entry.tasks) { $task in
-                VStack(alignment: .leading, spacing: 10) {
-                    TextField("Aufgabe", text: $task.title).textFieldStyle(.roundedBorder)
-                    Picker("Von wem?", selection: $task.source) { ForEach(["Von mir", "Aus der Therapie", "Gemeinsam"], id: \.self) { Text($0).tag($0) } }
-                    TextField("Der kleinste machbare Schritt", text: $task.smallStep, axis: .vertical)
-                    TextField("Details oder Unterstützung", text: $task.details, axis: .vertical)
-                    Toggle("Zieltermin", isOn: Binding(get: { task.dueDate != nil }, set: { task.dueDate = $0 ? Date() : nil }))
-                    if task.dueDate != nil { DatePicker("Bis wann?", selection: Binding(get: { task.dueDate ?? Date() }, set: { task.dueDate = $0 }), displayedComponents: .date) }
-                    Button("Entfernen", role: .destructive) { entry.tasks.removeAll { $0.id == task.id } }
-                }.padding(12).background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 16))
+            Text("\(entry.tasks.count) Aufgabe\(entry.tasks.count == 1 ? "" : "n")").font(.caption.weight(.semibold)).foregroundStyle(.secondary).accessibilityIdentifier("checkin.tasks.count")
+            ForEach(entry.tasks) { task in
+                CheckInTaskEditor(task: identifiedEditorBinding($entry.tasks, to: task)) {
+                    // Capture the value ID, never read a collection binding inside removeAll.
+                    let id = task.id
+                    entry.tasks.removeAll { $0.id == id }
+                }
             }
-            Button("Aufgabe hinzufügen", systemImage: "plus.circle.fill") { entry.tasks.append(CheckInTaskDraft()) }.buttonStyle(.bordered)
+            if entry.tasks.isEmpty {
+                Label("Noch keine Aufgabe – du kannst diesen Schritt auch überspringen.", systemImage: "leaf").font(.subheadline).foregroundStyle(.secondary)
+            }
+            Button("Aufgabe hinzufügen", systemImage: "plus.circle.fill") { entry.tasks.append(CheckInTaskDraft()) }.buttonStyle(.bordered).accessibilityIdentifier("checkin.task.add")
             if !entry.isDraft { Text("Dieser Check-in ist bereits abgeschlossen. Änderungen werden erst mit Speichern übernommen; erledigte Aufgaben bleiben erledigt.").font(.caption).foregroundStyle(.secondary) }
         case 6:
             field("Was möchtest du beim nächsten Termin besprechen?", text: $entry.therapyQuestion)
@@ -147,7 +147,7 @@ struct GuidedCheckInView: View {
         }
     }
     private func field(_ title: String, text: Binding<String>) -> some View {
-        VStack(alignment: .leading, spacing: 6) { Text(title).font(.subheadline.weight(.semibold)); TextField("Optional", text: text, axis: .vertical).lineLimit(3...8).textFieldStyle(.roundedBorder) }
+        TherapyInputField(title: title, text: text)
     }
     private func optionalScale(_ title: String, value: Binding<Int?>) -> some View {
         VStack(alignment: .leading) {

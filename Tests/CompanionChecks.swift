@@ -169,6 +169,31 @@ import Foundation
         companion.companionSettings.checkInReminders = [CheckInReminder(id: morning.id, kind: .morning, time: time), CheckInReminder(id: morning.id, kind: .evening, time: time)]
         let colliding = CheckInReminderPlanner.slots(data: companion, now: now, calendar: calendar)
         try expect(Set(colliding.map(\.id)).count == colliding.count, "Imported shared reminder UUIDs cannot collide across kinds")
+        let firstDraft = CheckInTaskDraft(title: "Erste Aufgabe"), secondDraft = CheckInTaskDraft(title: "Zweite Aufgabe"), thirdDraft = CheckInTaskDraft(title: "Dritte Aufgabe")
+        var editable = [firstDraft, secondDraft, thirdDraft]
+        editable.removeAll { $0.id == firstDraft.id }
+        try expect(IdentifiedDraftAccess.read(id: firstDraft.id, fallback: firstDraft, from: editable) == firstDraft, "Disposed first row can safely finish reading after deletion")
+        var delayedFirst = firstDraft; delayedFirst.title = "Verspätete Tastatureingabe"
+        try expect(!IdentifiedDraftAccess.replace(delayedFirst, id: firstDraft.id, in: &editable) && editable == [secondDraft, thirdDraft], "Keyboard callback cannot restore removed task or overwrite next row")
+        var changedSecond = secondDraft; changedSecond.details = "Bleibt richtig zugeordnet"
+        try expect(IdentifiedDraftAccess.replace(changedSecond, id: secondDraft.id, in: &editable) && editable[0] == changedSecond, "Shifted remaining row writes through its stable identity")
+        editable.reverse()
+        changedSecond.title = "Nach Sortieren"
+        try expect(IdentifiedDraftAccess.replace(changedSecond, id: secondDraft.id, in: &editable) && editable[1] == changedSecond && editable[0].id == thirdDraft.id, "Reordering cannot send an edit to a different task")
+        editable.removeAll { $0.id == secondDraft.id }
+        editable.removeAll { $0.id == thirdDraft.id }
+        try expect(IdentifiedDraftAccess.read(id: thirdDraft.id, fallback: thirdDraft, from: editable) == thirdDraft && !IdentifiedDraftAccess.replace(thirdDraft, id: thirdDraft.id, in: &editable), "Removing last/all tasks leaves stale getters and setters safe")
+        let freshDraft = CheckInTaskDraft(title: "Neu hinzugefügt"); editable.append(freshDraft)
+        try expect(!IdentifiedDraftAccess.replace(changedSecond, id: secondDraft.id, in: &editable) && editable == [freshDraft], "Old callback cannot change a newly added task")
+        try expect(!IdentifiedDraftAccess.replace(freshDraft, id: thirdDraft.id, in: &editable), "A replacement cannot change row identity")
+        var deletedCheckIn = GuidedCheckIn(kind: .morning, tasks: [firstDraft, secondDraft])
+        deletedCheckIn.tasks.removeAll { $0.id == firstDraft.id }
+        var finishAfterRemoval = AppData()
+        GuidedCheckInMutation.apply(deletedCheckIn, complete: true, to: &finishAfterRemoval)
+        try expect(finishAfterRemoval.weeklyTasks.map(\.id) == [secondDraft.id], "Finishing after removal creates only the remaining task")
+        deletedCheckIn.tasks = []
+        var emptyFinish = AppData(); GuidedCheckInMutation.apply(deletedCheckIn, complete: true, to: &emptyFinish)
+        try expect(emptyFinish.weeklyTasks.isEmpty && emptyFinish.guidedCheckIns.count == 1, "Empty task list can still finish and save check-in")
         print("Passed \(count) companion migration, optional answers, routine identity, snooze, vacation and DST checks.")
     }
 }

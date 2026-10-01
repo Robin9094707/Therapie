@@ -106,3 +106,8 @@ A simulator first-boot timeout is reported separately as infrastructure unavaila
 - Therapieübersicht mit Datumsauswahl, einzeln wählbaren abgeschlossenen Check-ins, Akku-Verlauf und iOS-Teilen-Vorschau. Notizen, Namen und Routinen nur auf ausdrückliche Auswahl. Aufgaben und Ziele zeigen den aktuellen Stand; Fotos/Audio separat teilen. Fehlende Werte werden nicht geschätzt.
 - Additive Schema-7-Felder: vorhandene Daten, verschlüsselte Backups und lesbare ZIPs bleiben kompatibel. Frühere Einstellungen lassen neue Erinnerungen ausgeschaltet. Bundle-ID unverändert.
 - Quellcode vor diesem Update: Branch `backup/before-3005-2026-10-01`. Eine Quellcode-Sicherung ersetzt kein externes Datenbackup vor App-Deinstallation oder Downgrade.
+
+
+### Update 3005.0.1
+
+Behebt unsichere Listenbindungen beim Entfernen einer Check-in-Aufgabe: Editoren greifen über die stabile ID zu, verschwundene Zeilen lesen einen sicheren Snapshot und verspätete Tastaturereignisse ändern keine anderen Aufgaben. Dieselbe Absicherung gilt für Routinenzeiten, Wochenaufgaben und verschiebbare Stundenplan-Phasen. Neue Regressionen prüfen entfernte/verschobene Zeilen, nachträgliches Hinzufügen und Abschließen mit leerer Aufgabenliste. Eingabefelder im Check-in erhalten feste Beschriftungen, größere Innenabstände, dezente Konturen und eine sichtbare Fokusmarkierung. Datenformat und Bundle-ID bleiben unverändert. Vorheriger Code: `backup/before-3005-0-1-2026-10-01`.
