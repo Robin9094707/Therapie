@@ -17,6 +17,8 @@ final class AppStore: ObservableObject {
     @Published var taskReminderStatus = ""
     @Published var notificationTaskID: UUID?
     @Published var openEnergyReview = false
+    @Published var notificationSession = false
+    @Published var notificationMood = false
     @Published var pendingGuidedCheckIn: GuidedCheckIn?
     @Published var notificationRoutineID: UUID?
     @Published var routineReminderStatus = ""

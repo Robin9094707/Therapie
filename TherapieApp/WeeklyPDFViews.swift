@@ -78,8 +78,8 @@ struct WeeklyPDFReportView: View {
         let data = store.data, selected = options
         let plan = WeeklyPrintPlan.make(data: data, options: selected)
         let photos = plan.photoIDs.compactMap { id -> ReportPhoto? in
-            guard let item = data.media.first(where: { $0.id == id }), let url = try? BackupArchive.sourceURL(item.relativePath, root: store.rootURL) else { return nil }
-            return ReportPhoto(url: url, caption: item.title)
+            guard let item = data.media.first(where: { $0.id == id }) else { return nil }
+            return ReportPhoto(url: try? BackupArchive.sourceURL(item.relativePath, root: store.rootURL), caption: item.title)
         }
         Task { @MainActor in
             defer { generating = false }

@@ -80,6 +80,8 @@ struct BackupChecks {
         data.companionSettings.dayCheckInSlots = DailyCheckInSlot.defaults + [DailyCheckInSlot(name: "Mein Moment", startHour: 12, endHour: 13)]
         data.companionSettings.taskAlarmsEnabled = true
         data.companionSettings.energyReviewAlarm = true
+        data.companionSettings.sessionAlarmsEnabled = true
+        data.companionSettings.wellnessAlarmEnabled = true
         data.companionSettings.checkInReminders?[0].alarmEnabled = true
         data.companionSettings.checkInReminders?[0].slotID = DailyCheckInSlot.defaults[0].id
         data.weeklyTasks[0].reminder?.alarmEnabled = true

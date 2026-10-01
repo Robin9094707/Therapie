@@ -36,6 +36,8 @@ import PDFKit
             try expect(result.missingPhotos == 0, "Selected image decoded")
             try expect(pdf.string?.contains("MEINE THERAPIEWOCHE") == true && pdf.string?.contains("Robin") == true, "Title and selected profile rendered as text")
             try expect(pdf.string?.contains("AUSGEWÄHLTE BILDER") == true, "Photo section included")
+            if limit == 3 { try expect(pdf.string?.contains("Für den nächsten Termin") == true && pdf.string?.contains("Abends eine Kleinigkeit") == true, "Three-page report includes selected notes and tasks") }
+            try expect(pdf.string?.contains("28.09.2026") == true, "Report dates match local Monday start")
             if limit == 1 { try expect(result.omittedRows > 0, "Omitted entries visibly counted in compact report") }
             for index in 0..<pdf.pageCount {
                 let page = pdf.page(at: index)!, bounds = page.bounds(for: .mediaBox)

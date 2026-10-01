@@ -91,8 +91,10 @@ extension AppStore {
             UserDefaults.standard.removeObject(forKey: "therapy.companion.open")
             let parts = route.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
             if parts.first == "energy" { openEnergyReview = true }
+            if parts.first == "wellness" { notificationMood = true }
             if parts.count >= 2 {
                 switch parts[0] {
+                case "session": if let id = UUID(uuidString: parts[1]), data.currentSession?.id == id { notificationSession = true }
                 case "routine": notificationRoutineID = UUID(uuidString: parts[1])
                 case "task": if let id = UUID(uuidString: parts[1]), data.weeklyTasks.contains(where: { $0.id == id && !$0.completed }) { notificationTaskID = id }
                 case "checkin": if let kind = GuidedCheckInKind(rawValue: parts[1]) { openDailyCheckIn(kind, slotID: parts.count > 2 ? UUID(uuidString: parts[2]) : nil) }

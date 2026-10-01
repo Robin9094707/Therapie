@@ -565,7 +565,7 @@ struct TherapyMaterialsView: View {
     @State private var knownMediaIDs: Set<UUID> = []
     private var items: [MediaItem] {
         store.data.media.filter {
-            (searchText.isEmpty || ([$0.title, $0.text] + $0.tags).joined(separator: " ").localizedCaseInsensitiveContains(searchText)) && (folderID == nil || $0.folderID == folderID) && (topicID == nil || $0.topicID == topicID)
+            (folderID == nil || $0.folderID == folderID) && (topicID == nil || $0.topicID == topicID)
                 && (category == nil || $0.category == category)
                 && (query.isEmpty || ([$0.title, $0.note, $0.source ?? ""] + $0.tags).contains { $0.localizedCaseInsensitiveContains(query) })
         }.sorted { $0.createdAt > $1.createdAt }

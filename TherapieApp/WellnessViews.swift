@@ -2,7 +2,7 @@ import SwiftUI
 import Charts
 import UIKit
 
-private enum WellnessRange: String, CaseIterable, Identifiable {
+enum WellnessRange: String, CaseIterable, Identifiable {
     case week = "Letzte Woche", seven = "7 Tage", thirty = "30 Tage", ninety = "90 Tage", all = "Alles"
     var id: String { rawValue }
     var period: WellnessPeriod {
@@ -502,8 +502,8 @@ struct MoodEditorView: View {
             .interactiveDismissDisabled(dirty)
             .safeAreaInset(edge: .bottom) { WellnessSaveErrorView() }
             .sheet(item: $pointDraft) { point in
-                BatteryPointEditorView(point: point, showDate: false) { saved in
-                    points.removeAll { $0.id == saved.id }; points.append(saved); return true
+                CheckInKeywordEditor(point: point) { saved in
+                    points.removeAll { $0.id == saved.id }; points.append(saved)
                 }
             }
             .alert("Änderungen verwerfen?", isPresented: $discard) {
@@ -657,6 +657,8 @@ struct WellnessSettingsView: View {
             Section("Sanfte Wochen-Erinnerung") {
                 Toggle("Wöchentlich erinnern", isOn: $store.data.wellnessSettings.reminderEnabled)
                 if store.data.wellnessSettings.reminderEnabled {
+                    Toggle("Zusätzlich als AlarmKit-Wecker", isOn: Binding(get: { store.data.companionSettings.wellnessAlarmEnabled ?? false }, set: { store.data.companionSettings.wellnessAlarmEnabled = $0 }))
+                    Button("Wecker freigeben", systemImage: "alarm") { Task { await RoutineAlarmCoordinator.shared.requestAccess(store) } }
                     Picker("Wochentag", selection: $store.data.wellnessSettings.reminderWeekday) {
                         ForEach(1...7, id: \.self) { Text(TherapyDateHelper.weekdayName($0)).tag($0) }
                     }

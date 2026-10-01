@@ -122,14 +122,39 @@ enum CompanionAlarmPlanner {
             guard let task = data.weeklyTasks.first(where: { $0.id == slot.taskID }), task.reminder?.alarmEnabled ?? data.companionSettings.taskAlarmsEnabled ?? false else { continue }
             var components = DateComponents(hour: slot.hour, minute: slot.minute, second: 0)
             components.weekday = slot.weekday
-            if let date = calendar.nextDate(after: now, matching: components, matchingPolicy: .nextTime, repeatedTimePolicy: .first) {
+            var cursor = now
+            let horizon = calendar.date(byAdding: .day, value: 7, to: now) ?? now.addingTimeInterval(7 * 86400)
+            for _ in 0..<7 {
+                guard let date = calendar.nextDate(after: cursor, matching: components, matchingPolicy: .nextTime, repeatedTimePolicy: .first), date <= horizon else { break }
                 slots.append(.init(id: slot.identifier + ".\(Int(date.timeIntervalSince1970))", group: "task.\(task.id)", fireAt: date, title: data.reminderPreferences.privateTaskTitles ? "Dein nächster kleiner Schritt" : task.title, route: "task|\(task.id)"))
+                // Starting the next search on the following local day prevents a repeated DST hour from ringing twice.
+                let nextDay = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: date)) ?? date.addingTimeInterval(86400)
+                cursor = nextDay.addingTimeInterval(-0.001)
             }
         }
         if data.reminderPreferences.energyReviewEnabled, data.companionSettings.energyReviewAlarm == true,
            let next = TherapyDateHelper.nextOccurrence(schedule: data.schedule, after: now) {
             let date = next.addingTimeInterval(-Double(max(0, min(1440, data.reminderPreferences.energyReviewMinutesBeforeTherapy))) * 60)
             if date > now { slots.append(.init(id: "energy.\(Int(date.timeIntervalSince1970))", group: "energy", fireAt: date, title: "Deine Wochenenergie", route: "energy")) }
+        }
+        if data.wellnessSettings.reminderEnabled, data.companionSettings.wellnessAlarmEnabled == true {
+            let settings = data.wellnessSettings
+            let components = DateComponents(hour: max(0, min(23, settings.reminderHour)), minute: max(0, min(59, settings.reminderMinute)), second: 0, weekday: max(1, min(7, settings.reminderWeekday)))
+            if let date = calendar.nextDate(after: now, matching: components, matchingPolicy: .nextTime, repeatedTimePolicy: .first) {
+                slots.append(.init(id: "wellness.\(Int(date.timeIntervalSince1970))", group: "wellness", fireAt: date, title: "Ein Moment für deine Stimmung", route: "wellness"))
+            }
+        }
+        if data.companionSettings.sessionAlarmsEnabled == true, let session = data.currentSession, session.pausedAt == nil, session.endedAt == nil {
+            if data.sessionPreferences.notifyAtEnd && session.expectedEnd > now {
+                slots.append(.init(id: "session.end.\(session.id).\(Int(session.expectedEnd.timeIntervalSince1970))", group: "session", fireAt: session.expectedEnd, title: "Deine Therapiezeit ist zu Ende", route: "session|\(session.id)"))
+            }
+            if data.sessionPreferences.notifyAtPhases {
+                var boundary = session.clockStart
+                for phase in session.phases.dropLast() {
+                    boundary = boundary.addingTimeInterval(Double(max(1, phase.minutes)) * 60)
+                    if boundary > now { slots.append(.init(id: "session.phase.\(session.id).\(phase.id).\(Int(boundary.timeIntervalSince1970))", group: "session.phase", fireAt: boundary, title: "Nächster Abschnitt deiner Therapiezeit", route: "session|\(session.id)")) }
+                }
+            }
         }
         return slots.sorted { $0.fireAt == $1.fireAt ? $0.id < $1.id : $0.fireAt < $1.fireAt }
     }

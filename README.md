@@ -5,7 +5,7 @@
 - Geführte Check-ins unterstützen einzelne Akku-Stichwörter mit optionalem Satz und Wirkung. Beim Abschließen werden ihre Statistikdaten zusammen mit dem Check-in gespeichert; wiederholtes Speichern dupliziert sie nicht.
 - Notizen haben einen größeren Editor, Listenhilfen, Fotos, Sprachaufnahmen und Archivanhänge. Lösen oder Löschen einer Notiz lässt Dateien im Archiv erhalten. Das Archiv nutzt denselben sicheren Notizeditor.
 - Wochenberichte sind echte A4-PDFs mit maximal 1–3 Seiten, gewählten Bereichen und bis zu drei bewusst ausgewählten Bildern. Standard ist die letzte Kalenderwoche. Vorschau, Drucken und PDF-Teilen sind integriert. Kürzungen und nicht abgedruckte Einträge werden ausgewiesen; Aufgaben und Ziele zeigen den heutigen Stand.
-- AlarmKit ist optional auch für Tages-Check-ins, Aufgaben und Wochenenergie verfügbar. Öffnen und Änderungen aktualisieren den begrenzten Vorrat unabhängig von der Mitteilungsfreigabe. Erledigte/entfernte Erinnerungen werden bereinigt. Geräte-Alarmkennungen bleiben lokal.
+- AlarmKit ist optional auch für Tages-Check-ins, Aufgaben, Wochenenergie, die wöchentliche Stimmungserinnerung und Therapietimer verfügbar. Öffnen und Änderungen aktualisieren den begrenzten Vorrat unabhängig von der Mitteilungsfreigabe. Erledigte/entfernte Erinnerungen werden bereinigt. Geräte-Alarmkennungen bleiben lokal.
 - Profilname und Tageszeit bestimmen die Begrüßung; die Animation berücksichtigt reduzierte Bewegung. Bestehende Verlaufs-, Therapie-, Backup- und Archivfunktionen bleiben erreichbar.
 - Schema 8 importiert frühere Daten mit optionalen Ergänzungen. Vor dem Upgrade wird `therapy-data.pre-3006.json` angelegt. Der vorherige Quellstand liegt im Git-Branch `backup/before-3006-2026-10-01`.
 

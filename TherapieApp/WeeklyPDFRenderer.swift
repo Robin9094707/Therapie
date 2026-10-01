@@ -12,7 +12,7 @@ private typealias ReportColor = NSColor
 #endif
 
 struct ReportPhoto {
-    let url: URL
+    let url: URL?
     let caption: String
 }
 struct WeeklyPDFResult {
@@ -66,7 +66,7 @@ enum WeeklyPDFRenderer {
             context.setFillColor(accent); context.fill(CGRect(x: left, y: 36, width: 36, height: 4))
             draw("MEINE THERAPIEWOCHE", CGRect(x: left, y: 52, width: width, height: 28), size: 19, bold: true)
             let name = plan.name.isEmpty ? "" : " · " + String(plan.name.prefix(65))
-            draw(plan.period.start.formatted(date: .abbreviated, time: .omitted) + " – " + plan.period.end.addingTimeInterval(-1).formatted(date: .abbreviated, time: .omitted) + name, CGRect(x: left, y: 84, width: width, height: 34), size: 10, color: subtle)
+            draw(WeeklyPrintDateFormat.day(plan.period.start) + " – " + WeeklyPrintDateFormat.day(plan.period.end.addingTimeInterval(-1)) + name, CGRect(x: left, y: 84, width: width, height: 34), size: 10, color: subtle)
             var y: CGFloat = 130
             if page == 1 {
                 draw(plan.summary, CGRect(x: left, y: y, width: width, height: 32), size: 12, bold: true); y += 40
@@ -92,7 +92,7 @@ enum WeeklyPDFRenderer {
                     }
                     for day in 0..<7 {
                         let date = Calendar.therapyCalendar.date(byAdding: .day, value: day, to: plan.period.start)!
-                        draw(date.formatted(.dateTime.weekday(.abbreviated)), CGRect(x: chart.minX + CGFloat(day) / 6 * chart.width - 12, y: chart.maxY + 8, width: 30, height: 16), size: 8, color: subtle)
+                        draw(WeeklyPrintDateFormat.weekday(date), CGRect(x: chart.minX + CGFloat(day) / 6 * chart.width - 12, y: chart.maxY + 8, width: 30, height: 16), size: 8, color: subtle)
                     }
                     y += 108
                 }
@@ -123,7 +123,7 @@ enum WeeklyPDFRenderer {
                 for (offset, photo) in chosenPhotos.enumerated() {
                     let frame = CGRect(x: left + CGFloat(offset) * (cellWidth + 10), y: 627, width: cellWidth, height: 105)
                     context.setFillColor(CGColor(gray: 0.96, alpha: 1)); context.fill(frame)
-                    if let source = CGImageSourceCreateWithURL(photo.url as CFURL, nil), let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true, kCGImageSourceThumbnailMaxPixelSize: 700] as CFDictionary) {
+                    if let url = photo.url, let source = CGImageSourceCreateWithURL(url as CFURL, nil), let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true, kCGImageSourceThumbnailMaxPixelSize: 700] as CFDictionary) {
                         let ratio = min(frame.width / CGFloat(image.width), frame.height / CGFloat(image.height))
                         let size = CGSize(width: CGFloat(image.width) * ratio, height: CGFloat(image.height) * ratio)
                         let rect = CGRect(x: frame.midX - size.width / 2, y: frame.midY - size.height / 2, width: size.width, height: size.height)

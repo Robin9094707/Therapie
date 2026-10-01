@@ -294,6 +294,9 @@ struct SessionPreferencesView: View {
             Section("Mitteilungen") {
                 Toggle("Am Ende der Stunde erinnern", isOn: $store.data.sessionPreferences.notifyAtEnd)
                 Toggle("Bei jedem Phasenwechsel erinnern", isOn: $store.data.sessionPreferences.notifyAtPhases)
+                Toggle("Zusätzlich als AlarmKit-Wecker", isOn: Binding(get: { store.data.companionSettings.sessionAlarmsEnabled ?? false }, set: { store.data.companionSettings.sessionAlarmsEnabled = $0 }))
+                Button("AlarmKit-Wecker freigeben", systemImage: "alarm") { Task { await RoutineAlarmCoordinator.shared.requestAccess(store) } }
+                Text(store.routineAlarmStatus).font(.caption).foregroundStyle(.secondary)
                 Text("Mitteilungen benötigen deine Freigabe. Es werden keine Notiz- oder Themeninhalte angezeigt.").font(.caption).foregroundStyle(.secondary)
             }
             Button("Einstellungen für laufende Stunde übernehmen") { controller.synchronize() }.disabled(controller.busy)

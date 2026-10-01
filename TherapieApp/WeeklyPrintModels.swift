@@ -29,7 +29,7 @@ struct WeeklyPrintPlan {
     var summary: String
     static func make(data: AppData, options: WeeklyPrintOptions) -> WeeklyPrintPlan {
         let period = options.period
-        func stamp(_ date: Date) -> String { date.formatted(.dateTime.day().month().hour().minute()) }
+        func stamp(_ date: Date) -> String { WeeklyPrintDateFormat.stamp(date) }
         var rows: [WeeklyPrintRow] = []
         func row(_ section: String, _ title: String, _ text: String) { rows.append(.init(section: section, title: title, text: text)) }
         let daily = WellnessAnalytics.daily(data, period: period)
@@ -61,12 +61,21 @@ struct WeeklyPrintPlan {
                 if let value = entry.sleepHours { values.append("Schlaf \(value.formatted()) h") }
                 row("Check-ins", stamp(entry.date) + " · " + entry.displayTitle, values.filter { !$0.isEmpty }.joined(separator: " · "))
             }
-            for entry in data.moodCheckIns.filter({ period.contains($0.date) }).sorted(by: { $0.date > $1.date }) {
-                var values = [entry.note, entry.smallWin, entry.nextNeed]
+            for entry in data.moodCheckIns.filter({ period.contains($0.date) && (!$0.note.isEmpty || !$0.smallWin.isEmpty || !$0.nextNeed.isEmpty || !$0.emotions.isEmpty || $0.stress != nil || $0.sensoryLoad != nil || $0.sleepHours != nil) }).sorted(by: { $0.date > $1.date }) {
+                var values = [entry.note, entry.smallWin, entry.nextNeed, entry.emotions.joined(separator: ", ")]
+                if let stress = entry.stress { values.append("Stress \(stress)/5") }
+                if let sensory = entry.sensoryLoad { values.append("Reize \(sensory)/5") }
+                if let sleep = entry.sleepHours { values.append("Schlaf \(sleep.formatted()) h") }
                 if options.includeMood { values.insert(entry.moodTitle, at: 0) }
                 if options.includeBattery { values.insert("Akku \(entry.battery)/5", at: 0) }
                 row("Stimmungseinträge", stamp(entry.date), values.filter { !$0.isEmpty }.joined(separator: " · "))
             }
+            for review in data.weekReviews.filter({ period.contains($0.weekStart) }) {
+                var values = [review.summary, review.smallWin, review.nextStep, review.therapyQuestion]
+                if options.includeBattery { values += [review.whatHelped, review.whatWasHard] }
+                row("Wochenrückblicke", stamp(review.weekStart), values.filter { !$0.isEmpty }.joined(separator: " · "))
+            }
+            for session in data.sessionHistory.filter({ period.contains($0.startedAt) }) { row("Therapiestunden", stamp(session.startedAt) + " · " + session.title, [session.summary, session.nextStep].filter { !$0.isEmpty }.joined(separator: " · ")) }
             for entry in data.reflections.filter({ period.contains($0.date) }) { row("Therapierückblick", stamp(entry.date), [entry.summary, entry.whatHelped, entry.nextFocus].filter { !$0.isEmpty }.joined(separator: " · ")) }
         }
         if options.includeTasks {
@@ -96,4 +105,14 @@ struct WeeklyPrintPlan {
         let plotted = daily.map { value -> DailyWellnessValue in return DailyWellnessValue(date: value.date, mood: options.includeMood ? value.mood : nil, battery: options.includeBattery ? value.battery : nil, stress: value.stress, sensory: value.sensory, count: value.count, segment: value.segment) }
         return WeeklyPrintPlan(name: options.includeName ? data.profile.userName : "", period: period, rows: rows, daily: plotted, photoIDs: selected, maxPages: max(1, min(3, options.maxPages)), summary: summary.isEmpty ? "Keine Angaben in den gewählten Messwerten." : summary)
     }
+}
+
+enum WeeklyPrintDateFormat {
+    private static func format(_ date: Date, pattern: String) -> String {
+        let formatter = DateFormatter(); formatter.locale = Locale(identifier: "de_DE"); formatter.calendar = .therapyCalendar; formatter.timeZone = Calendar.therapyCalendar.timeZone; formatter.dateFormat = pattern
+        return formatter.string(from: date)
+    }
+    static func day(_ date: Date) -> String { format(date, pattern: "dd.MM.yyyy") }
+    static func stamp(_ date: Date) -> String { format(date, pattern: "dd.MM. HH:mm") }
+    static func weekday(_ date: Date) -> String { format(date, pattern: "EE") }
 }

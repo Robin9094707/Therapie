@@ -112,6 +112,8 @@ struct CompanionSettings: Codable, Equatable {
     var dayCheckInSlots: [DailyCheckInSlot]?
     var taskAlarmsEnabled: Bool?
     var energyReviewAlarm: Bool?
+    var sessionAlarmsEnabled: Bool?
+    var wellnessAlarmEnabled: Bool?
 }
 struct RoutineOccurrence: Identifiable, Equatable {
     var routineID: UUID

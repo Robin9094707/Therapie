@@ -45,6 +45,8 @@ struct RootView: View {
         .sheet(isPresented: Binding(get: { store.notificationRoutineID != nil }, set: { if !$0 { store.notificationRoutineID = nil } })) {
             if let id = store.notificationRoutineID { RoutineDetailView(routineID: id) }
         }
+        .onChange(of: store.notificationSession) { _, value in if value { store.notificationSession = false; openSession = true } }
+        .sheet(isPresented: $store.notificationMood) { MoodEditorView() }
         .sheet(isPresented: $store.openEnergyReview) { WeeklyEnergyEditorView() }
         .task {
             store.sessionController.synchronize()

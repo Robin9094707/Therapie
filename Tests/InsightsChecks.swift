@@ -56,6 +56,29 @@ import Foundation
         let admitted = CompanionAlarmPlanner.admitted(many)
         try expect(admitted.count == 24 && Set(admitted.map(\.id)).count == 24 && Set(admitted.map(\.group)).count == 5, "Alarm inventory bounded, unique and groups covered")
         try expect(CompanionAlarmPlanner.admitted(many, budget: 0).isEmpty, "Zero inventory budget")
+        var taskData = AppData()
+        let week = now.therapyWeek
+        taskData.weeklyTasks = [WeeklyTask(createdAt: now, weekOfYear: week.week, yearForWeekOfYear: week.year, title: "PRIVATE", details: "", reminder: TaskReminder(hour: 15, alarmEnabled: true))]
+        let taskAlarms = CompanionAlarmPlanner.candidates(taskData, now: now, calendar: cal)
+        try expect(taskAlarms.count == 7 && taskAlarms.allSatisfy { !$0.title.contains("PRIVATE") && $0.fireAt > now }, "Task alarms cover seven days and respect private titles")
+        taskData.weeklyTasks[0].completed = true
+        try expect(CompanionAlarmPlanner.candidates(taskData, now: now, calendar: cal).isEmpty, "Completing task removes all desired task alarms")
+        taskData.companionSettings.sessionAlarmsEnabled = true
+        taskData.sessionPreferences.notifyAtPhases = true
+        taskData.currentSession = RunningTherapySession.start(TherapySessionTemplate(), at: now)
+        let sessionSlots = CompanionAlarmPlanner.candidates(taskData, now: now, calendar: cal)
+        try expect(sessionSlots.count == taskData.currentSession!.phases.count && sessionSlots.allSatisfy { $0.route.hasPrefix("session|") && $0.fireAt > now }, "Timer end and phase alarms use active session timeline")
+        taskData.currentSession?.pause(at: now.addingTimeInterval(10))
+        try expect(CompanionAlarmPlanner.candidates(taskData, now: now, calendar: cal).isEmpty, "Paused therapy timer cancels alarms")
+        taskData.currentSession = nil
+        taskData.wellnessSettings.reminderEnabled = true; taskData.companionSettings.wellnessAlarmEnabled = true
+        try expect(CompanionAlarmPlanner.candidates(taskData, now: now, calendar: cal).count == 1, "Weekly mood reminder has independent opt-in alarm")
+        var nightData = AppData(); nightData.companionSettings.dayCheckInSlots = defaults.map { value in var value = value; if value.kind == .night { value.enabled = true }; return value }
+        nightData.companionSettings.checkInReminders = [CheckInReminder(kind: .night, time: RoutineTime(hour: 4), slotID: night.id)]
+        let nightNow = date("2026-10-01T01:00:00Z")
+        nightData.guidedCheckIns = [GuidedCheckIn(date: date("2026-09-30T21:30:00Z"), kind: .night, isDraft: false, daySlotID: night.id)]
+        let nightSlots = CheckInReminderPlanner.slots(data: nightData, now: nightNow, calendar: cal)
+        try expect(!nightSlots.contains { cal.isDate($0.fireAt, inSameDayAs: nightNow) } && nightSlots.count == 6, "Completed night suppresses only its shared overnight window")
         data.notes = [TherapyNote(createdAt: now, title: "SECRET", text: "Private text", tags: [])]
         var options = WeeklyPrintOptions(weekStart: now.therapyWeekStart, includeName: false, includeBattery: false, includeCheckIns: false, includeTasks: false, includeGoals: false, includeRoutines: false, includeNotes: false)
         let plan = WeeklyPrintPlan.make(data: data, options: options)
