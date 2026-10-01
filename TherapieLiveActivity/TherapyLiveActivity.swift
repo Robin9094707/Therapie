@@ -6,11 +6,11 @@ import ActivityKit
 struct TherapyLiveActivityBundle: WidgetBundle {
     var body: some Widget {
         TherapyLiveActivityWidget()
-        TherapyHomeWidget(category: .overview)
-        TherapyHomeWidget(category: .appointment)
-        TherapyHomeWidget(category: .routines)
-        TherapyHomeWidget(category: .reminders)
-        TherapyHomeWidget(category: .session)
+        TherapyOverviewWidget()
+        TherapyAppointmentWidget()
+        TherapyRoutinesWidget()
+        TherapyRemindersWidget()
+        TherapySessionWidget()
     }
 }
 

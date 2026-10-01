@@ -44,9 +44,23 @@ enum TherapyHomeWidgetKind: String {
         switch self { case .appointment: "therapie://appointments"; case .routines: "therapie://routines"; case .reminders: "therapie://reminders"; case .session: "therapie://session"; case .overview: "therapie://today" }
     }
 }
-struct TherapyHomeWidget: Widget {
-    let category: TherapyHomeWidgetKind
-    var body: some WidgetConfiguration {
+struct TherapyOverviewWidget: Widget {
+    var body: some WidgetConfiguration { TherapyHomeWidgetConfiguration.make(.overview) }
+}
+struct TherapyAppointmentWidget: Widget {
+    var body: some WidgetConfiguration { TherapyHomeWidgetConfiguration.make(.appointment) }
+}
+struct TherapyRoutinesWidget: Widget {
+    var body: some WidgetConfiguration { TherapyHomeWidgetConfiguration.make(.routines) }
+}
+struct TherapyRemindersWidget: Widget {
+    var body: some WidgetConfiguration { TherapyHomeWidgetConfiguration.make(.reminders) }
+}
+struct TherapySessionWidget: Widget {
+    var body: some WidgetConfiguration { TherapyHomeWidgetConfiguration.make(.session) }
+}
+enum TherapyHomeWidgetConfiguration {
+    static func make(_ category: TherapyHomeWidgetKind) -> some WidgetConfiguration {
         StaticConfiguration(kind: "TherapyHome." + category.rawValue, provider: TherapyHomeProvider()) { entry in
             TherapyHomeWidgetView(entry: entry, category: category)
                 .containerBackground(for: .widget) {
@@ -54,10 +68,10 @@ struct TherapyHomeWidget: Widget {
                 }
         }
         .configurationDisplayName(category.title)
-        .description(description)
+        .description(description(for: category))
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular])
     }
-    private var description: String {
+    private static func description(for category: TherapyHomeWidgetKind) -> String {
         switch category {
         case .overview: "Therapietermin und fällige Routinen auf einen Blick."
         case .appointment: "Dein nächster Termin, mit Absagen und Urlaubspausen."

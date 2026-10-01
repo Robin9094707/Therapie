@@ -107,6 +107,10 @@ struct BackupChecks {
         let prepared = try BackupArchive.prepareImport(url: archive, password: password)
         defer { prepared.discard() }
         try expect(try json(prepared.manifest.data) == json(data.portableSnapshot), "All AppData fields round-trip")
+        try expect(prepared.manifest.data.dashboard == data.dashboard && prepared.manifest.data.archivePreferences == data.archivePreferences, "Encrypted restore retains cards, pins and archive settings")
+        var noCompanion = prepared.manifest
+        noCompanion.data.guidedCheckIns = []; noCompanion.data.routines = []; noCompanion.data.routineCompletions = []; noCompanion.data.routineSnoozes = []
+        try expect(prepared.manifest.entryCount - noCompanion.entryCount == data.guidedCheckIns.count + data.routines.count + data.routineCompletions.count + data.routineSnoozes.count, "Backup overview counts all companion records")
         try expect(prepared.manifest.preferences == prefs, "Portable preferences round-trip")
         try expect(prepared.manifest.attachments.count == 3 && prepared.manifest.omittedAttachments == 0, "All attachment kinds included")
         for (_, path, bytes) in files { try expect(try Data(contentsOf: prepared.directory.appendingPathComponent(path)) == bytes, "Exact attachment bytes: " + path) }
