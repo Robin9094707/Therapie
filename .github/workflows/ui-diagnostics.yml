@@ -1,0 +1,45 @@
+name: Inspect failed UI screenshots
+on:
+  push:
+    branches: ['diagnostic/ui-36925891691']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Therapie-UI-Previews
+          run-id: 36925891691
+          github-token: ${{ github.token }}
+          path: ui
+      - run: pip install --quiet pillow
+      - name: Reduce screenshot sizes and preserve test evidence
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          import shutil
+          source = Path('ui')
+          dest = Path('compact-ui')
+          for path in source.rglob('*'):
+              if not path.is_file(): continue
+              relative = path.relative_to(source)
+              if path.suffix.lower() == '.png':
+                  target = dest / relative.with_suffix('.jpg')
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  with Image.open(path) as image:
+                      image.thumbnail((1000, 1600))
+                      image.convert('RGB').save(target, quality=78)
+              elif path.suffix.lower() in ['.json', '.log', '.txt']:
+                  target = dest / relative
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copyfile(path, target)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Therapie-UI-Diagnostics
+          path: compact-ui
+          retention-days: 14
