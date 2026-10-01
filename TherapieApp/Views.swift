@@ -20,7 +20,7 @@ struct RootView: View {
             if store.loadError != nil {
                 SettingsView()
             } else if store.data.profile.onboardingCompleted {
-                if ProcessInfo.processInfo.arguments.contains("--show-routines") { NavigationStack { RoutineHubView() } } else { MainTabView() }
+                if ProcessInfo.processInfo.arguments.contains("--show-routines") { NavigationStack { RoutineHubView() }.safeAreaInset(edge: .bottom) { UndoChangesButton() } } else { MainTabView() }
             } else {
                 OnboardingView()
             }
@@ -82,7 +82,6 @@ struct RootView: View {
             }
         }
         .overlay { TherapyCelebrationOverlay() }
-        .safeAreaInset(edge: .bottom) { UndoChangesButton() }
         .transaction { if reduceMotion { $0.animation = nil } }
         .task {
             if !permissionSetupDone && !ProcessInfo.processInfo.arguments.contains("--ui-testing") {
@@ -389,26 +388,32 @@ struct MainTabView: View {
     var body: some View {
         TabView(selection: $store.selectedTab) {
             DashboardView()
+                .safeAreaInset(edge: .bottom) { UndoChangesButton() }
                 .tabItem { Label("Heute", systemImage: "sparkles") }
                 .tag(0)
 
             InsightsHubView()
+                .safeAreaInset(edge: .bottom) { UndoChangesButton() }
                 .tabItem { Label("Insights", systemImage: "chart.xyaxis.line") }
                 .tag(1)
 
             TherapyHubView()
+                .safeAreaInset(edge: .bottom) { UndoChangesButton() }
                 .tabItem { Label("Therapie", systemImage: "leaf") }
                 .tag(2)
 
             LibraryView()
+                .safeAreaInset(edge: .bottom) { UndoChangesButton() }
                 .tabItem { Label("Archiv", systemImage: "square.stack.3d.up.fill") }
                 .tag(3)
 
             if store.data.aiSettings.enabled {
                 NavigationStack { AIBuddyView() }
+                    .safeAreaInset(edge: .bottom) { UndoChangesButton() }
                     .tabItem { Label("KI", systemImage: "bubble.left.and.text.bubble.right") }.tag(5)
             }
             SettingsView()
+                .safeAreaInset(edge: .bottom) { UndoChangesButton() }
                 .tabItem { Label("Profil", systemImage: "person.crop.circle.fill") }
                 .tag(4)
         }

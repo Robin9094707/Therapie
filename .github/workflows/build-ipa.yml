@@ -154,13 +154,17 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
+      - name: Prepare compact native UI previews
+        if: always()
+        run: /tmp/therapie-icon/bin/python scripts/compact_ui_previews.py
+
       - name: Upload compact native UI previews
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Therapie-UI-Previews
           path: |
-            build/checkin-regression/previews
+            build/checkin-regression/compact-previews
             build/checkin-regression/status.json
             build/checkin-regression/test.log
             build/checkin-regression/preview-export.log
