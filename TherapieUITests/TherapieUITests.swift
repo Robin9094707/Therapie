@@ -218,7 +218,6 @@ final class TherapieUITests: XCTestCase {
     }
 
     @MainActor
-    @MainActor
     func testTodayCustomizationRoutineConfirmationAndArchiveFilters() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing", "--show-dashboard", "--personalization-fixture"]
@@ -256,6 +255,7 @@ final class TherapieUITests: XCTestCase {
         capture("Archiveintrag bleibt bearbeitbar")
     }
 
+    @MainActor
     private func capture(_ name: String) {
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         attachment.name = name
