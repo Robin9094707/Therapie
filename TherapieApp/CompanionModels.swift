@@ -1,6 +1,6 @@
 import Foundation
 
-enum GuidedCheckInKind: String, Codable, CaseIterable, Identifiable {
+enum GuidedCheckInKind: String, Codable, CaseIterable, Identifiable, Hashable {
     case morning, evening, therapy, free
     var id: String { rawValue }
     var title: String {
@@ -72,7 +72,7 @@ struct DailyRoutine: Codable, Equatable, Identifiable {
     var quietStartHour: Int?
     var quietEndHour = 7
 }
-enum RoutineOutcome: String, Codable { case done, skipped }
+enum RoutineOutcome: String, Codable, Hashable { case done, skipped }
 struct RoutineCompletion: Codable, Equatable, Identifiable {
     var id = UUID()
     var routineID: UUID
@@ -81,6 +81,18 @@ struct RoutineCompletion: Codable, Equatable, Identifiable {
     var recordedAt = Date()
     var outcome: RoutineOutcome = .done
     var note = ""
+    var routineTitle: String?
+    var timeTitle: String?
+    var corrections: [RoutineCorrection]?
+}
+struct RoutineCorrection: Codable, Equatable, Identifiable {
+    var id = UUID()
+    var date = Date()
+    var previousOutcome: RoutineOutcome
+    var previousNote: String
+    var outcome: RoutineOutcome
+    var note: String
+    var reason: String
 }
 struct RoutineSnooze: Codable, Equatable, Identifiable {
     var id: String
@@ -90,6 +102,8 @@ struct CompanionSettings: Codable, Equatable {
     var vacationUntil: Date?
     var privateRoutineTitles = true
     var offerTherapyCheckIn = true
+    // Optional additions retain schema-7 backups and existing local snapshots.
+    var checkInReminders: [CheckInReminder]?
 }
 struct RoutineOccurrence: Identifiable, Equatable {
     var routineID: UUID
@@ -216,5 +230,153 @@ enum GuidedCheckInMutation {
         }
         data.guidedCheckIns.removeAll { $0.id == clean.id }
         data.guidedCheckIns.insert(clean, at: 0)
+    }
+}
+
+
+struct CheckInReminder: Codable, Equatable, Identifiable {
+    var id = UUID()
+    var kind: GuidedCheckInKind = .morning
+    var enabled = true
+    var time = RoutineTime(hour: 7, minute: 0, weekendHour: 9, weekendMinute: 0)
+    var pauseOnVacation = true
+}
+struct CheckInReminderSlot: Equatable, Identifiable {
+    var reminderID: UUID
+    var kind: GuidedCheckInKind
+    var fireAt: Date
+    var id: String { "therapy.checkin.\(reminderID).\(Int(fireAt.timeIntervalSince1970))" }
+}
+enum CheckInReminderPlanner {
+    static func slots(data: AppData, now: Date = Date(), calendar: Calendar = .current) -> [CheckInReminderSlot] {
+        var output: [CheckInReminderSlot] = []
+        let today = calendar.startOfDay(for: now)
+        // Two reminders per day, seven days of capacity. The editor enforces one per kind.
+        var seenKinds = Set<GuidedCheckInKind>()
+        for reminder in data.companionSettings.checkInReminders ?? [] where reminder.enabled {
+            guard [.morning, .evening].contains(reminder.kind), seenKinds.insert(reminder.kind).inserted else { continue }
+            for offset in 0..<7 {
+                guard let day = calendar.date(byAdding: .day, value: offset, to: today) else { continue }
+                let weekday = calendar.component(.weekday, from: day), clock = reminder.time.clock(weekday: weekday)
+                guard reminder.time.weekdays.contains(weekday),
+                      let date = calendar.date(bySettingHour: clock.hour, minute: clock.minute, second: 0, of: day, matchingPolicy: .nextTime, repeatedTimePolicy: .first, direction: .forward),
+                      calendar.isDate(date, inSameDayAs: day), date > now else { continue }
+                if reminder.pauseOnVacation, let until = data.companionSettings.vacationUntil, date < until { continue }
+                if data.guidedCheckIns.contains(where: { !$0.isDraft && $0.kind == reminder.kind && calendar.isDate($0.date, inSameDayAs: day) }) { continue }
+                output.append(CheckInReminderSlot(reminderID: reminder.id, kind: reminder.kind, fireAt: date))
+            }
+        }
+        return output.sorted { $0.fireAt == $1.fireAt ? $0.id < $1.id : $0.fireAt < $1.fireAt }
+    }
+}
+enum RoutineHistoryMutation {
+    static func preserveTitles(in data: inout AppData, routine: DailyRoutine) {
+        for index in data.routineCompletions.indices where data.routineCompletions[index].routineID == routine.id {
+            if data.routineCompletions[index].routineTitle == nil { data.routineCompletions[index].routineTitle = routine.title }
+            if data.routineCompletions[index].timeTitle == nil { data.routineCompletions[index].timeTitle = routine.times.first { $0.id == data.routineCompletions[index].timeID }?.title }
+        }
+    }
+    @discardableResult
+    static func correct(id: UUID, outcome: RoutineOutcome, note: String, reason: String, in data: inout AppData, now: Date = Date()) -> Bool {
+        guard let index = data.routineCompletions.firstIndex(where: { $0.id == id }),
+              !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        let old = data.routineCompletions[index]
+        guard old.outcome != outcome || old.note != note else { return false }
+        let correction = RoutineCorrection(date: now, previousOutcome: old.outcome, previousNote: old.note, outcome: outcome, note: note, reason: reason.trimmingCharacters(in: .whitespacesAndNewlines))
+        data.routineCompletions[index].corrections = (old.corrections ?? []) + [correction]
+        data.routineCompletions[index].outcome = outcome
+        data.routineCompletions[index].note = note
+        // Keep the original occurrence and confirmation timestamp; corrections never reopen reminders.
+        return true
+    }
+    static func title(_ log: RoutineCompletion, data: AppData) -> String {
+        log.routineTitle ?? data.routines.first { $0.id == log.routineID }?.title ?? "Gelöschte Routine"
+    }
+}
+struct TherapyReportOptions {
+    var start: Date
+    var end: Date
+    var includeCheckIns = true
+    var includeMoodEntries = true
+    var includeTasks = true
+    var includeGoals = true
+    var includeRoutines = false
+    var includeNotes = false
+    var includeNames = false
+    var excludedCheckInIDs = Set<UUID>()
+}
+enum TherapyReport {
+    static func checkIns(data: AppData, options: TherapyReportOptions) -> [GuidedCheckIn] {
+        data.guidedCheckIns.filter { !$0.isDraft && $0.date >= options.start && $0.date < options.end && !options.excludedCheckInIDs.contains($0.id) }.sorted { $0.date < $1.date }
+    }
+    static func meanBattery(_ entries: [GuidedCheckIn]) -> Double? {
+        let values = entries.compactMap(\.batteryPercent)
+        return values.isEmpty ? nil : Double(values.reduce(0, +)) / Double(values.count)
+    }
+    static func text(data: AppData, options: TherapyReportOptions) -> String {
+        func included(_ date: Date) -> Bool { date >= options.start && date < options.end }
+        func stamp(_ date: Date) -> String { date.formatted(date: .abbreviated, time: .shortened) }
+        var lines = ["Meine Therapieübersicht", "Zeitraum: " + options.start.formatted(date: .abbreviated, time: .omitted) + " – " + options.end.addingTimeInterval(-1).formatted(date: .abbreviated, time: .omitted)]
+        if options.includeNames {
+            if !data.profile.userName.isEmpty { lines.append("Name: " + data.profile.userName) }
+            if !data.profile.therapistName.isEmpty { lines.append("Therapie bei: " + data.profile.therapistName) }
+        }
+        if options.includeCheckIns {
+            let entries = checkIns(data: data, options: options)
+            lines.append("CHECK-INS · \(entries.count) abgeschlossen")
+            if let mean = meanBattery(entries) { lines.append("Akku-Mittelwert: \(Int(mean.rounded())) % aus \(entries.compactMap(\.batteryPercent).count) Angaben. Übersprungene Antworten sind nicht eingerechnet.") }
+            for entry in entries {
+                lines.append("\(stamp(entry.date)) · \(entry.kind.title)")
+                if let value = entry.mood { lines.append("Stimmung: " + MoodCheckIn.moodTitles[max(0, min(4, value - 1))]) }
+                if let value = entry.batteryPercent { lines.append("Akku: \(value) %") }
+                if let value = entry.stress { lines.append("Stress: \(value)/5") }
+                if let value = entry.sensoryLoad { lines.append("Reize: \(value)/5") }
+                if let value = entry.sleepHours { lines.append("Schlaf: \(value.formatted()) Stunden") }
+                for (label, value) in [("Rückblick", entry.summary), ("Energiegeber", entry.givesEnergy), ("Energienehmer", entry.takesEnergy), ("Erfolg", entry.smallWin), ("Bedürfnis", entry.nextNeed), ("Therapiefrage", entry.therapyQuestion)] where !value.isEmpty { lines.append(label + ": " + value) }
+                if !entry.mediaIDs.isEmpty { lines.append("\(entry.mediaIDs.count) verknüpfte Fotos · Bilddateien separat teilen") }
+                // Tasks are shared only through the separately selected task section.
+            }
+        }
+        if options.includeMoodEntries {
+            lines.append("STIMMUNGSEINTRÄGE")
+            for entry in data.moodCheckIns.filter({ included($0.date) }).sorted(by: { $0.date < $1.date }) {
+                lines.append("\(stamp(entry.date)) · \(entry.moodTitle) · Akku \(entry.battery)/5")
+                if !entry.note.isEmpty { lines.append(entry.note) }
+                if !entry.nextNeed.isEmpty { lines.append("Bedürfnis: " + entry.nextNeed) }
+            }
+        }
+        if options.includeTasks {
+            lines.append("AUFGABEN · aktueller Stand")
+            for task in data.weeklyTasks.filter({ included($0.createdAt) || ($0.completedAt.map(included) ?? false) || ($0.dueDate.map(included) ?? false) }).sorted(by: { $0.createdAt < $1.createdAt }) {
+                lines.append("\(task.completed ? "Erledigt" : "Offen"): \(task.title)")
+                if !task.details.isEmpty { lines.append(task.details) }
+                if let value = task.smallStep, !value.isEmpty { lines.append("Kleiner Schritt: " + value) }
+                if let value = task.dueDate { lines.append("Fällig: " + stamp(value)) }
+            }
+        }
+        if options.includeGoals {
+            lines.append("ZIELE · aktueller Stand")
+            for goal in data.therapyGoals {
+                lines.append("\(goal.title) · \(goal.status.rawValue) · \(goal.progress) %")
+                if !goal.smallStep.isEmpty { lines.append("Kleiner Schritt: " + goal.smallStep) }
+                if !goal.support.isEmpty { lines.append("Unterstützung: " + goal.support) }
+            }
+        }
+        if options.includeRoutines {
+            lines.append("ROUTINEN · protokollierte Angaben, keine Einnahmeprüfung")
+            let logs = data.routineCompletions.filter { included($0.scheduledAt) }.sorted { $0.scheduledAt < $1.scheduledAt }
+            lines.append("\(logs.filter { $0.outcome == .done }.count) erledigt · \(logs.filter { $0.outcome == .skipped }.count) ausgelassen. Fehlende Bestätigungen werden nicht als ausgelassen gewertet.")
+            for log in logs {
+                lines.append("\(stamp(log.scheduledAt)) · \(RoutineHistoryMutation.title(log, data: data))\(log.timeTitle.map { $0.isEmpty ? "" : " · " + $0 } ?? "") · \(log.outcome == .done ? "Erledigt" : "Ausgelassen")")
+                if !log.note.isEmpty { lines.append(log.note) }
+                for correction in log.corrections ?? [] { lines.append("Korrektur \(stamp(correction.date)): \(correction.previousOutcome.rawValue) → \(correction.outcome.rawValue) · \(correction.reason)") }
+            }
+        }
+        if options.includeNotes {
+            lines.append("NOTIZEN")
+            for note in data.notes.filter({ included($0.createdAt) }).sorted(by: { $0.createdAt < $1.createdAt }) { lines.append(note.title + "\n" + note.text) }
+        }
+        lines.append("Selbstbericht. Nur die gewählten Bereiche sind enthalten; keine automatische Übermittlung.")
+        return lines.joined(separator: "\n\n")
     }
 }

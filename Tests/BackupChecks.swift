@@ -36,10 +36,10 @@ struct BackupChecks {
         data.profile = UserProfile(userName: "Robin", therapistName: "Therapeutin", onboardingCompleted: true)
         let routine = DailyRoutine(title: "Frühstück", symbol: "fork.knife", goalID: nil, times: [RoutineTime(title: "Vor der Arbeit", weekdays: [2, 3, 4, 5, 6], hour: 6, minute: 15, weekendHour: 9, weekendMinute: 0)], urgentAlarm: true)
         data.routines = [routine]
-        data.routineCompletions = [RoutineCompletion(routineID: routine.id, timeID: routine.times[0].id, scheduledAt: Date(), outcome: .skipped, note: "Pause")]
+        data.routineCompletions = [RoutineCompletion(routineID: routine.id, timeID: routine.times[0].id, scheduledAt: Date(), outcome: .skipped, note: "Pause", routineTitle: "Frühstück", timeTitle: "Vor der Arbeit", corrections: [RoutineCorrection(previousOutcome: .done, previousNote: "", outcome: .skipped, note: "Pause", reason: "Falsche Angabe")])]
         data.routineSnoozes = [RoutineSnooze(id: "portable-occurrence", until: Date())]
         data.guidedCheckIns = [GuidedCheckIn(kind: .therapy, mood: 4, batteryPercent: 0, stress: 2, sensoryLoad: 3, sleepHours: 7.5, summary: "Geführter Rückblick", therapyQuestion: "Was hilft?", tasks: [CheckInTaskDraft(title: "Erster Schritt", source: "Aus der Therapie")], isDraft: false)]
-        data.companionSettings = CompanionSettings(vacationUntil: Date(), privateRoutineTitles: false, offerTherapyCheckIn: true)
+        data.companionSettings = CompanionSettings(vacationUntil: Date(), privateRoutineTitles: false, offerTherapyCheckIn: true, checkInReminders: [CheckInReminder(kind: .morning, time: RoutineTime(weekdays: [2, 3, 4, 5, 6], hour: 6, minute: 30, weekendHour: 9, weekendMinute: 0))])
         data.schedule.alarmIDs = ["local-device-only"]
         data.preferences.includeLocationForNewMedia = false
         data.schedule.location = "Praxis"

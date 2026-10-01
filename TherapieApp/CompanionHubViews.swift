@@ -3,6 +3,8 @@ import SwiftUI
 struct CompanionTodayCard: View {
     @EnvironmentObject private var store: AppStore
     @State private var checkIn: GuidedCheckIn?
+    @State private var showPlanning = false
+    @State private var showReport = false
     @State private var showEntries = false
     @State private var showRoutines = false
     @AppStorage("therapy.calmInterface") private var calmInterface = true
@@ -13,6 +15,9 @@ struct CompanionTodayCard: View {
                     SectionHeader(title: "Ein Moment für dich", icon: "sparkles", subtitle: "Ankommen, Energie spüren, einen kleinen Schritt wählen.")
                     Spacer(minLength: 0)
                     Menu {
+                        Button("Check-in-Erinnerungen", systemImage: "bell") { showPlanning = true }
+                        Button("Für meinen Therapietermin", systemImage: "doc.text") { showReport = true }
+                        Divider()
                         Button("Liquid Glass", systemImage: "sparkles") { calmInterface = false; store.refreshReadableFiles() }
                         Button("Ruhige Darstellung", systemImage: "leaf") { calmInterface = true; store.refreshReadableFiles() }
                     } label: { Image(systemName: "slider.horizontal.3").frame(width: 44, height: 44) }.accessibilityLabel("Darstellung wählen")
@@ -30,12 +35,16 @@ struct CompanionTodayCard: View {
                     Spacer()
                     Button("Routinen & Ziele", systemImage: "alarm") { showRoutines = true }
                 }.font(.subheadline.weight(.semibold))
+                Button("Für deinen nächsten Therapietermin", systemImage: "doc.text.magnifyingglass") { showReport = true }.font(.subheadline.weight(.semibold))
+                Button("Check-in-Erinnerungen einstellen", systemImage: "bell") { showPlanning = true }.font(.caption)
                 let due = RoutinePlanner.due(data: store.data)
                 if !due.isEmpty {
                     Label("\(due.count) Routine\(due.count == 1 ? "" : "n") noch offen", systemImage: "bell.badge.fill").font(.caption).foregroundStyle(.orange)
                 }
             }
         }
+        .sheet(isPresented: $showPlanning) { CheckInReminderSettingsView(reminders: store.data.companionSettings.checkInReminders ?? []) }
+        .sheet(isPresented: $showReport) { TherapyReportView() }
         .sheet(item: $checkIn) { GuidedCheckInView(entry: $0) }
         .sheet(isPresented: $showEntries) { EntryHubView() }
         .sheet(isPresented: $showRoutines) { NavigationStack { RoutineHubView() } }

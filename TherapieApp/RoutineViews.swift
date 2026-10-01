@@ -3,6 +3,7 @@ import SwiftUI
 struct RoutineHubView: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
+    @State private var showHistory = false
     @State private var draft: DailyRoutine?
     @State private var goal: TherapyGoal?
     @State private var historyRoutine: DailyRoutine?
@@ -28,6 +29,7 @@ struct RoutineHubView: View {
                         Text("Nur Routinen mit aktivierter Urlaubspause pausieren. Die Uhrzeiten und deine Ziele bleiben gespeichert.").font(.caption).foregroundStyle(.secondary)
                     }
                 }
+                Button("Gesamten Routinenverlauf ansehen", systemImage: "clock.arrow.circlepath") { showHistory = true }.buttonStyle(.bordered)
                 RoutinePermissionCard()
                 SwiftUI.TimelineView(.periodic(from: .now, by: 30)) { context in
                     let due = RoutinePlanner.due(data: store.data, now: context.date)
@@ -69,10 +71,11 @@ struct RoutineHubView: View {
             }
         }.navigationTitle("Routinen & Ziele").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fertig") { dismiss() } } }
+            .sheet(isPresented: $showHistory) { RoutineHistoryView() }
             .sheet(item: $draft) { RoutineEditorView(routine: $0) }
             .sheet(item: $historyRoutine) { RoutineDetailView(routineID: $0.id) }
             .sheet(item: $goal) { GoalEditorView(goal: $0) }
-            .alert("Routine löschen?", isPresented: $confirmDelete) { Button("Abbrechen", role: .cancel) {}; Button("Löschen", role: .destructive) { if let item = deleting { store.deleteRoutine(item.id) } } } message: { Text("Ihre Erinnerungen werden entfernt. Bestätigungen bleiben in deinen Sicherungen erhalten.") }
+            .alert("Routine löschen?", isPresented: $confirmDelete) { Button("Abbrechen", role: .cancel) {}; Button("Löschen", role: .destructive) { if let item = deleting { store.deleteRoutine(item.id) } } } message: { Text("Ihre Erinnerungen werden entfernt. Bestätigungen bleiben im Routinenverlauf und in deinen Sicherungen erhalten.") }
     }
     private func timeDescription(_ time: RoutineTime) -> String {
         let days = time.weekdays.count == 7 ? "Täglich" : time.weekdays.map(TherapyDateHelper.weekdayName).joined(separator: ", ")
@@ -151,14 +154,7 @@ struct RoutineDetailView: View {
                     if due.isEmpty { GlassCard { Label("Aktuell kein offener Termin", systemImage: "checkmark.circle") } }
                     Text("Dein Verlauf").font(.title3.bold())
                     ForEach(store.data.routineCompletions.filter { $0.routineID == routineID }.sorted { $0.recordedAt > $1.recordedAt }) { log in
-                        GlassCard {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Label(log.outcome == .done ? "Erledigt" : "Ausgelassen", systemImage: log.outcome == .done ? "checkmark.circle" : "forward.end").font(.headline)
-                                Text("Fällig: " + log.scheduledAt.formatted(date: .abbreviated, time: .shortened)).font(.caption)
-                                Text("Bestätigt: " + log.recordedAt.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
-                                if !log.note.isEmpty { Text(log.note).font(.subheadline) }
-                            }
-                        }
+                        RoutineHistoryCard(log: log)
                     }
                 }
             }.navigationTitle(store.data.routines.first(where: { $0.id == routineID })?.title ?? "Routine").navigationBarTitleDisplayMode(.inline)

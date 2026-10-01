@@ -18,10 +18,10 @@ struct StorageReminderChecks {
         data.profile = UserProfile(userName: "Robin", therapistName: "Therapeutin", onboardingCompleted: true)
         let routine = DailyRoutine(title: "Frühstück", symbol: "fork.knife", goalID: nil, times: [RoutineTime(title: "Vor der Arbeit", weekdays: [2, 3, 4, 5, 6], hour: 6, minute: 15, weekendHour: 9, weekendMinute: 0)], urgentAlarm: true)
         data.routines = [routine]
-        data.routineCompletions = [RoutineCompletion(routineID: routine.id, timeID: routine.times[0].id, scheduledAt: Date(), outcome: .skipped, note: "Pause")]
+        data.routineCompletions = [RoutineCompletion(routineID: routine.id, timeID: routine.times[0].id, scheduledAt: Date(), outcome: .skipped, note: "Pause", routineTitle: "Frühstück", timeTitle: "Vor der Arbeit", corrections: [RoutineCorrection(previousOutcome: .done, previousNote: "", outcome: .skipped, note: "Pause", reason: "Falsche Angabe")])]
         data.routineSnoozes = [RoutineSnooze(id: "portable-occurrence", until: Date())]
         data.guidedCheckIns = [GuidedCheckIn(kind: .therapy, mood: 4, batteryPercent: 0, stress: 2, sensoryLoad: 3, sleepHours: 7.5, summary: "Geführter Rückblick", therapyQuestion: "Was hilft?", tasks: [CheckInTaskDraft(title: "Erster Schritt", source: "Aus der Therapie")], isDraft: false)]
-        data.companionSettings = CompanionSettings(vacationUntil: Date(), privateRoutineTitles: false, offerTherapyCheckIn: true)
+        data.companionSettings = CompanionSettings(vacationUntil: Date(), privateRoutineTitles: false, offerTherapyCheckIn: true, checkInReminders: [CheckInReminder(kind: .morning, time: RoutineTime(weekdays: [2, 3, 4, 5, 6], hour: 6, minute: 30, weekendHour: 9, weekendMinute: 0))])
         data.reminderPreferences.energyReviewEnabled = true
         data.notes = [TherapyNote(title: "Lesbare Notiz", text: "Meine wichtige Zeile\nzweite Zeile", tags: ["wichtig"], isImportant: true)]
         data.therapyFolders = [TherapyFolder(title: "Meine Themen")]
@@ -64,6 +64,10 @@ struct StorageReminderChecks {
         try expect(try Data(contentsOf: prepared.directory.appendingPathComponent("Media/p.jpg")) == photo, "ZIP streams multiple attachment blocks")
         try expect(try Data(contentsOf: prepared.directory.appendingPathComponent("Recordings/empty.m4a")).isEmpty, "ZIP supports empty attachments")
         try expect(fm.fileExists(atPath: prepared.directory.appendingPathComponent("UEBERSICHT.md").path), "ZIP contains readable overview")
+        let reminderText = try String(contentsOf: prepared.directory.appendingPathComponent("Eintraege/Einstellungen/companionSettings.txt"), encoding: .utf8)
+        try expect(reminderText.contains("Check-in-Erinnerungen"), "Reminder settings appear in readable mirror")
+        let logText = try String(contentsOf: prepared.directory.appendingPathComponent("Eintraege/routineCompletions/" + data.routineCompletions[0].id.uuidString + ".txt"), encoding: .utf8)
+        try expect(logText.contains("Falsche Angabe") && logText.contains("Frühstück"), "History titles and correction audit are human-readable")
         let checkURL = URL(fileURLWithPath: "/tmp/therapie-portable-check.zip")
         try? fm.removeItem(at: checkURL); try fm.copyItem(at: zip, to: checkURL)
         var noPhotos = BackupOptions(); noPhotos.includePhotos = false

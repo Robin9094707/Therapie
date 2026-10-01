@@ -16,6 +16,10 @@ with zipfile.ZipFile(sys.argv[1]) as archive:
     assert data["guidedCheckIns"][0]["batteryPercent"] == 0
     assert data["routines"][0]["title"] == "Frühstück"
     assert data["routineCompletions"][0]["outcome"] == "skipped"
+    assert data["companionSettings"]["checkInReminders"][0]["kind"] == "morning"
+    assert data["routineCompletions"][0]["routineTitle"] == "Frühstück"
+    assert data["routineCompletions"][0]["corrections"][0]["reason"] == "Falsche Angabe"
+    assert "Check-in-Erinnerungen" in archive.read("Eintraege/Einstellungen/companionSettings.txt").decode()
     for key in ("guidedCheckIns", "routines", "routineCompletions"):
         record = data[key][0]
         assert f"Eintraege/{key}/{record['id'].upper()}.txt" in names

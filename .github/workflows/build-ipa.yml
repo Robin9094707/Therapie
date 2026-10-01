@@ -118,17 +118,17 @@ jobs:
       - name: Package IPA
         run: |
           APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" -print -quit)
-          rm -rf Payload Therapie-v3004.0.0.ipa
+          rm -rf Payload Therapie-v3005.0.0.ipa
           mkdir Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Therapie-v3004.0.0.ipa Payload
-          ls -lh Therapie-v3004.0.0.ipa
+          /usr/bin/zip -qry Therapie-v3005.0.0.ipa Payload
+          ls -lh Therapie-v3005.0.0.ipa
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Therapie-v3004.0.0-IPA
-          path: Therapie-v3004.0.0.ipa
+          name: Therapie-v3005.0.0-IPA
+          path: Therapie-v3005.0.0.ipa
           if-no-files-found: error
           retention-days: 30
 

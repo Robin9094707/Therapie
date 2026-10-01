@@ -20,6 +20,7 @@ final class AppStore: ObservableObject {
     @Published var pendingGuidedCheckIn: GuidedCheckIn?
     @Published var notificationRoutineID: UUID?
     @Published var routineReminderStatus = ""
+    @Published var checkInReminderStatus = ""
     @Published var routineAlarmStatus = ""
     private var writeBlocked = false
 

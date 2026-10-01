@@ -32,6 +32,7 @@ extension AppStore {
             clean.times[index].minute = max(0, min(59, clean.times[index].minute))
         }
         var snapshot = data
+        if let previous = snapshot.routines.first(where: { $0.id == clean.id }) { RoutineHistoryMutation.preserveTitles(in: &snapshot, routine: previous) }
         snapshot.routines.removeAll { $0.id == clean.id }; snapshot.routines.append(clean)
         data = snapshot
     }
@@ -39,7 +40,8 @@ extension AppStore {
         guard data.routines.contains(where: { $0.id == occurrence.routineID }),
               !RoutinePlanner.resolved(occurrence, completions: data.routineCompletions), occurrence.due <= Date() else { return }
         var snapshot = data
-        snapshot.routineCompletions.insert(RoutineCompletion(routineID: occurrence.routineID, timeID: occurrence.timeID, scheduledAt: occurrence.due, outcome: outcome, note: note), at: 0)
+        let routine = snapshot.routines.first { $0.id == occurrence.routineID }!
+        snapshot.routineCompletions.insert(RoutineCompletion(routineID: occurrence.routineID, timeID: occurrence.timeID, scheduledAt: occurrence.due, outcome: outcome, note: note, routineTitle: routine.title, timeTitle: routine.times.first { $0.id == occurrence.timeID }?.title), at: 0)
         snapshot.routineSnoozes.removeAll { $0.id == occurrence.id }
         data = snapshot
     }
@@ -52,10 +54,20 @@ extension AppStore {
     }
     func deleteRoutine(_ id: UUID) {
         var snapshot = data
+        if let previous = snapshot.routines.first(where: { $0.id == id }) { RoutineHistoryMutation.preserveTitles(in: &snapshot, routine: previous) }
         snapshot.routines.removeAll { $0.id == id }
         snapshot.routineSnoozes.removeAll { $0.id.hasPrefix(id.uuidString + ".") }
         // History survives deletion and remains available in exports.
         data = snapshot
+    }
+    func correctRoutineLog(id: UUID, outcome: RoutineOutcome, note: String, reason: String) {
+        var snapshot = data
+        if RoutineHistoryMutation.correct(id: id, outcome: outcome, note: note, reason: reason, in: &snapshot) { data = snapshot }
+    }
+    func openDailyCheckIn(_ kind: GuidedCheckInKind) {
+        guard [.morning, .evening].contains(kind) else { return }
+        let today = data.guidedCheckIns.filter { $0.kind == kind && Calendar.current.isDateInToday($0.date) }.sorted { $0.date > $1.date }
+        pendingGuidedCheckIn = today.first(where: \.isDraft) ?? today.first ?? GuidedCheckIn(kind: kind)
     }
     func consumeRoutineAlarmRoute() {
         if let raw = UserDefaults.standard.string(forKey: "therapy.routine.open"), let id = UUID(uuidString: raw) {

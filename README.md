@@ -97,3 +97,12 @@ A simulator first-boot timeout is reported separately as infrastructure unavaila
 - Datenschema 7 übernimmt Schemas 1–6, gleicher Bundle-Identifier. Vor Migration bleibt `therapy-data.pre-3004.json` erhalten. Alle neuen Records und Einstellungen sind in verschlüsselten Backups, Klartext-ZIP und automatischem lesbarem Spiegel enthalten. Geräte-Wecker-IDs liegen außerhalb von AppData und reisen nicht durch Exporte.
 - Rückkehr zum bisherigen **Quellcode**: Branch `backup/before-guided-update-2026-09-30`, Commit `b8b36d15239c13b6daeaed5f05081c55c9644b77`. Vor einem **App-Downgrade** eine ältere Datensicherung behalten: die vorige App kann Schema 7 nicht lesen. Der gesicherte Quellcode allein setzt keine lokalen Einträge zurück.
 - CI prüft neue Migrationen und vollständige Backups, optionale Antworten, 0-%-Akku, stabile Reminder-IDs, exakte Terminbestätigungen, einmaliges Verschieben, Urlaub, Nachtruhe sowie Sommer-/Winterzeit und Jahreswechsel. Gerätebuild und tatsächliches Bundle werden validiert. Haptik, AlarmKit, Sperrbildschirmaktionen und Fotos benötigen zusätzliche Tests am echten iPhone.
+
+
+### Update 3005.0.0
+
+- Optionale Morgen-/Abend-Check-in-Mitteilungen mit eigenen Wochentagen, Wochenendzeiten und Urlaubspause. Maximal zwei pro Tag für sieben Tage; beim Öffnen und Speichern wird der Vorrat erneuert. Abgeschlossene Check-ins unterdrücken den Tageshinweis. Antippen öffnet den heutigen Entwurf oder den vorhandenen Tages-Check-in.
+- Gesamter Routinenverlauf mit Suche, Zeitraum, Statusfilter und historischen Routinen-/Terminnamen. Angabe und Notiz können mit Pflichtgrund korrigiert werden; frühere Werte bleiben im exportierbaren Audit. Korrekturen öffnen keine Erinnerungen erneut.
+- Therapieübersicht mit Datumsauswahl, einzeln wählbaren abgeschlossenen Check-ins, Akku-Verlauf und iOS-Teilen-Vorschau. Notizen, Namen und Routinen nur auf ausdrückliche Auswahl. Aufgaben und Ziele zeigen den aktuellen Stand; Fotos/Audio separat teilen. Fehlende Werte werden nicht geschätzt.
+- Additive Schema-7-Felder: vorhandene Daten, verschlüsselte Backups und lesbare ZIPs bleiben kompatibel. Frühere Einstellungen lassen neue Erinnerungen ausgeschaltet. Bundle-ID unverändert.
+- Quellcode vor diesem Update: Branch `backup/before-3005-2026-10-01`. Eine Quellcode-Sicherung ersetzt kein externes Datenbackup vor App-Deinstallation oder Downgrade.
