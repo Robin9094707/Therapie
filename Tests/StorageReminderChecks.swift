@@ -45,6 +45,11 @@ struct StorageReminderChecks {
         data.companionSettings.energyReviewAlarm = true
         data.sessionPreferences.showLiveActivityNames(false)
         data.companionSettings.sessionAlarmsEnabled = true
+        data.companionSettings.sessionPhaseAlarmsEnabled = true
+        data.schedule.therapyAlarmsEnabled = true
+        data.schedule.cancellations = [TherapyCancellation(date: Date(), reason: .therapist, note: "Praxis geschlossen"), TherapyCancellation(date: Date(), reason: .me, restoredAt: Date())]
+        data.schedule.therapyVacations = [TherapyVacation(start: Date(), end: Date().addingTimeInterval(86400 * 14), note: "Urlaub")]
+
         data.companionSettings.wellnessAlarmEnabled = true
         data.companionSettings.checkInReminders?[0].alarmEnabled = true
         data.companionSettings.checkInReminders?[0].slotID = DailyCheckInSlot.defaults[0].id
@@ -75,7 +80,7 @@ struct StorageReminderChecks {
         let zip = try ReadableBackup.export(data: data, root: root, preferences: preferences, options: BackupOptions(), version: "3003.0.0")
         defer { try? fm.removeItem(at: zip.deletingLastPathComponent()) }
         let prepared = try ReadableBackup.prepareImport(url: zip); defer { prepared.discard() }
-        try expect(try BackupArchive.encoder().encode(prepared.manifest.data) == BackupArchive.encoder().encode(data), "Plain ZIP preserves all AppData fields")
+        try expect(try BackupArchive.encoder().encode(prepared.manifest.data) == BackupArchive.encoder().encode(data.portableSnapshot), "Plain ZIP preserves all AppData fields")
         try expect(prepared.manifest.preferences == preferences, "Plain ZIP preserves portable settings")
         try expect(try Data(contentsOf: prepared.directory.appendingPathComponent("Media/p.jpg")) == photo, "ZIP streams multiple attachment blocks")
         try expect(try Data(contentsOf: prepared.directory.appendingPathComponent("Recordings/empty.m4a")).isEmpty, "ZIP supports empty attachments")

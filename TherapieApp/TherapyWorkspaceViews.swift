@@ -1,5 +1,7 @@
 import SwiftUI
 import QuickLook
+import PhotosUI
+import UIKit
 
 struct TherapyEditorSheet<Content: View>: View {
     @Environment(\.dismiss) private var dismiss
@@ -146,13 +148,17 @@ struct TherapyNoteEditorView: View {
     @EnvironmentObject private var store: AppStore
     @State private var note: TherapyNote
     @State private var tags: String
-    private let initial: TherapyNote
+    @State private var initial: TherapyNote
+    @State private var selectedPhoto: PhotosPickerItem?
+    @State private var attachment: NoteAttachmentDestination?
+    @State private var importing = false
+    @State private var attachmentError: String?
     init(note: TherapyNote = TherapyNote(title: "", text: "", tags: [])) {
-        initial = note; _note = State(initialValue: note); _tags = State(initialValue: note.tags.joined(separator: ", "))
+        _initial = State(initialValue: note); _note = State(initialValue: note); _tags = State(initialValue: note.tags.joined(separator: ", "))
     }
     private var canSave: Bool { !note.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !note.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !(note.mediaIDs ?? []).isEmpty }
     var body: some View {
-        TherapyEditorSheet(title: note.author == NoteAuthor.therapist.rawValue ? "Beitrag für die Therapie" : "Therapie-Notiz", dirty: note != initial || tags != initial.tags.joined(separator: ", "), canSave: canSave, save: {
+        TherapyEditorSheet(title: note.author == NoteAuthor.therapist.rawValue ? "Beitrag für die Therapie" : "Therapie-Notiz", dirty: note != initial || tags != initial.tags.joined(separator: ", "), canSave: canSave && !importing, save: {
             var clean = note
             if clean.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { clean.title = "Notiz" }
             clean.tags = tags.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
@@ -175,7 +181,7 @@ struct TherapyNoteEditorView: View {
                 }
                 DatePicker("Datum", selection: $note.createdAt, in: ...Date(), displayedComponents: [.date, .hourAndMinute])
             }
-            NoteAttachmentsSection(note: $note)
+            NoteAttachmentsSection(note: $note, photo: $selectedPhoto, importing: importing, error: attachmentError, record: { dismissKeyboard(); attachment = .record }, choose: { dismissKeyboard(); attachment = .archive }, open: { dismissKeyboard(); attachment = .media($0.id) })
             Section("Einordnen") {
                 TherapyLinkFields(folder: $note.folderID, topic: $note.topicID)
                 Picker("Bereich", selection: Binding(get: { note.category ?? TherapyCategory.other.rawValue }, set: { note.category = $0 })) {
@@ -184,7 +190,30 @@ struct TherapyNoteEditorView: View {
                 TextField("Tags, mit Komma trennen", text: $tags)
             }
         }
+        .accessibilityIdentifier("note.editor")
+        .presentationDetents([.large])
+        .sheet(item: $attachment) { route in
+            switch route {
+            case .record: AudioRecordingView(onSaved: link)
+            case .archive: NoteArchivePicker(choose: link)
+            case .media(let id): TherapyMediaDetailView(itemID: id)
+            }
+        }
+        .onChange(of: selectedPhoto) { _, selected in
+            guard let selected else { return }; importing = true
+            Task { @MainActor in
+                defer { importing = false; selectedPhoto = nil }
+                do {
+                    guard let bytes = try await selected.loadTransferable(type: Data.self), let image = UIImage(data: bytes), let jpeg = image.jpegData(compressionQuality: 0.85) else { throw CocoaError(.fileReadCorruptFile) }
+                    try store.importPhoto(bytes: jpeg, fileExtension: "jpg", title: note.title.isEmpty ? "Notizfoto" : note.title, note: "", tags: [], location: nil)
+                    if let failure = store.lastSaveError { attachmentError = failure; return }
+                    if let item = store.data.media.first { link(item.id) }; attachmentError = nil
+                } catch { attachmentError = error.localizedDescription }
+            }
+        }
     }
+    private func link(_ id: UUID) { if !(note.mediaIDs ?? []).contains(id) { note.mediaIDs = (note.mediaIDs ?? []) + [id] } }
+    private func dismissKeyboard() { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
 }
 
 struct TherapyMediaEditorView: View {
@@ -478,6 +507,7 @@ struct TherapyNotesCollectionView: View {
     var therapistOnly = false
     var sessionID: UUID? = nil
     @State private var draft: TherapyNote?
+    @State private var viewing: TherapyNote?
     @State private var deleting: TherapyNote?
     @State private var confirmDelete = false
     private var notes: [TherapyNote] {
@@ -514,12 +544,13 @@ struct TherapyNotesCollectionView: View {
                         Text(note.text).font(.subheadline).lineLimit(6)
                         if let ids = note.mediaIDs, !ids.isEmpty { Label("\(ids.count) Anhänge · Foto / Audio / Dokument", systemImage: "paperclip").font(.caption).foregroundStyle(.secondary) }
                         Text("\(note.author ?? NoteAuthor.me.rawValue) · \(note.createdAt.formatted(date: .abbreviated, time: .shortened))").font(.caption).foregroundStyle(.secondary)
-                        Button("Ganze Notiz öffnen") { draft = note }.font(.caption.bold())
+                        Button("Ganze Notiz öffnen") { viewing = note }.font(.caption.bold())
                     }
                 }
             }
         }
         .sheet(item: $draft) { TherapyNoteEditorView(note: $0) }
+        .sheet(item: $viewing) { TherapyNoteDetailView(noteID: $0.id) }
         .alert("Notiz löschen?", isPresented: $confirmDelete) {
             Button("Abbrechen", role: .cancel) {}
             Button("Löschen", role: .destructive) { if let deleting { store.data.notes.removeAll { $0.id == deleting.id } } }
@@ -558,7 +589,7 @@ struct TherapyMaterialsView: View {
     @State private var edit: MediaItem?
     @State private var deleting: MediaItem?
     @State private var confirmDelete = false
-    @State private var preview: URL?
+    @State private var preview: MediaItem?
     @State private var photo = false
     @State private var document = false
     @State private var audio = false
@@ -605,14 +636,14 @@ struct TherapyMaterialsView: View {
                             Label("Anhang beim Export ausgelassen", systemImage: "doc.badge.ellipsis").font(.footnote).foregroundStyle(.secondary)
                             Text("Informationen und Notizen kannst du weiterhin bearbeiten. Die Datei ist in dieser Sicherung nicht enthalten.").font(.caption).foregroundStyle(.secondary)
                         } else {
-                            Button("Material öffnen", systemImage: "arrow.up.right.square") { preview = store.fileURL(for: item) }
+                            Button("Material öffnen", systemImage: "arrow.up.right.square") { preview = item }
                         }
                         if item.folderID != nil { Text(TherapyHierarchy.path(for: item.folderID, folders: store.data.therapyFolders)).font(.caption).foregroundStyle(.secondary) }
                     }
                 }
             }
         }
-        .quickLookPreview($preview)
+        .sheet(item: $preview) { TherapyMediaDetailView(itemID: $0.id) }
         .sheet(item: $edit) { TherapyMediaEditorView(item: $0) }
         .sheet(isPresented: $photo, onDismiss: assignImported) { AddPhotoView() }
         .sheet(isPresented: $document, onDismiss: assignImported) { ImportDocumentView() }

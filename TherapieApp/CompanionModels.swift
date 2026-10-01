@@ -112,6 +112,7 @@ struct CompanionSettings: Codable, Equatable {
     var dayCheckInSlots: [DailyCheckInSlot]?
     var taskAlarmsEnabled: Bool?
     var energyReviewAlarm: Bool?
+    var sessionPhaseAlarmsEnabled: Bool?
     var sessionAlarmsEnabled: Bool?
     var wellnessAlarmEnabled: Bool?
 }

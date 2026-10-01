@@ -37,7 +37,7 @@ struct RootView: View {
             }
         }
         .onOpenURL { url in if url.scheme == "therapie" && url.host == "session" { openSession = true } }
-        .onChange(of: scenePhase) { _, phase in if phase == .active { store.sessionController.synchronize(); store.consumeRoutineAlarmRoute(); TaskNotificationCoordinator.shared.refresh(store) } }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { store.sessionController.synchronize(); store.consumeRoutineAlarmRoute(); store.refreshTherapyCalendar(force: false); TaskNotificationCoordinator.shared.refresh(store) } }
         .sheet(isPresented: Binding(get: { store.notificationTaskID != nil }, set: { if !$0 { store.notificationTaskID = nil } })) {
             if let id = store.notificationTaskID, let task = store.data.weeklyTasks.first(where: { $0.id == id }) { WeeklyTaskEditorView(task: task) }
         }
@@ -46,10 +46,12 @@ struct RootView: View {
             if let id = store.notificationRoutineID { RoutineDetailView(routineID: id) }
         }
         .onChange(of: store.notificationSession) { _, value in if value { store.notificationSession = false; openSession = true } }
+        .sheet(isPresented: $store.notificationTherapy) { TherapyAppointmentsView() }
         .sheet(isPresented: $store.notificationMood) { MoodEditorView() }
         .sheet(isPresented: $store.openEnergyReview) { WeeklyEnergyEditorView() }
         .task {
             store.sessionController.synchronize()
+            store.refreshTherapyCalendar(force: false)
             store.consumeRoutineAlarmRoute()
             while !Task.isCancelled {
                 store.sessionController.reconcile()
@@ -406,16 +408,13 @@ struct DashboardView: View {
         return tasks.first { !$0.completed } ?? tasks.first
     }
 
-    private var nextTherapy: Date? {
-        TherapyDateHelper.nextOccurrence(schedule: store.data.schedule)
-    }
-
     var body: some View {
         NavigationStack {
             TherapyScreen {
                 VStack(spacing: 16) {
                     PersonalWelcomeCard()
-                    hero
+                    TherapyAppointmentCard()
+                    TodayOverviewCard()
                     CompanionTodayCard()
                     quickActions
                     WellnessProgressCard()
@@ -432,9 +431,10 @@ struct DashboardView: View {
                     NavigationLink { TasksView() } label: { Label("Aufgaben", systemImage: "checklist") }
                 }
             }
+            .onAppear { if ProcessInfo.processInfo.arguments.contains("--show-note") { showNote = true } }
             .sheet(isPresented: $showNote) {
                 AddNoteView()
-                    .presentationDetents([.medium, .large])
+                    .presentationDetents([.large])
             }
             .sheet(isPresented: $showEnergy) {
                 MoodEditorView()
@@ -443,84 +443,6 @@ struct DashboardView: View {
             .sheet(isPresented: $showReflection) {
                 AddReflectionView()
                     .presentationDetents([.medium, .large])
-            }
-        }
-    }
-
-    private var hero: some View {
-        GlassCard(emphasized: true) {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(alignment: .top, spacing: 14) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Deine Therapiewoche")
-                            .font(.system(.title2, design: .rounded, weight: .bold))
-                            .lineLimit(2)
-                            .minimumScaleFactor(0.8)
-
-                        Text(Date().formatted(date: .complete, time: .omitted))
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer(minLength: 8)
-
-                    Image(systemName: "brain.head.profile.fill")
-                        .font(.title2)
-                        .frame(width: 44, height: 44)
-                        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                }
-
-                Divider()
-
-                HStack(alignment: .center, spacing: 12) {
-                    Image(systemName: "calendar.badge.clock")
-                        .font(.title2)
-                        .frame(width: 48, height: 48)
-                        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Nächste Therapie")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-
-                        if let nextTherapy {
-                            Text(nextTherapy.formatted(date: .abbreviated, time: .shortened))
-                                .font(.title3.bold())
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.78)
-
-                            if !store.data.profile.therapistName.isEmpty {
-                                Text("mit " + store.data.profile.therapistName)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-                        } else {
-                            Text("Noch nicht geplant")
-                                .font(.headline)
-                        }
-                    }
-
-                    Spacer(minLength: 0)
-                }
-
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 8) {
-                        StatusPill(text: "KW \(Date().therapyWeek.week)", icon: "calendar")
-                        StatusPill(
-                            text: currentTask == nil ? "Keine Wochenaufgabe" : (currentTask?.completed == true ? "Aufgaben erledigt" : "Aufgabe offen"),
-                            icon: currentTask?.completed == true ? "checkmark.circle.fill" : "circle.dashed"
-                        )
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        StatusPill(text: "KW \(Date().therapyWeek.week)", icon: "calendar")
-                        StatusPill(
-                            text: currentTask == nil ? "Keine Wochenaufgabe" : (currentTask?.completed == true ? "Aufgaben erledigt" : "Aufgabe offen"),
-                            icon: currentTask?.completed == true ? "checkmark.circle.fill" : "circle.dashed"
-                        )
-                    }
-                }
             }
         }
     }
@@ -699,6 +621,7 @@ struct TherapyCalendarView: View {
         NavigationStack {
             TherapyScreen {
                 VStack(spacing: 16) {
+                    TherapyAppointmentCard()
                     calendarCard
                     selectedDayCard
                     syncCard
@@ -736,7 +659,7 @@ struct TherapyCalendarView: View {
                 if therapyWeekdayMatch {
                     HStack(spacing: 9) {
                         Image(systemName: "heart.circle.fill")
-                        Text("Regulärer Therapietag · \(String(format: "%02d:%02d", store.data.schedule.hour, store.data.schedule.minute)) Uhr")
+                        Text(therapyDayLabel)
                             .font(.subheadline.weight(.semibold))
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -807,28 +730,27 @@ struct TherapyCalendarView: View {
         }
     }
 
+    private var therapyDayLabel: String {
+        if let cancellation = TherapyDateHelper.cancellation(schedule: store.data.schedule, on: selectedDate) { return "Abgesagt · " + cancellation.reason.title }
+        let clock = Calendar.current.date(bySettingHour: store.data.schedule.hour, minute: store.data.schedule.minute, second: 0, of: selectedDate) ?? selectedDate
+        if TherapyDateHelper.vacation(schedule: store.data.schedule, at: clock) != nil { return "Therapiepause · Urlaub" }
+        return "Therapietag · " + String(format: "%02d:%02d", store.data.schedule.hour, store.data.schedule.minute) + " Uhr"
+    }
     private func syncEverything() {
-        syncing = true
-        statusMessage = nil
-
-        Task {
+        syncing = true; statusMessage = nil
+        Task { @MainActor in
             do {
-                let eventID = try await CalendarSyncService.shared.sync(
-                    schedule: store.data.schedule,
-                    profile: store.data.profile
-                )
-                store.data.schedule.calendarEventIdentifier = eventID
-
-                let ids = try await AlarmService.shared.replaceAll(schedule: store.data.schedule)
-                store.data.schedule.alarmIDs = ids
-                statusMessage = "Kalender und \(ids.count) Alarme wurden synchronisiert."
-            } catch {
-                statusMessage = error.localizedDescription
-            }
-
+                let id = try await CalendarSyncService.shared.sync(schedule: store.data.schedule, profile: store.data.profile)
+                store.data.schedule.calendarEventIdentifier = id
+                statusMessage = "Kalender synchronisiert · 26 kommende Termine."
+            } catch { statusMessage = "Kalender: " + error.localizedDescription }
+            store.data.schedule.therapyAlarmsEnabled = true
+            await RoutineAlarmCoordinator.shared.requestAccess(store)
+            statusMessage = (statusMessage ?? "") + "\n" + store.routineAlarmStatus
             syncing = false
         }
     }
+
 }
 
 struct DayCountTile: View {
@@ -1010,6 +932,7 @@ struct LibraryView: View {
     @State private var showAudio = false
     @State private var showNote = false
     @State private var showDocument = false
+    @State private var viewingMedia: MediaItem?
 
     var body: some View {
         NavigationStack {
@@ -1062,6 +985,7 @@ struct LibraryView: View {
                     }
                 }
             }
+            .sheet(item: $viewingMedia) { TherapyMediaDetailView(itemID: $0.id) }
             .sheet(isPresented: $showPhoto) {
                 AddPhotoView()
                     .presentationDetents([.medium, .large])
@@ -1072,7 +996,7 @@ struct LibraryView: View {
             }
             .sheet(isPresented: $showNote) {
                 AddNoteView()
-                    .presentationDetents([.medium, .large])
+                    .presentationDetents([.large])
             }
             .sheet(isPresented: $showDocument) {
                 ImportDocumentView()
@@ -1123,11 +1047,10 @@ struct LibraryView: View {
             ForEach(store.data.media.filter { matches([$0.title, $0.note] + $0.tags) }) { item in
                 GlassCard {
                     HStack(alignment: .top, spacing: 13) {
-                        MediaThumbnail(item: item)
+                        Button { viewingMedia = item } label: { MediaAttachmentThumbnail(item: item) }.buttonStyle(.plain).accessibilityLabel(item.title + " öffnen")
 
                         VStack(alignment: .leading, spacing: 5) {
-                            Text(item.title)
-                                .font(.headline)
+                            Button(item.title) { viewingMedia = item }.font(.headline).multilineTextAlignment(.leading)
                                 .lineLimit(2)
 
                             Text(item.createdAt.formatted(date: .abbreviated, time: .shortened))
@@ -1221,23 +1144,7 @@ struct LibraryView: View {
         return query.isEmpty || values.contains { $0.localizedStandardContains(query) }
     }
 
-    @ViewBuilder
-    private func MediaThumbnail(item: MediaItem) -> some View {
-        let url = store.fileURL(for: item)
 
-        if item.kind == .photo, let image = UIImage(contentsOfFile: url.path) {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFill()
-                .frame(width: 66, height: 66)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        } else {
-            Image(systemName: item.kind.symbol)
-                .font(.title2)
-                .frame(width: 66, height: 66)
-                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        }
-    }
 }
 
 struct InsightRow: View {
@@ -1619,7 +1526,8 @@ struct AddTaskView: View {
 }
 
 struct AddNoteView: View {
-    var body: some View { TherapyNoteEditorView() }
+    @State private var draft = TherapyNote(title: "", text: "", tags: [])
+    var body: some View { TherapyNoteEditorView(note: draft) }
 }
 
 struct AddEnergyView: View {
@@ -1823,6 +1731,9 @@ struct AudioRecordingView: View {
 
     var onSaved: ((UUID) -> Void)? = nil
     @State private var currentURL: URL?
+    @State private var starting = false
+    @State private var startTask: Task<Void, Never>?
+    @State private var saved = false
     @State private var title = ""
     @State private var tags = ""
     @State private var errorMessage: String?
@@ -1864,7 +1775,7 @@ struct AudioRecordingView: View {
                                     icon: recorder.isRecording ? "stop.fill" : "record.circle"
                                 ) {
                                     toggleRecording()
-                                }
+                                }.disabled(starting).accessibilityIdentifier("audio.record.toggle")
                             }
                         }
 
@@ -1881,6 +1792,9 @@ struct AudioRecordingView: View {
                 }
             }
             .navigationTitle("Audio")
+            .accessibilityIdentifier("audio.recorder")
+            .interactiveDismissDisabled(recorder.isRecording || starting)
+            .onDisappear { startTask?.cancel(); if recorder.isRecording { _ = recorder.stop() }; if !saved, let currentURL, !store.data.media.contains(where: { $0.relativePath == "Recordings/" + currentURL.lastPathComponent }) { try? FileManager.default.removeItem(at: currentURL) } }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Schließen") {
@@ -1888,7 +1802,7 @@ struct AudioRecordingView: View {
                             _ = recorder.stop()
                         }
                         dismiss()
-                    }
+                    }.disabled(starting).accessibilityIdentifier("audio.record.close")
                 }
             }
         }
@@ -1905,14 +1819,16 @@ struct AudioRecordingView: View {
                     tags: parseTags(tags)
                 )
                 if let failure = store.lastSaveError { errorMessage = failure; return }
-                if let item = store.data.media.first(where: { $0.relativePath == "Recordings/" + currentURL.lastPathComponent }) { onSaved?(item.id) }
-                dismiss()
+                if let item = store.data.media.first(where: { $0.relativePath == "Recordings/" + currentURL.lastPathComponent }) { saved = true; onSaved?(item.id); dismiss() }
+                else { errorMessage = "Die Aufnahme konnte nicht gespeichert werden." }
             }
         } else {
             let url = store.newRecordingURL()
             currentURL = url
 
-            Task {
+            starting = true
+            startTask = Task { @MainActor in
+                defer { starting = false }
                 do {
                     try await recorder.start(url: url)
                 } catch {

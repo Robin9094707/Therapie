@@ -7,7 +7,13 @@ final class AppStore: ObservableObject {
         didSet {
             guard !isLoading else { return }
             save()
-            if lastSaveError == nil { TherapyEffects.shared.changed(from: oldValue, to: data) }
+            if lastSaveError == nil {
+                TherapyEffects.shared.changed(from: oldValue, to: data)
+                var previous = oldValue.schedule, current = data.schedule
+                previous.calendarEventIdentifier = nil; current.calendarEventIdentifier = nil
+                previous.alarmIDs = []; current.alarmIDs = []
+                if previous != current || oldValue.profile != data.profile { refreshTherapyCalendar() }
+            }
         }
     }
 
@@ -18,6 +24,10 @@ final class AppStore: ObservableObject {
     @Published var notificationTaskID: UUID?
     @Published var openEnergyReview = false
     @Published var notificationSession = false
+    @Published var notificationTherapy = false
+    @Published var therapyCalendarStatus = ""
+    private var calendarRefreshTask: Task<Void, Never>?
+    private var lastCalendarRefresh = Date.distantPast
     @Published var notificationMood = false
     @Published var pendingGuidedCheckIn: GuidedCheckIn?
     @Published var notificationRoutineID: UUID?
@@ -62,7 +72,6 @@ final class AppStore: ObservableObject {
         }
 
         data = AppData()
-        var refreshLegacyAlarms = false
         if let recoveryFailure {
             writeBlocked = true
             loadError = "Eine unterbrochene Wiederherstellung konnte nicht abgeschlossen werden. Die vorherige Sicherung bleibt erhalten. " + recoveryFailure
@@ -75,7 +84,6 @@ final class AppStore: ObservableObject {
                 decoder.dateDecodingStrategy = .iso8601
                 data = try decoder.decode(AppData.self, from: raw)
                 let version = (try JSONSerialization.jsonObject(with: raw) as? [String: Any])?["schemaVersion"] as? Int ?? 1
-                refreshLegacyAlarms = version < 6 && !data.schedule.alarmIDs.isEmpty
                 let snapshot = root.appendingPathComponent("therapy-data.pre-3006.json")
                 if version < 8 && !fm.fileExists(atPath: snapshot.path) {
                     try raw.write(to: snapshot, options: [.atomic, .completeFileProtection])
@@ -102,6 +110,20 @@ final class AppStore: ObservableObject {
                     let entry = GuidedCheckIn(kind: .morning, mood: 4, batteryPercent: 70, summary: "Mein gespeicherter Rückblick", tasks: [CheckInTaskDraft(title: "Frühstück vorbereiten", smallStep: "Brot bereitlegen")], isDraft: false, step: 7, moodPercent: 78, energyPoints: [BatteryPoint(title: "Technik", note: "Zeit für mein Hobby")])
                     data.guidedCheckIns = [entry]; pendingGuidedCheckIn = entry
                 }
+                if ProcessInfo.processInfo.arguments.contains("--show-note") {
+                    let imagePath = "Media/ui-photo.png", audioPath = "Recordings/ui-audio.wav"
+                    let image = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWLsAAAAASUVORK5CYII=")!
+                    try? image.write(to: root.appendingPathComponent(imagePath))
+                    // One second of unsigned 8-bit PCM: a real playable, non-private audio fixture.
+                    var wav = Data("RIFF".utf8)
+                    func appendWord(_ value: UInt32, width: Int) { for byte in 0..<width { wav.append(UInt8((value >> (byte * 8)) & 255)) } }
+                    appendWord(8036, width: 4); wav.append(Data("WAVEfmt ".utf8)); appendWord(16, width: 4)
+                    appendWord(1, width: 2); appendWord(1, width: 2); appendWord(8000, width: 4); appendWord(8000, width: 4)
+                    appendWord(1, width: 2); appendWord(8, width: 2); wav.append(Data("data".utf8)); appendWord(8000, width: 4); wav.append(Data(repeating: 128, count: 8000))
+                    try? wav.write(to: root.appendingPathComponent(audioPath))
+                    data.media = [MediaItem(id: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!, createdAt: Date().addingTimeInterval(-3600), kind: .photo, title: "Testfoto", note: "", tags: [], relativePath: imagePath), MediaItem(id: UUID(uuidString: "33333333-3333-3333-3333-333333333333")!, createdAt: Date().addingTimeInterval(-3600), kind: .audio, title: "Testaufnahme", note: "", tags: [], relativePath: audioPath)]
+                }
+                if ProcessInfo.processInfo.arguments.contains("--show-appointments") { notificationTherapy = true }
                 if ProcessInfo.processInfo.arguments.contains("--show-routines") {
                     let time = RoutineTime(title: "Morgens", hour: 6, minute: 30, weekendHour: 9, weekendMinute: 0)
                     data.routines = [DailyRoutine(title: "Mein kleiner Morgen-Schritt", symbol: "sun.max.fill", details: "Alles für den Start bereitlegen.", times: [time])]
@@ -113,11 +135,23 @@ final class AppStore: ObservableObject {
         if loadError == nil {
             if !fm.fileExists(atPath: dataURL.path) { save() } else { refreshReadableFiles(); TaskNotificationCoordinator.shared.refresh(self) }
         }
-        if refreshLegacyAlarms && loadError == nil {
-            Task {
-                do { data.schedule.alarmIDs = try await AlarmService.shared.replaceAll(schedule: data.schedule) }
-                catch { taskReminderStatus = "Bitte aktualisiere deine AlarmKit-Erinnerungen im Kalender: " + error.localizedDescription }
-            }
+
+    }
+
+    func refreshTherapyCalendar(force: Bool = true) {
+        guard loadError == nil, lastSaveError == nil, data.schedule.calendarEventIdentifier != nil,
+              !ProcessInfo.processInfo.arguments.contains("--ui-testing"),
+              force || Date().timeIntervalSince(lastCalendarRefresh) > 1800 else { return }
+        calendarRefreshTask?.cancel()
+        calendarRefreshTask = Task { @MainActor in
+            do {
+                try await Task.sleep(for: .milliseconds(700))
+                guard !Task.isCancelled else { return }
+                let id = try await CalendarSyncService.shared.sync(schedule: data.schedule, profile: data.profile, requestPermission: false)
+                data.schedule.calendarEventIdentifier = id
+                lastCalendarRefresh = Date()
+                therapyCalendarStatus = "Kalender aktualisiert · 26 kommende Termine. Absagen und Urlaub berücksichtigt."
+            } catch is CancellationError {} catch { therapyCalendarStatus = "Kalender noch nicht aktualisiert: " + error.localizedDescription }
         }
     }
 
@@ -177,9 +211,12 @@ final class AppStore: ObservableObject {
     }
 
     func restoreFromBackup() throws {
+        calendarRefreshTask?.cancel()
         backupWorkItem?.cancel()
         backupWorkItem = nil
         let restored = try BackupService.shared.restore(appRoot: rootURL)
+        CalendarSyncService.shared.removeSyncedEvent(identifier: data.schedule.calendarEventIdentifier)
+        AlarmService.shared.cancelAllOwnedAlarms()
         RoutineAlarmCoordinator.shared.cancel()
         isLoading = true
         data = restored
@@ -197,10 +234,11 @@ final class AppStore: ObservableObject {
     }
 
     func installBackup(_ prepared: PreparedBackup) throws {
+        calendarRefreshTask?.cancel()
         backupWorkItem?.cancel(); backupWorkItem = nil
         readableWorkItem?.cancel(); readableWorkItem = nil
         BackupDiskAccess.lock.lock(); defer { BackupDiskAccess.lock.unlock() }
-        var restored = prepared.manifest.data
+        var restored = prepared.manifest.data.portableSnapshot
         // OS identifiers and security-scoped bookmarks belong to this device.
         restored.schedule.calendarEventIdentifier = nil
         restored.schedule.alarmIDs = []

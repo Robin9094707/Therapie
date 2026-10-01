@@ -16,46 +16,53 @@ final class CalendarSyncService {
         try await eventStore.requestFullAccessToEvents()
     }
 
-    func sync(schedule: TherapySchedule, profile: UserProfile) async throws -> String {
-        let granted = try await requestAccess()
-        guard granted else { throw ServiceError.permissionDenied("Kalenderzugriff wurde nicht erlaubt.") }
+    var hasAccess: Bool { EKEventStore.authorizationStatus(for: .event) == .fullAccess }
+    private let ownershipKey = "therapy.calendar.events"
 
-        if let oldIdentifier = schedule.calendarEventIdentifier,
-           let oldEvent = eventStore.event(withIdentifier: oldIdentifier) {
-            try? eventStore.remove(oldEvent, span: .futureEvents, commit: true)
-        }
-
-        guard let start = TherapyDateHelper.nextOccurrence(schedule: schedule) else {
-            throw ServiceError.generic("Der nächste Therapietermin konnte nicht berechnet werden.")
-        }
-
-        let event = EKEvent(eventStore: eventStore)
-        event.title = "Autismus-Therapie"
-        event.location = schedule.location
-        if !profile.therapistName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            event.notes = "Therapie mit " + profile.therapistName
-        }
-        if let preparation = schedule.preparation, !preparation.isEmpty { event.notes = (event.notes ?? "") + "\nVorbereitung: " + preparation }
-        event.startDate = start
-        event.endDate = start.addingTimeInterval(TimeInterval(schedule.durationMinutes * 60))
-        event.calendar = eventStore.defaultCalendarForNewEvents
-        event.recurrenceRules = [EKRecurrenceRule(recurrenceWith: .weekly, interval: 1, end: nil)]
-        event.alarms = schedule.reminderOffsetsMinutes.map {
-            EKAlarm(relativeOffset: TimeInterval(-$0 * 60))
-        }
-
-        try eventStore.save(event, span: .futureEvents, commit: true)
-        guard let identifier = event.eventIdentifier else {
-            throw ServiceError.generic("Der Kalendereintrag wurde erstellt, aber ohne Kennung zurückgegeben.")
-        }
-        return identifier
+    func sync(schedule: TherapySchedule, profile: UserProfile, requestPermission: Bool = true) async throws -> String {
+        if requestPermission { guard try await requestAccess() else { throw ServiceError.permissionDenied("Kalenderzugriff wurde nicht erlaubt.") } }
+        guard hasAccess else { throw ServiceError.permissionDenied("Bitte vollen Kalenderzugriff erlauben. Änderungen konnten noch nicht synchronisiert werden.") }
+        guard let calendar = eventStore.defaultCalendarForNewEvents else { throw ServiceError.generic("Kein beschreibbarer Kalender verfügbar.") }
+        // Individual, bounded appointments: exclusions cannot leave an endless recurring alert behind.
+        let dates = TherapyDateHelper.occurrences(schedule: schedule, count: 26)
+        guard !dates.isEmpty else { throw ServiceError.generic("Kein nächster Therapietermin gefunden.") }
+        var created: [EKEvent] = []
+        let owned = UserDefaults.standard.stringArray(forKey: ownershipKey) ?? []
+        do {
+            for date in dates {
+                let event = EKEvent(eventStore: eventStore)
+                event.title = "Therapie"; event.location = schedule.location; event.calendar = calendar
+                var notes: [String] = []
+                if !profile.therapistName.isEmpty { notes.append("Therapie mit " + profile.therapistName) }
+                if let preparation = schedule.preparation, !preparation.isEmpty { notes.append("Vorbereitung: " + preparation) }
+                event.notes = notes.joined(separator: "\n")
+                event.startDate = date; event.endDate = date.addingTimeInterval(Double(max(1, schedule.durationMinutes)) * 60)
+                event.alarms = Set(schedule.reminderOffsetsMinutes).filter { (0...10080).contains($0) }.map { EKAlarm(relativeOffset: -Double($0) * 60) }
+                try eventStore.save(event, span: .thisEvent, commit: false); created.append(event)
+            }
+            var identifiers = Set(owned)
+            if let legacy = schedule.calendarEventIdentifier { identifiers.insert(legacy) }
+            for id in identifiers { if let event = eventStore.event(withIdentifier: id) { try eventStore.remove(event, span: event.hasRecurrenceRules ? .futureEvents : .thisEvent, commit: false) } }
+            try eventStore.commit()
+        } catch { eventStore.reset(); throw error }
+        let ids = created.compactMap(\.eventIdentifier)
+        UserDefaults.standard.set(ids, forKey: ownershipKey)
+        guard let first = ids.first else { throw ServiceError.generic("Kalender wurde gespeichert, aber ohne Kennungen zurückgegeben.") }
+        return first
     }
-
     func removeSyncedEvent(identifier: String?) {
-        guard let identifier,
-              let event = eventStore.event(withIdentifier: identifier) else { return }
-        try? eventStore.remove(event, span: .futureEvents, commit: true)
+        var identifiers = Set(UserDefaults.standard.stringArray(forKey: ownershipKey) ?? [])
+        if let identifier { identifiers.insert(identifier) }
+        var retained: [String] = []
+        for id in identifiers {
+            if let event = eventStore.event(withIdentifier: id) {
+                do { try eventStore.remove(event, span: event.hasRecurrenceRules ? .futureEvents : .thisEvent, commit: true) }
+                catch { retained.append(id) }
+            }
+        }
+        UserDefaults.standard.set(retained, forKey: ownershipKey)
     }
+
 }
 
 struct TherapyAlarmMetadata: AlarmMetadata, Codable, Hashable, Sendable {
@@ -73,61 +80,14 @@ final class AlarmService {
         return state == .authorized
     }
 
-    func replaceAll(schedule: TherapySchedule) async throws -> [String] {
-        let authorized = try await requestAuthorization()
-        guard authorized else {
-            throw ServiceError.permissionDenied("AlarmKit wurde nicht erlaubt.")
-        }
-
-        var ids: [String] = []
-        guard let nextTherapy = TherapyDateHelper.nextOccurrence(schedule: schedule) else {
-            return ids
-        }
-
-        do {
-        for offset in Set(schedule.reminderOffsetsMinutes).filter({ (0...10080).contains($0) }).sorted() {
-            let reminderDate = nextTherapy.addingTimeInterval(TimeInterval(-offset * 60))
-            let comps = Calendar.current.dateComponents([.weekday, .hour, .minute], from: reminderDate)
-            guard let weekdayNumber = comps.weekday,
-                  let hour = comps.hour,
-                  let minute = comps.minute,
-                  let weekday = localeWeekday(from: weekdayNumber) else { continue }
-
-            let id = UUID()
-            let time = Alarm.Schedule.Relative.Time(hour: hour, minute: minute)
-            let recurrence = Alarm.Schedule.Relative.Recurrence.weekly([weekday])
-            let relative = Alarm.Schedule.Relative(time: time, repeats: recurrence)
-            let presentation = AlarmPresentation(
-                alert: AlarmPresentation.Alert(title: "Therapie-Erinnerung")
-            )
-            let attributes = AlarmAttributes(
-                presentation: presentation,
-                metadata: TherapyAlarmMetadata(category: "therapy", offsetMinutes: offset),
-                tintColor: .indigo
-            )
-            let configuration = AlarmManager.AlarmConfiguration<TherapyAlarmMetadata>.alarm(
-                schedule: .relative(relative),
-                attributes: attributes
-            )
-            _ = try await AlarmManager.shared.schedule(id: id, configuration: configuration)
-            ids.append(id.uuidString)
-        }
-
-        // Task reminders are now individual, actionable notifications and stop at completion.
-        try cancel(ids: schedule.alarmIDs)
-        } catch {
-            try? cancel(ids: ids)
-            throw error
-        }
-
-        return ids
-    }
-
     func cancel(ids: [String]) throws {
-        for string in ids {
-            guard let id = UUID(uuidString: string) else { continue }
-            try? AlarmManager.shared.cancel(id: id)
+        let live = Set(try AlarmManager.shared.alarms.map(\.id))
+        var firstError: Error?
+        for raw in ids {
+            guard let id = UUID(uuidString: raw), live.contains(id) else { continue }
+            do { try AlarmManager.shared.cancel(id: id) } catch { if firstError == nil { firstError = error } }
         }
+        if let firstError { throw firstError }
     }
 
     func cancelAllOwnedAlarms() {
@@ -138,18 +98,7 @@ final class AlarmService {
         }
     }
 
-    private func localeWeekday(from calendarWeekday: Int) -> Locale.Weekday? {
-        switch calendarWeekday {
-        case 1: .sunday
-        case 2: .monday
-        case 3: .tuesday
-        case 4: .wednesday
-        case 5: .thursday
-        case 6: .friday
-        case 7: .saturday
-        default: nil
-        }
-    }
+
 }
 
 final class BackupService {
@@ -222,7 +171,7 @@ final class BackupService {
                 let encoder = JSONEncoder()
                 encoder.dateEncodingStrategy = .iso8601
                 encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-                let raw = try encoder.encode(snapshot)
+                let raw = try encoder.encode(snapshot.portableSnapshot)
                 try raw.write(to: backupRoot.appendingPathComponent("therapy-data.json"), options: .atomic)
 
                 for directory in ["Media", "Recordings"] {
@@ -255,7 +204,7 @@ final class BackupService {
         let raw = try Data(contentsOf: dataURL)
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        let restored = try decoder.decode(AppData.self, from: raw)
+        let restored = try decoder.decode(AppData.self, from: raw).portableSnapshot
 
         let fm = FileManager.default
         let staged = try BackupArchive.privateDirectory()
@@ -271,7 +220,7 @@ final class BackupService {
             try fm.copyItem(at: source, to: target)
             try BackupArchive.protect(target)
         }
-        try raw.write(to: staged.appendingPathComponent("therapy-data.json"), options: .atomic)
+        try BackupArchive.encoder().encode(restored).write(to: staged.appendingPathComponent("therapy-data.json"), options: .atomic)
         try BackupArchive.protect(staged.appendingPathComponent("therapy-data.json"))
         try BackupArchive.install(directory: staged, root: appRoot)
         return restored
@@ -328,6 +277,7 @@ final class AudioRecorderService: NSObject, ObservableObject, AVAudioRecorderDel
 
     func start(url: URL) async throws {
         let allowed = await requestMicrophonePermission()
+        try Task.checkCancellation()
         guard allowed else {
             throw ServiceError.permissionDenied("Mikrofonzugriff wurde nicht erlaubt.")
         }
@@ -346,7 +296,7 @@ final class AudioRecorderService: NSObject, ObservableObject, AVAudioRecorderDel
         let recorder = try AVAudioRecorder(url: url, settings: settings)
         recorder.delegate = self
         recorder.isMeteringEnabled = true
-        recorder.record()
+        guard recorder.record() else { try? session.setActive(false); throw ServiceError.generic("Die Aufnahme konnte nicht gestartet werden.") }
         self.recorder = recorder
         isRecording = true
         elapsed = 0

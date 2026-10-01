@@ -294,7 +294,9 @@ struct SessionPreferencesView: View {
             Section("Mitteilungen") {
                 Toggle("Am Ende der Stunde erinnern", isOn: $store.data.sessionPreferences.notifyAtEnd)
                 Toggle("Bei jedem Phasenwechsel erinnern", isOn: $store.data.sessionPreferences.notifyAtPhases)
-                Toggle("Zusätzlich als AlarmKit-Wecker", isOn: Binding(get: { store.data.companionSettings.sessionAlarmsEnabled ?? false }, set: { store.data.companionSettings.sessionAlarmsEnabled = $0 }))
+                Toggle("Wecker am Ende der Stunde", isOn: Binding(get: { store.data.companionSettings.sessionAlarmsEnabled ?? false }, set: { store.data.companionSettings.sessionAlarmsEnabled = $0 }))
+                Toggle("Wecker nach jedem Abschnitt", isOn: Binding(get: { store.data.companionSettings.sessionPhaseAlarmsEnabled ?? (store.data.companionSettings.sessionAlarmsEnabled == true && store.data.sessionPreferences.notifyAtPhases) }, set: { store.data.companionSettings.sessionPhaseAlarmsEnabled = $0 }))
+                Text("Abschnittswecker nennen den abgeschlossenen und den nächsten Abschnitt. Pause, Fortsetzen und Beenden aktualisieren die geplanten Wecker. Sie funktionieren unabhängig von Mitteilungen.").font(.caption).foregroundStyle(.secondary)
                 Button("AlarmKit-Wecker freigeben", systemImage: "alarm") { Task { await RoutineAlarmCoordinator.shared.requestAccess(store) } }
                 Text(store.routineAlarmStatus).font(.caption).foregroundStyle(.secondary)
                 Text("Mitteilungen benötigen deine Freigabe. Es werden keine Notiz- oder Themeninhalte angezeigt.").font(.caption).foregroundStyle(.secondary)

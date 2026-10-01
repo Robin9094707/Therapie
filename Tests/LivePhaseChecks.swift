@@ -18,10 +18,15 @@ import Foundation
         try expect(state.currentPhase(at: start.addingTimeInterval(300))?.title == "AirTag besprechen", "Exact phase end moves to AirTag, not previous phase")
         try expect(state.currentPhase(at: start.addingTimeInterval(-1)) == nil, "No phase before the plan starts")
         try expect(state.currentPhase(at: session.expectedEnd) == nil, "No current phase after all planned time")
+        try expect(state.phaseRemaining(at: start.addingTimeInterval(299)) == 1, "Running section has one second left before the exact boundary")
+        try expect(state.phaseRemaining(at: start.addingTimeInterval(300)) == 600, "New AirTag section starts with its full remaining duration")
+        try expect(state.phaseRemaining(at: session.expectedEnd) == nil, "Completed plan has no active section countdown")
         state.paused = true; state.referenceDate = start.addingTimeInterval(330)
         try expect(state.currentPhase(at: start.addingTimeInterval(3000))?.title == "AirTag besprechen", "Paused live activity freezes the actual section")
+        try expect(state.phaseRemaining(at: start.addingTimeInterval(3000)) == 570, "Pause freezes section remaining time")
         state.referenceDate = nil; state.remaining = 3270
         try expect(state.currentPhase(at: start.addingTimeInterval(3000))?.title == "AirTag besprechen", "Older paused content without reference date decodes safely")
+        try expect(state.phaseRemaining(at: start.addingTimeInterval(3000)) == 570, "Older pause content also freezes section remaining time")
         state.paused = false; state.referenceDate = start
         let roundtrip = try JSONDecoder().decode(TherapyActivityAttributes.ContentState.self, from: JSONEncoder().encode(state))
         try expect(roundtrip == state, "Exact Live Activity content with names and reference round-trips")

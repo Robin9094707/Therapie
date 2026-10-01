@@ -35,4 +35,11 @@ with zipfile.ZipFile(sys.argv[1]) as archive:
     assert len(data["companionSettings"]["dayCheckInSlots"]) == 6
     assert data["sessionPreferences"]["namedLiveActivity"] is False
     assert "Echte Abschnittsnamen" in archive.read("Eintraege/Einstellungen/sessionPreferences.txt").decode()
+    assert data["schedule"]["cancellations"][0]["reason"] == "therapist"
+    assert data["schedule"]["therapyVacations"][0]["note"] == "Urlaub"
+    assert data["schedule"]["therapyAlarmsEnabled"] is True
+    assert data["companionSettings"]["sessionPhaseAlarmsEnabled"] is True
+    assert data["schedule"]["alarmIDs"] == []
+    assert "calendarEventIdentifier" not in data["schedule"]
+    assert "Therapie-Absagen" in archive.read("Eintraege/Einstellungen/schedule.txt").decode()
 print("Independent Python ZIP64, CRC, attachment and human-readable record verification passed.")

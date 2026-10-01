@@ -1,3 +1,15 @@
+## Update 3006.1.0
+
+- Notizanhänge öffnen über einen stabilen Editor statt über wiederverwendete Formularzeilen. Die neue Notiz behält ihre Identität bei Fensterwechseln. Audio, Archiv-Auswahl und Medienvorschau schließen jeweils nur ihr eigenes Fenster.
+- Gespeicherte Notizen öffnen als Übersicht mit ausdrücklichem Bearbeiten. Fotos, Dokumente und Sprachnachrichten öffnen aus Notizen, Materialien und Archiv; Audio hat einen Player mit Pause und Positionsregler. Fehlende Dateien behalten ihre Informationen.
+- Live-Aktivitäten zeigen neben der gesamten Restzeit auch die Restzeit des aktuellen benannten Abschnitts. Abschnittswecker und Endwecker sind separat optional; Pausieren, Fortsetzen und Beenden aktualisieren ihre AlarmKit-Planung unabhängig von Mitteilungen.
+- Die Startseite bündelt den Termin-Countdown in Tagen, Stunden und Minuten, Aufgaben, Check-ins, Routinen, Entwürfe, Notizen und Medien.
+- Einzelne Therapietermine lassen sich mit Grund und Hinweis absagen und wiederherstellen. Therapiepausen haben ein einstellbares Anfangs- und Enddatum einschließlich des letzten Tages und können vorzeitig beendet werden. Absagen und Pausen bleiben in Sicherungen erhalten.
+- Therapie-Wecker berücksichtigen diese Ausnahmen und ersetzen alte unendliche Wiederholungen. Ein begrenzter Alarmvorrat wird beim Öffnen und Ändern erneuert; Freigabe- und Kapazitätsstatus bleiben sichtbar. Bereits verbundene iPhone-Kalender erhalten 26 tatsächliche kommende Termine und werden nach Änderungen und beim Öffnen erneuert.
+- Bestehendes Schema 8 und Bundle-ID bleiben kompatibel. Gerätekennungen werden nicht in portable Sicherungen übernommen. Quellsicherung: `backup/before-3006-1-0-2026-10-01`.
+
+Alarmzustellung, echte Mikrofonaufnahme, Kalenderanbieter und Live-Aktivitäten müssen zusätzlich auf dem iPhone geprüft werden. Native UI-Regressionen prüfen das Öffnen, Schließen, Anhängen und Wiederöffnen einer Notiz sowie Absagen und Wiederherstellen.
+
 ## Update 3006.0.1
 
 - Abgeschlossene geführte Check-ins öffnen zuerst eine lesbare Übersicht mit getrennten Bereichen für Werte, Rückblick, Akku-Punkte, Aufgaben und Anhänge. Bearbeiten ist eine ausdrückliche Aktion; Entwürfe werden direkt fortgesetzt.

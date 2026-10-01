@@ -21,6 +21,9 @@ struct TherapySchedule: Codable, Equatable {
     var alarmIDs: [String] = []
     var location: String?
     var preparation: String?
+    var cancellations: [TherapyCancellation]?
+    var therapyVacations: [TherapyVacation]?
+    var therapyAlarmsEnabled: Bool?
 }
 
 struct AppPreferences: Codable, Equatable {
@@ -223,25 +226,97 @@ extension Date {
 }
 
 struct TherapyDateHelper {
-    static func nextOccurrence(schedule: TherapySchedule, after date: Date = Date()) -> Date? {
-        var components = DateComponents()
-        components.weekday = schedule.weekday
-        components.hour = schedule.hour
-        components.minute = schedule.minute
-        components.second = 0
-
-        return Calendar.current.nextDate(
-            after: date.addingTimeInterval(-1),
-            matching: components,
-            matchingPolicy: .nextTime,
-            repeatedTimePolicy: .first,
-            direction: .forward
-        )
+    static func regularOccurrence(schedule: TherapySchedule, after date: Date = Date(), calendar: Calendar = .current) -> Date? {
+        guard (1...7).contains(schedule.weekday), (0...23).contains(schedule.hour), (0...59).contains(schedule.minute) else { return nil }
+        let parts = DateComponents(hour: schedule.hour, minute: schedule.minute, second: 0, weekday: schedule.weekday)
+        return calendar.nextDate(after: date.addingTimeInterval(-0.001), matching: parts, matchingPolicy: .nextTime, repeatedTimePolicy: .first, direction: .forward)
+    }
+    static func cancellation(schedule: TherapySchedule, on date: Date, calendar: Calendar = .current) -> TherapyCancellation? {
+        schedule.cancellations?.first { $0.restoredAt == nil && calendar.isDate($0.date, inSameDayAs: date) }
+    }
+    static func vacation(schedule: TherapySchedule, at date: Date) -> TherapyVacation? {
+        schedule.therapyVacations?.first { $0.endedAt == nil && $0.start <= date && date < $0.end }
+    }
+    static func nextOccurrence(schedule: TherapySchedule, after date: Date = Date(), calendar: Calendar = .current) -> Date? {
+        var cursor = date
+        for _ in 0..<520 {
+            guard let next = regularOccurrence(schedule: schedule, after: cursor, calendar: calendar) else { return nil }
+            if let pause = vacation(schedule: schedule, at: next) { cursor = max(next.addingTimeInterval(1), pause.end); continue }
+            if cancellation(schedule: schedule, on: next, calendar: calendar) == nil { return next }
+            cursor = next.addingTimeInterval(1)
+        }
+        return nil
+    }
+    static func occurrences(schedule: TherapySchedule, after date: Date = Date(), count: Int = 8, includeExcluded: Bool = false, calendar: Calendar = .current) -> [Date] {
+        var cursor = date, result: [Date] = []
+        for _ in 0..<max(0, min(52, count)) {
+            let next = includeExcluded ? regularOccurrence(schedule: schedule, after: cursor, calendar: calendar) : nextOccurrence(schedule: schedule, after: cursor, calendar: calendar)
+            guard let next else { break }; result.append(next); cursor = next.addingTimeInterval(1)
+        }
+        return result
     }
 
     static func weekdayName(_ weekday: Int) -> String {
         let names = Calendar.therapyCalendar.weekdaySymbols
         guard weekday >= 1, weekday <= 7 else { return "Unbekannt" }
         return names[weekday - 1].capitalized
+    }
+}
+
+
+enum TherapyCancellationReason: String, Codable, CaseIterable, Identifiable {
+    case me, therapist, other
+    var id: String { rawValue }
+    var title: String { switch self { case .me: "Von mir abgesagt"; case .therapist: "Von der Therapie abgesagt"; case .other: "Anderer Grund" } }
+}
+struct TherapyCancellation: Codable, Equatable, Identifiable {
+    var id = UUID()
+    var date: Date
+    var createdAt = Date()
+    var reason: TherapyCancellationReason = .me
+    var note = ""
+    var restoredAt: Date?
+}
+struct TherapyVacation: Codable, Equatable, Identifiable {
+    var id = UUID()
+    var start: Date
+    var end: Date // Exclusive; selected final day is included by the editor.
+    var note = ""
+    var endedAt: Date?
+}
+enum TherapyScheduleActions {
+    static func cancel(_ entry: TherapyCancellation, schedule: inout TherapySchedule, calendar: Calendar = .current) {
+        var all = schedule.cancellations ?? []
+        if let index = all.firstIndex(where: { $0.restoredAt == nil && calendar.isDate($0.date, inSameDayAs: entry.date) }) { all[index].reason = entry.reason; all[index].note = entry.note }
+        else { all.insert(entry, at: 0) }
+        schedule.cancellations = all
+    }
+    static func restore(_ id: UUID, schedule: inout TherapySchedule, at date: Date = Date()) {
+        guard let index = schedule.cancellations?.firstIndex(where: { $0.id == id }) else { return }
+        schedule.cancellations?[index].restoredAt = date
+    }
+    static func endVacation(_ id: UUID, schedule: inout TherapySchedule, at date: Date = Date()) {
+        guard let index = schedule.therapyVacations?.firstIndex(where: { $0.id == id }) else { return }
+        schedule.therapyVacations?[index].endedAt = date
+    }
+}
+enum TherapyCountdown {
+    static func label(until date: Date, from now: Date = Date()) -> String {
+        let minutes = max(0, Int(ceil(date.timeIntervalSince(now) / 60)))
+        if minutes == 0 { return "Dein Termin beginnt jetzt" }
+        if minutes < 60 { return "In \(minutes) Min." }
+        let hours = minutes / 60, rest = minutes % 60
+        if hours < 24 { return "In \(hours) Std. \(rest) Min." }
+        return "In \(hours / 24) \(hours / 24 == 1 ? "Tag" : "Tagen") \(hours % 24) Std. \(rest) Min."
+    }
+}
+
+extension AppData {
+    var portableSnapshot: AppData {
+        var value = self
+        if value.schedule.therapyAlarmsEnabled == nil && !value.schedule.alarmIDs.isEmpty { value.schedule.therapyAlarmsEnabled = true }
+        value.schedule.calendarEventIdentifier = nil
+        value.schedule.alarmIDs = []
+        return value
     }
 }

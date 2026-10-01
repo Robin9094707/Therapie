@@ -44,7 +44,8 @@ struct TherapyLiveActivityWidget: Widget {
                     Text(phase.title).font(.caption.weight(.semibold)).lineLimit(1).frame(maxWidth: 88).accessibilityLabel(phase.title)
                 } else { Image(systemName: context.state.paused ? "pause.fill" : "timer").foregroundStyle(.indigo) }
             } compactTrailing: {
-                SessionActivityClock(state: context.state).font(.caption.monospacedDigit()).frame(width: 52)
+                if !context.isStale, let phase = context.state.currentPhase() { SessionActivityPhaseClock(state: context.state, phase: phase).font(.caption.monospacedDigit()).frame(width: 52).accessibilityLabel("Abschnitt: verbleibende Zeit") }
+                else { SessionActivityClock(state: context.state).font(.caption.monospacedDigit()).frame(width: 52) }
             } minimal: {
                 Image(systemName: context.state.paused ? "pause.fill" : "timer").foregroundStyle(.indigo)
             }
@@ -58,7 +59,11 @@ struct SessionActivityPhaseHeading: View {
     let isStale: Bool
     var body: some View {
         if !isStale, let phase = state.currentPhase() {
-            Text((state.paused ? "Pausiert: " : "Jetzt: ") + phase.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+            HStack(spacing: 8) {
+                Text((state.paused ? "Pausiert: " : "Jetzt: ") + phase.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                Spacer(minLength: 0)
+                SessionActivityPhaseClock(state: state, phase: phase).font(.subheadline.monospacedDigit().bold()).frame(width: 54, alignment: .trailing).accessibilityLabel("Restzeit dieses Abschnitts")
+            }
         } else if !state.phases.isEmpty {
             Text("Dein Zeitplan · Abschnitt an den Zeitfenstern ablesen").font(.caption2).foregroundStyle(.secondary)
         }
@@ -81,7 +86,7 @@ struct SessionActivityPhasePlan: View {
                                     let clock = state.referenceDate ?? state.end.addingTimeInterval(-Double(state.remaining))
                                     ProgressView(value: max(0, min(1, clock.timeIntervalSince(phase.start) / max(1, phase.end.timeIntervalSince(phase.start))))).tint(.teal).labelsHidden()
                                 } else { ProgressView(timerInterval: phase.start...phase.end, countsDown: false).tint(.teal).labelsHidden() }
-                                HStack(spacing: 1) { Text(phase.start, style: .time); Text("–"); Text(phase.end, style: .time) }.font(.system(size: 8)).monospacedDigit().foregroundStyle(.secondary).lineLimit(1)
+                                HStack(spacing: 1) { Text(phase.start, style: .time); Text("–"); Text(phase.end, style: .time) }.font(.system(size: 9)).monospacedDigit().foregroundStyle(.secondary).lineLimit(1)
                             }.frame(maxWidth: .infinity, alignment: .leading)
                         } else { Color.clear.frame(maxWidth: .infinity, maxHeight: 0) }
                     }
@@ -95,5 +100,17 @@ struct SessionActivityClock: View {
     var body: some View {
         if state.paused { Text(String(format: "%d:%02d", state.remaining / 60, state.remaining % 60)).monospacedDigit() }
         else { Text(timerInterval: state.start...state.end, countsDown: true, showsHours: false).monospacedDigit() }
+    }
+}
+
+struct SessionActivityPhaseClock: View {
+    let state: TherapyActivityAttributes.ContentState
+    let phase: TherapyActivityAttributes.Phase
+    var body: some View {
+        if state.paused {
+            let clock = state.referenceDate ?? state.end.addingTimeInterval(-Double(state.remaining))
+            let seconds = Int(ceil(max(0, min(phase.end.timeIntervalSince(phase.start), phase.end.timeIntervalSince(clock)))))
+            Text(String(format: "%d:%02d", seconds / 60, seconds % 60))
+        } else { Text(timerInterval: phase.start...phase.end, countsDown: true, showsHours: false).multilineTextAlignment(.trailing) }
     }
 }

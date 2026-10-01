@@ -187,7 +187,7 @@ enum BackupArchive {
                        password: String, version: String, progress: (Double) -> Void = { _ in }) throws -> URL {
         BackupDiskAccess.lock.lock(); defer { BackupDiskAccess.lock.unlock() }
         guard password.count >= 8 else { throw BackupArchiveError.invalid("Das Passwort muss mindestens acht Zeichen haben.") }
-        var snapshot = data
+        var snapshot = data.portableSnapshot
         var attachments: [BackupManifest.Attachment] = []
         var seen = Set<String>()
         for i in snapshot.media.indices {

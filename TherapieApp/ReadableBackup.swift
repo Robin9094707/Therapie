@@ -29,7 +29,7 @@ enum ReadableBackup {
         return String(path.dropFirst(prefix.count))
     }
     static let labels: [String: String] = [
-        "checkInReminders": "Check-in-Erinnerungen", "corrections": "Korrekturen", "routineTitle": "Routinenname", "timeTitle": "Terminname", "reason": "Grund", "previousOutcome": "Vorheriger-Status", "previousNote": "Vorherige-Notiz",
+        "cancellations": "Therapie-Absagen", "therapyVacations": "Therapiepausen", "therapyAlarmsEnabled": "Therapie-Wecker aktiv", "restoredAt": "Wiederhergestellt am", "endedAt": "Beendet am", "sessionPhaseAlarmsEnabled": "Wecker nach jedem Abschnitt", "checkInReminders": "Check-in-Erinnerungen", "corrections": "Korrekturen", "routineTitle": "Routinenname", "timeTitle": "Terminname", "reason": "Grund", "previousOutcome": "Vorheriger-Status", "previousNote": "Vorherige-Notiz",
         "guidedCheckIns": "Gefuehrte-Check-ins", "routines": "Alltagsroutinen", "routineCompletions": "Routine-Protokoll", "routineSnoozes": "Verschobene-Routinen", "companionSettings": "Alltags-Einstellungen",
         "batteryPercent": "Akku in Prozent", "isDraft": "Entwurf", "scheduledAt": "Geplant fuer", "recordedAt": "Bestaetigt am", "outcome": "Ergebnis", "times": "Uhrzeiten", "pauseOnVacation": "Urlaubspause", "retryMinutes": "Erneut erinnern nach Minuten",
         "weeklyTasks": "Wochenaufgaben", "notes": "Notizen", "energyEntries": "Energie-Checks", "media": "Materialien",
@@ -63,7 +63,7 @@ enum ReadableBackup {
     }
     static func writeEntries(data: AppData, root: URL, preferences: PortablePreferences = PortablePreferences()) throws {
         let fm = FileManager.default
-        var object = try JSONSerialization.jsonObject(with: BackupArchive.encoder().encode(data)) as! [String: Any]
+        var object = try JSONSerialization.jsonObject(with: BackupArchive.encoder().encode(data.portableSnapshot)) as! [String: Any]
         object["appearancePreferences"] = try JSONSerialization.jsonObject(with: BackupArchive.encoder().encode(preferences))
         try BackupArchive.encoder().encode(preferences).write(to: root.appendingPathComponent("appearance-preferences.json"), options: .atomic)
         try BackupArchive.protect(root.appendingPathComponent("appearance-preferences.json"))
@@ -136,7 +136,7 @@ enum ReadableBackup {
         defer { try? FileManager.default.removeItem(at: staged) }
         var success = false
         defer { if !success { try? FileManager.default.removeItem(at: outputDirectory) } }
-        var snapshot = data, attachments: [BackupManifest.Attachment] = [], seen = Set<String>(), sources: [(String, URL)] = []
+        var snapshot = data.portableSnapshot, attachments: [BackupManifest.Attachment] = [], seen = Set<String>(), sources: [(String, URL)] = []
         for folder in ["Media", "Recordings"] { try FileManager.default.createDirectory(at: staged.appendingPathComponent(folder), withIntermediateDirectories: true) }
         for i in snapshot.media.indices {
             let item = snapshot.media[i]; try BackupArchive.validatePath(item.relativePath)

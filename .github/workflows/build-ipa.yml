@@ -63,6 +63,11 @@ jobs:
           swiftc TherapieApp/Models.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift TherapieApp/CompanionModels.swift TherapieApp/InsightsModels.swift TherapieApp/WeeklyPrintModels.swift Tests/InsightsChecks.swift -o /tmp/therapie-insights-checks
           /tmp/therapie-insights-checks
 
+      - name: Test cancellations, vacations and section alarms
+        run: |
+          swiftc TherapieApp/Models.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift TherapieApp/CompanionModels.swift TherapieApp/InsightsModels.swift Tests/AppointmentChecks.swift -o /tmp/therapie-appointment-checks
+          /tmp/therapie-appointment-checks
+
       - name: Render and verify actual weekly PDF layouts
         run: |
           swiftc TherapieApp/Models.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift TherapieApp/CompanionModels.swift TherapieApp/InsightsModels.swift TherapieApp/WeeklyPrintModels.swift TherapieApp/WeeklyPDFRenderer.swift Tests/WeeklyPDFChecks.swift -o /tmp/therapie-pdf-checks
@@ -112,7 +117,7 @@ jobs:
       - name: Validate actual iPhone bundle
         run: python3 scripts/validate_bundle.py build/Build/Products/Release-iphoneos/Therapie.app
 
-      - name: Verify saved check-in overview and safe task removal
+      - name: Verify notes, attachments, appointments and check-in regressions
         if: contains(github.event.head_commit.message, '[checkin-ui]') || (github.event_name == 'workflow_dispatch' && inputs.verify_checkin)
         timeout-minutes: 20
         run: |
@@ -170,17 +175,17 @@ jobs:
       - name: Package IPA
         run: |
           APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" -print -quit)
-          rm -rf Payload Therapie-v3006.0.1.ipa
+          rm -rf Payload Therapie-v3006.1.0.ipa
           mkdir Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Therapie-v3006.0.1.ipa Payload
-          ls -lh Therapie-v3006.0.1.ipa
+          /usr/bin/zip -qry Therapie-v3006.1.0.ipa Payload
+          ls -lh Therapie-v3006.1.0.ipa
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Therapie-v3006.0.1-IPA
-          path: Therapie-v3006.0.1.ipa
+          name: Therapie-v3006.1.0-IPA
+          path: Therapie-v3006.1.0.ipa
           if-no-files-found: error
           retention-days: 30
 

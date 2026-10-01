@@ -40,6 +40,16 @@ final class RoutineAlarmCoordinator {
     }
     func refresh(_ store: AppStore) async {
         revision += 1; let generation = revision
+        guard store.lastSaveError == nil, store.loadError == nil else { return }
+        if !store.data.schedule.alarmIDs.isEmpty {
+            do {
+                try AlarmService.shared.cancel(ids: store.data.schedule.alarmIDs)
+                var snapshot = store.data
+                if snapshot.schedule.therapyAlarmsEnabled == nil { snapshot.schedule.therapyAlarmsEnabled = true }
+                snapshot.schedule.alarmIDs = []; store.data = snapshot
+                guard store.lastSaveError == nil else { return }
+            } catch { store.routineAlarmStatus = "Alte Therapie-Wecker konnten noch nicht entfernt werden: " + error.localizedDescription; return }
+        }
         let candidates = CompanionAlarmPlanner.candidates(store.data)
         let desired = CompanionAlarmPlanner.admitted(candidates)
         var owned = UserDefaults.standard.dictionary(forKey: storageKey) as? [String: String] ?? [:]

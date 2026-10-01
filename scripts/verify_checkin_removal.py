@@ -39,6 +39,8 @@ command = ['xcodebuild', '-project', 'Therapie.xcodeproj', '-scheme', 'TherapieA
            '-derivedDataPath', 'build-checkin-ui', '-resultBundlePath', str(output / 'CheckInTests.xcresult'),
            '-only-testing:TherapieUITests/TherapieUITests/testCheckInTaskRemovalWithKeyboardAndMultipleRows',
            '-only-testing:TherapieUITests/TherapieUITests/testSavedCheckInOpensReadOnlyAndEditsExplicitly',
+           '-only-testing:TherapieUITests/TherapieUITests/testNoteAttachmentsKeepParentOpenAndReopenReadOnly',
+           '-only-testing:TherapieUITests/TherapieUITests/testTherapyCancellationAndRestore',
            'CODE_SIGNING_ALLOWED=NO', 'test']
 print('Testing saved overview and real task removal on', phone['name'], flush=True)
 with (output / 'test.log').open('w') as log:
@@ -61,4 +63,4 @@ except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
 if code:
     print((output / 'test.log').read_text()[-16000:], flush=True)
     raise SystemExit(1)
-print('Check-in UI regressions passed: read-only overview, explicit edit/save, focused keyboard, first/last/all rows, repeat add/remove and saved draft resume.', flush=True)
+print('Check-in UI regressions passed: read-only overview, explicit edit/save, focused keyboard, first/last/all rows, repeat add/remove, saved draft resume, nested audio/archive/media windows, saved-note attachments and therapy cancellation/restore.', flush=True)

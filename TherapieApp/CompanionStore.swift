@@ -90,6 +90,7 @@ extension AppStore {
         if let route = UserDefaults.standard.string(forKey: "therapy.companion.open") {
             UserDefaults.standard.removeObject(forKey: "therapy.companion.open")
             let parts = route.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+            if parts.first == "therapy" { notificationTherapy = true }
             if parts.first == "energy" { openEnergyReview = true }
             if parts.first == "wellness" { notificationMood = true }
             if parts.count >= 2 {

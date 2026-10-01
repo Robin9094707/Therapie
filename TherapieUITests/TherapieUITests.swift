@@ -137,6 +137,76 @@ final class TherapieUITests: XCTestCase {
         capture("Updated saved check-in overview")
     }
 
+    @MainActor
+    func testNoteAttachmentsKeepParentOpenAndReopenReadOnly() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--show-dashboard", "--show-note"]
+        app.launch()
+        let attach = app.buttons["note.attach.audio"]
+        XCTAssertTrue(app.buttons["Speichern"].waitForExistence(timeout: 15))
+        reveal(attach, in: app)
+        for _ in 0..<3 {
+            attach.tap()
+            let close = app.buttons["audio.record.close"]
+            XCTAssertTrue(close.waitForExistence(timeout: 5))
+            XCTAssertTrue(app.buttons["audio.record.toggle"].exists)
+            close.tap()
+            XCTAssertTrue(app.buttons["Speichern"].waitForExistence(timeout: 5), "Only the recorder closes; the unsaved parent note stays open.")
+            reveal(attach, in: app)
+        }
+        for id in ["22222222-2222-2222-2222-222222222222", "33333333-3333-3333-3333-333333333333"] {
+            let archive = app.buttons["note.attach.archive"]
+            reveal(archive, in: app); archive.tap()
+            let choose = app.buttons["note.archive.choose." + id]
+            XCTAssertTrue(choose.waitForExistence(timeout: 5)); choose.tap()
+            let open = app.buttons["note.attachment.open." + id]
+            reveal(open, in: app); open.tap()
+            let close = app.buttons["media.detail.close"]
+            XCTAssertTrue(close.waitForExistence(timeout: 5))
+            if id.hasPrefix("333") { XCTAssertTrue(app.buttons["media.audio.play"].exists) }
+            capture("Note attachment " + id)
+            close.tap()
+            XCTAssertTrue(app.buttons["Speichern"].waitForExistence(timeout: 5))
+        }
+        app.buttons["Speichern"].tap()
+        XCTAssertTrue(app.tabBars.buttons["Archiv"].waitForExistence(timeout: 10)); app.tabBars.buttons["Archiv"].tap()
+        let overview = app.buttons["Übersicht öffnen"].firstMatch
+        XCTAssertTrue(overview.waitForExistence(timeout: 5)); overview.tap()
+        XCTAssertTrue(app.navigationBars["Deine Notiz"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.textFields.count, 0, "Saved notes first open read-only.")
+        for id in ["22222222-2222-2222-2222-222222222222", "33333333-3333-3333-3333-333333333333"] {
+            let open = app.buttons["note.detail.attachment." + id]
+            reveal(open, in: app); open.tap()
+            XCTAssertTrue(app.buttons["media.detail.close"].waitForExistence(timeout: 5)); app.buttons["media.detail.close"].tap()
+            XCTAssertTrue(app.navigationBars["Deine Notiz"].waitForExistence(timeout: 5), "Archive media closes back to the saved note.")
+        }
+        capture("Saved note with photo and playable audio")
+    }
+
+    @MainActor
+    func testTherapyCancellationAndRestore() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--show-dashboard", "--show-appointments"]
+        app.launch()
+        let cancel = app.buttons["therapy.cancel"].firstMatch
+        XCTAssertTrue(cancel.waitForExistence(timeout: 15)); cancel.tap()
+        XCTAssertTrue(app.navigationBars["Termin absagen"].waitForExistence(timeout: 5))
+        app.buttons["Speichern"].tap()
+        let restore = app.buttons["therapy.restore"].firstMatch
+        XCTAssertTrue(restore.waitForExistence(timeout: 5))
+        capture("Canceled weekly appointment")
+        restore.tap()
+        XCTAssertTrue(cancel.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["therapy.restore"].count, 0)
+        capture("Restored weekly appointment")
+    }
+
+    @MainActor
+    private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
+        for _ in 0..<7 { if element.exists && element.isHittable { return }; app.swipeUp() }
+        XCTAssertTrue(element.exists && element.isHittable, "Expected action is reachable: " + element.identifier)
+    }
+
     private func waitForViewport(_ element: XCUIElement, width: Int, height: Int) -> Bool {
         let predicate = NSPredicate(format: "label == %@", "\(width)x\(height)")
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)

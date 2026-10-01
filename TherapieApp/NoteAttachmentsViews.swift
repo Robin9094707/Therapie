@@ -1,38 +1,33 @@
 import SwiftUI
 import PhotosUI
 import UIKit
-import QuickLook
 
+/// A pure form section. Presenters belong to the stable editor, never to its recycled rows.
 struct NoteAttachmentsSection: View {
     @EnvironmentObject private var store: AppStore
     @Binding var note: TherapyNote
-    @State private var photo: PhotosPickerItem?
-    @State private var recording = false
-    @State private var chooseExisting = false
-    @State private var preview: URL?
-    @State private var error: String?
-    @State private var importing = false
-    private func link(_ id: UUID) { if !(note.mediaIDs ?? []).contains(id) { note.mediaIDs = (note.mediaIDs ?? []) + [id] } }
+    @Binding var photo: PhotosPickerItem?
+    var importing: Bool
+    var error: String?
+    let record: () -> Void
+    let choose: () -> Void
+    let open: (MediaItem) -> Void
     var body: some View {
         Section("Bilder, Sprache & Dokumente") {
             HStack {
-                PhotosPicker(selection: $photo, matching: .images) { Label("Bild", systemImage: "photo.badge.plus") }.disabled(importing)
+                PhotosPicker(selection: $photo, matching: .images) { Label("Bild", systemImage: "photo.badge.plus") }.accessibilityIdentifier("note.attach.photo")
                 Spacer()
-                Button("Sprache", systemImage: "mic") { recording = true }
-            }.buttonStyle(.bordered)
-            Button("Aus dem Archiv anhängen", systemImage: "paperclip") { chooseExisting = true }
+                Button("Sprache", systemImage: "mic", action: record).accessibilityIdentifier("note.attach.audio")
+            }.buttonStyle(.bordered).disabled(importing)
+            Button("Aus dem Archiv anhängen", systemImage: "paperclip", action: choose).disabled(importing).accessibilityIdentifier("note.attach.archive")
             if importing { ProgressView("Bild wird hinzugefügt …") }
             ForEach(note.mediaIDs ?? [], id: \.self) { id in
                 if let item = store.data.media.first(where: { $0.id == id }) {
-                    HStack(alignment: .center, spacing: 12) {
-                        if item.kind == .photo, let url = try? BackupArchive.sourceURL(item.relativePath, root: store.rootURL), let image = UIImage(contentsOfFile: url.path) {
-                            Image(uiImage: image).resizable().scaledToFill().frame(width: 56, height: 56).clipped().clipShape(RoundedRectangle(cornerRadius: 12)).accessibilityHidden(true)
-                        } else { Image(systemName: item.kind.symbol).font(.title2).frame(width: 56, height: 56) }
+                    HStack(spacing: 12) {
+                        MediaAttachmentThumbnail(item: item)
                         VStack(alignment: .leading, spacing: 4) {
                             Text(item.title).font(.subheadline.bold())
-                            if let url = try? BackupArchive.sourceURL(item.relativePath, root: store.rootURL), item.attachmentOmitted != true {
-                                Button("Öffnen / anhören") { preview = url }.font(.caption)
-                            } else { Text("Datei nicht verfügbar · Informationen erhalten").font(.caption).foregroundStyle(.secondary) }
+                            Button("Öffnen / anhören") { open(item) }.font(.caption).accessibilityIdentifier("note.attachment.open." + id.uuidString)
                         }
                         Spacer(minLength: 4)
                         Button(role: .destructive) { note.mediaIDs?.removeAll { $0 == id } } label: { Image(systemName: "minus.circle").frame(width: 44, height: 44) }.accessibilityLabel(item.title + " von der Notiz lösen")
@@ -44,29 +39,25 @@ struct NoteAttachmentsSection: View {
             Text("Anhänge bleiben im Archiv, auch wenn du sie von dieser Notiz löst oder die Notiz verwirfst.").font(.caption).foregroundStyle(.secondary)
             if let error { Text(error).font(.caption).foregroundStyle(.red) }
         }
-        .onChange(of: photo) { _, selected in
-            guard let selected else { return }; importing = true
-            Task { @MainActor in
-                defer { importing = false; photo = nil }
-                do {
-                    guard let bytes = try await selected.loadTransferable(type: Data.self), let image = UIImage(data: bytes), let jpeg = image.jpegData(compressionQuality: 0.85) else { throw CocoaError(.fileReadCorruptFile) }
-                    try store.importPhoto(bytes: jpeg, fileExtension: "jpg", title: note.title.isEmpty ? "Notizfoto" : note.title, note: "", tags: [], location: nil)
-                    if let failure = store.lastSaveError { error = failure; return }
-                    if let item = store.data.media.first { link(item.id) }; error = nil
-                } catch { self.error = error.localizedDescription }
-            }
+    }
+}
+
+enum NoteAttachmentDestination: Identifiable {
+    case record, archive, media(UUID)
+    var id: String { switch self { case .record: "record"; case .archive: "archive"; case .media(let id): "media-" + id.uuidString } }
+}
+struct NoteArchivePicker: View {
+    @EnvironmentObject private var store: AppStore
+    @Environment(\.dismiss) private var dismiss
+    let choose: (UUID) -> Void
+    var body: some View {
+        NavigationStack {
+            List {
+                if store.data.media.isEmpty { ContentUnavailableView("Dein Archiv ist noch leer", systemImage: "paperclip") }
+                ForEach(store.data.media) { item in
+                    Button { choose(item.id); dismiss() } label: { HStack { MediaAttachmentThumbnail(item: item); VStack(alignment: .leading) { Text(item.title); Text(item.kind.displayName).font(.caption).foregroundStyle(.secondary) } } }.accessibilityIdentifier("note.archive.choose." + item.id.uuidString)
+                }
+            }.navigationTitle("Anhang auswählen").toolbar { ToolbarItem(placement: .cancellationAction) { Button("Schließen") { dismiss() } } }.accessibilityIdentifier("note.archive")
         }
-        .sheet(isPresented: $recording) { AudioRecordingView(onSaved: link) }
-        .sheet(isPresented: $chooseExisting) {
-            NavigationStack {
-                List {
-                    if store.data.media.isEmpty { Text("Dein Archiv ist noch leer.").foregroundStyle(.secondary) }
-                    ForEach(store.data.media) { item in
-                        Button { link(item.id); chooseExisting = false } label: { Label(item.title, systemImage: item.kind.symbol) }
-                    }
-                }.navigationTitle("Anhang auswählen").toolbar { ToolbarItem(placement: .cancellationAction) { Button("Schließen") { chooseExisting = false } } }
-            }
-        }
-        .quickLookPreview($preview)
     }
 }

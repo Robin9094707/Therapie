@@ -91,7 +91,7 @@ private enum ArchiveRecord: Identifiable {
         case .guided(let value): value.kind.symbol
         }
     }
-    var isCheckIn: Bool { switch self { case .guided, .mood: true; default: false } }
+    var isCheckIn: Bool { switch self { case .guided, .mood, .note, .media: true; default: false } }
     var deletionMessage: String {
         switch self {
         case .guided: "Der Check-in wird gelöscht. Angelegte Aufgaben und Fotos bleiben erhalten."
@@ -157,8 +157,8 @@ struct TherapyEditableTimeline: View {
     }
     @ViewBuilder private func editor(_ record: ArchiveRecord) -> some View {
         switch record {
-        case .note(let value): TherapyNoteEditorView(note: value)
-        case .media(let value): TherapyMediaEditorView(item: value)
+        case .note(let value): TherapyNoteDetailView(noteID: value.id)
+        case .media(let value): TherapyMediaDetailView(itemID: value.id)
         case .energy(let value): LegacyEnergyEditorView(entry: value)
         case .reflection(let value): TherapyReflectionEditorView(entry: value)
         case .mood(let value): MoodCheckInDetailView(entryID: value.id)

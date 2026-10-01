@@ -144,15 +144,25 @@ enum CompanionAlarmPlanner {
                 slots.append(.init(id: "wellness.\(Int(date.timeIntervalSince1970))", group: "wellness", fireAt: date, title: "Ein Moment für deine Stimmung", route: "wellness"))
             }
         }
-        if data.companionSettings.sessionAlarmsEnabled == true, let session = data.currentSession, session.pausedAt == nil, session.endedAt == nil {
-            if data.sessionPreferences.notifyAtEnd && session.expectedEnd > now {
-                slots.append(.init(id: "session.end.\(session.id).\(Int(session.expectedEnd.timeIntervalSince1970))", group: "session", fireAt: session.expectedEnd, title: "Deine Therapiezeit ist zu Ende", route: "session|\(session.id)"))
+        if data.schedule.therapyAlarmsEnabled ?? !data.schedule.alarmIDs.isEmpty {
+            for appointment in TherapyDateHelper.occurrences(schedule: data.schedule, after: now, count: 8, calendar: calendar) {
+                for offset in Set(data.schedule.reminderOffsetsMinutes).filter({ (0...10080).contains($0) }).sorted() {
+                    let fire = appointment.addingTimeInterval(-Double(offset) * 60)
+                    if fire > now { slots.append(.init(id: "therapy.\(Int(appointment.timeIntervalSince1970)).\(offset)", group: "therapy", fireAt: fire, title: offset == 0 ? "Dein Therapietermin beginnt" : "Therapie in \(offset) Minuten", route: "therapy")) }
+                }
             }
-            if data.sessionPreferences.notifyAtPhases {
+        }
+        let phaseAlarms = data.companionSettings.sessionPhaseAlarmsEnabled ?? (data.companionSettings.sessionAlarmsEnabled == true && data.sessionPreferences.notifyAtPhases)
+        if let session = data.currentSession, session.pausedAt == nil, session.endedAt == nil {
+            if (data.companionSettings.sessionAlarmsEnabled == true || phaseAlarms), session.expectedEnd > now {
+                slots.append(.init(id: "session.end.\(session.id).\(Int(session.expectedEnd.timeIntervalSince1970))", group: "session", fireAt: session.expectedEnd, title: "Deine Therapiezeit ist beendet", route: "session|\(session.id)"))
+            }
+            if phaseAlarms {
                 var boundary = session.clockStart
-                for phase in session.phases.dropLast() {
+                for (index, phase) in session.phases.dropLast().enumerated() {
                     boundary = boundary.addingTimeInterval(Double(max(1, phase.minutes)) * 60)
-                    if boundary > now { slots.append(.init(id: "session.phase.\(session.id).\(phase.id).\(Int(boundary.timeIntervalSince1970))", group: "session.phase", fireAt: boundary, title: "Nächster Abschnitt deiner Therapiezeit", route: "session|\(session.id)")) }
+                    let title = data.sessionPreferences.usesPrivateLiveActivity ? "Abschnitt \(index + 1) beendet · weiter mit Abschnitt \(index + 2)" : String(phase.title.prefix(35)) + " beendet · " + String(session.phases[index + 1].title.prefix(35))
+                    if boundary > now { slots.append(.init(id: "session.phase.\(session.id).\(phase.id).\(Int(boundary.timeIntervalSince1970))", group: "session.phase", fireAt: boundary, title: title, route: "session|\(session.id)")) }
                 }
             }
         }
@@ -160,7 +170,9 @@ enum CompanionAlarmPlanner {
     }
     static func admitted(_ all: [CompanionAlarmSlot], budget: Int = 24) -> [CompanionAlarmSlot] {
         var groups = Set<String>(), ids = Set<String>(), selected: [CompanionAlarmSlot] = []
-        for slot in all where groups.insert(slot.group).inserted && selected.count < max(0, budget) {
+        // Reserve the imminent running session boundaries before recurring inventories.
+        for slot in all where slot.group.hasPrefix("session") && selected.count < max(0, budget) { if ids.insert(slot.id).inserted { selected.append(slot); groups.insert(slot.group) } }
+        for slot in all where !slot.group.hasPrefix("session") && groups.insert(slot.group).inserted && selected.count < max(0, budget) {
             if ids.insert(slot.id).inserted { selected.append(slot) }
         }
         for slot in all where selected.count < max(0, budget) { if ids.insert(slot.id).inserted { selected.append(slot) } }

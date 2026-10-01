@@ -82,6 +82,11 @@ struct BackupChecks {
         data.companionSettings.energyReviewAlarm = true
         data.sessionPreferences.showLiveActivityNames(false)
         data.companionSettings.sessionAlarmsEnabled = true
+        data.companionSettings.sessionPhaseAlarmsEnabled = true
+        data.schedule.therapyAlarmsEnabled = true
+        data.schedule.cancellations = [TherapyCancellation(date: Date(), reason: .therapist, note: "Praxis geschlossen"), TherapyCancellation(date: Date(), reason: .me, restoredAt: Date())]
+        data.schedule.therapyVacations = [TherapyVacation(start: Date(), end: Date().addingTimeInterval(86400 * 14), note: "Urlaub")]
+
         data.companionSettings.wellnessAlarmEnabled = true
         data.companionSettings.checkInReminders?[0].alarmEnabled = true
         data.companionSettings.checkInReminders?[0].slotID = DailyCheckInSlot.defaults[0].id
@@ -95,7 +100,7 @@ struct BackupChecks {
         try expect(original.range(of: Data("Media/photo.jpg".utf8)) == nil, "Filenames encrypted")
         let prepared = try BackupArchive.prepareImport(url: archive, password: password)
         defer { prepared.discard() }
-        try expect(try json(prepared.manifest.data) == json(data), "All AppData fields round-trip")
+        try expect(try json(prepared.manifest.data) == json(data.portableSnapshot), "All AppData fields round-trip")
         try expect(prepared.manifest.preferences == prefs, "Portable preferences round-trip")
         try expect(prepared.manifest.attachments.count == 3 && prepared.manifest.omittedAttachments == 0, "All attachment kinds included")
         for (_, path, bytes) in files { try expect(try Data(contentsOf: prepared.directory.appendingPathComponent(path)) == bytes, "Exact attachment bytes: " + path) }
