@@ -215,8 +215,10 @@ enum RoutinePlanner {
 enum GuidedCheckInMutation {
     @discardableResult static func apply(_ entry: GuidedCheckIn, complete: Bool, to data: inout AppData) -> Bool {
         // Existing legacy duplicates stay editable; new accidental duplicates never mutate data.
-        if !data.guidedCheckIns.contains(where: { $0.id == entry.id }),
-           DayCheckInPolicy.existing(for: entry, in: data) != nil { return false }
+        if let existing = DayCheckInPolicy.existing(for: entry, in: data), existing.id != entry.id {
+            let previous = data.guidedCheckIns.first { $0.id == entry.id }
+            guard previous.map({ DayCheckInPolicy.sameBucket($0, entry, in: data) }) == true else { return false }
+        }
         var clean = entry
         if complete {
             clean.isDraft = false

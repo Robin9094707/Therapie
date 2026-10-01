@@ -50,7 +50,8 @@ struct AIBuddyAction: Codable, Equatable, Identifiable {
     var date: Date? { dateISO.flatMap { ISO8601DateFormatter().date(from: $0) } }
     var valid: Bool {
         guard title.count <= 160, text.count <= 6000, (dateISO == nil || date != nil), (moodPercent == nil || (0...100).contains(moodPercent!)), weekdays.allSatisfy({ (1...7).contains($0) }) else { return false }
-        if [.completeTask, .completeRoutine, .openScreen].contains(kind) { return !(targetID ?? "").isEmpty }
+        if kind == .openScreen { return ["today", "insights", "therapy", "archive", "session", "routines", "appointments", "reminders"].contains(targetID ?? "") }
+        if [.completeTask, .completeRoutine].contains(kind) { return !(targetID ?? "").isEmpty }
         if kind == .appointment || kind == .routine { return date != nil && !title.isEmpty }
         return !title.isEmpty || !text.isEmpty
     }
@@ -87,6 +88,8 @@ enum AIBuddyText {
         var value = text.replacingOccurrences(of: "(?m)^```[^\\n]*\\n?", with: "", options: .regularExpression)
         value = value.replacingOccurrences(of: "(?m)^#{1,6}\\s+", with: "", options: .regularExpression)
         value = value.replacingOccurrences(of: "\\[([^\\]]+)\\]\\([^)]*\\)", with: "$1", options: .regularExpression)
+        value = value.replacingOccurrences(of: "(?<!\\*)\\*([^*\\n]+)\\*(?!\\*)", with: "$1", options: .regularExpression)
+        value = value.replacingOccurrences(of: "(?<!_)_([^_\\n]+)_(?!_)", with: "$1", options: .regularExpression)
         for marker in ["**", "__", "`"] { value = value.replacingOccurrences(of: marker, with: "") }
         return value.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -140,10 +143,30 @@ struct AIBuddyContext {
         let average = WellnessAnalytics.average(moods).map { String(format: "%.1f/5", $0) } ?? "keine Werte"
         let trend = InsightsAnalytics.trend(data: data, period: period).map { String(format: "%+.2f", $0) } ?? "zu wenige Werte"
         let next = TherapyDateHelper.nextOccurrence(schedule: data.schedule, after: end).map(formatter.string) ?? "keiner"
-        let due = RoutinePlanner.due(data: data, now: end).prefix(12).map { occurrence in "\(occurrence.id) | \(data.routines.first { $0.id == occurrence.routineID }?.title ?? "Routine")" }.joined(separator: "\n")
-        let openTasks = data.weeklyTasks.filter { !$0.completed }.prefix(15).map { "\($0.id) | \($0.title)" }.joined(separator: "\n")
-        let topics = TherapyDiscussionPlanner.points(in: data).prefix(15).map { formatter.string(from: $0.date) + " | " + String($0.text.prefix(350)) }.joined(separator: "\n")
-        let session = data.currentSession.map { "Laufende Stunde: " + $0.title + ", Phasen: " + $0.phases.map(\.title).joined(separator: ", ") + ", begonnen " + formatter.string(from: $0.startedAt) } ?? "Keine Stunde aktiv"
+        let occurrences: [RoutineOccurrence] = RoutinePlanner.due(data: data, now: end)
+        var dueLines: [String] = []
+        for occurrence in occurrences.prefix(12) {
+            let routine: DailyRoutine? = data.routines.first(where: { $0.id == occurrence.routineID })
+            let title: String = routine?.title ?? "Routine"
+            dueLines.append(occurrence.id + " | " + title)
+        }
+        let due: String = dueLines.joined(separator: "\n")
+        var taskLines: [String] = []
+        for task in data.weeklyTasks.filter({ !$0.completed }).prefix(15) { taskLines.append(task.id.uuidString + " | " + task.title) }
+        let openTasks: String = taskLines.joined(separator: "\n")
+        var topicLines: [String] = []
+        for point in TherapyDiscussionPlanner.points(in: data).prefix(15) {
+            let line: String = formatter.string(from: point.date) + " | " + String(point.text.prefix(350))
+            topicLines.append(line)
+        }
+        let topics: String = topicLines.joined(separator: "\n")
+        var session: String = "Keine Stunde aktiv"
+        if let current = data.currentSession {
+            let phases: String = current.phases.map { $0.title }.joined(separator: ", ")
+            session = "Laufende Stunde: " + current.title
+            session += ", Phasen: " + phases
+            session += ", begonnen " + formatter.string(from: current.startedAt)
+        }
         var text = session + "\nZeitraum " + formatter.string(from: start) + " bis " + formatter.string(from: end)
         text += ", \(days) Kalendertage. \(lines.count) Einträge, \(records.count - lines.count) aus Platzgründen nicht enthalten."
         text += " Selbstberichtete Tagesmittel: \(average) bei \(moods.count) Tagen mit Stimmung; Trend \(trend) auf Skala 1–5, keine Diagnose."

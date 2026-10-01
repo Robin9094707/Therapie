@@ -8,6 +8,7 @@ final class AppStore: ObservableObject {
             guard !isLoading else { return }
             save()
             if lastSaveError == nil {
+                if !data.aiSettings.enabled && selectedTab == 5 { selectedTab = 4 }
                 rememberChange(from: oldValue, to: data)
                 TherapyEffects.shared.changed(from: oldValue, to: data)
                 var previous = oldValue.schedule, current = data.schedule
@@ -310,7 +311,8 @@ final class AppStore: ObservableObject {
     }
 
     func saveCheckIn(_ entry: MoodCheckIn, points: [BatteryPoint]) {
-        if !data.moodCheckIns.contains(where: { $0.id == entry.id }), MoodDailyPolicy.existing(for: entry, in: data) != nil {
+        if let existing = MoodDailyPolicy.existing(for: entry, in: data), existing.id != entry.id,
+           data.moodCheckIns.first(where: { $0.id == entry.id }).map({ MoodDailyPolicy.sameBucket($0, entry, in: data) }) != true {
             lastSaveError = "Für dieses Zeitfenster gibt es heute bereits einen Stimmungs-Check-in. Öffne ihn zum Bearbeiten oder erlaube zusätzliche Einträge im Check-in-Rhythmus."; return
         }
         var snapshot = data

@@ -210,6 +210,10 @@ struct AppData: Codable, Equatable {
         companionSettings = try c.decodeIfPresent(CompanionSettings.self, forKey: .companionSettings) ?? CompanionSettings()
         dashboard = try c.decodeIfPresent(DashboardPreferences.self, forKey: .dashboard) ?? DashboardPreferences()
         archivePreferences = try c.decodeIfPresent(ArchivePreferences.self, forKey: .archivePreferences) ?? ArchivePreferences()
+        if version < 10, !dashboard.cardOrder.contains(HomeCard.discussion.rawValue) {
+            let position = dashboard.cardOrder.firstIndex(of: HomeCard.appointment.rawValue).map { $0 + 1 } ?? 0
+            dashboard.cardOrder.insert(HomeCard.discussion.rawValue, at: position)
+        }
         therapyDiscussionAcknowledgedIDs = try c.decodeIfPresent([String].self, forKey: .therapyDiscussionAcknowledgedIDs) ?? []
         aiSettings = try c.decodeIfPresent(AIBuddySettings.self, forKey: .aiSettings) ?? AIBuddySettings()
         aiMessages = try c.decodeIfPresent([AIBuddyMessage].self, forKey: .aiMessages) ?? []

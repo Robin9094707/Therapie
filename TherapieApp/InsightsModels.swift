@@ -51,6 +51,14 @@ enum DayCheckInPolicy {
             return anchor(saved.date) == anchor(entry.date)
         }.sorted { a, b in a.isDraft != b.isDraft ? !a.isDraft : a.date > b.date }.first
     }
+    static func sameBucket(_ a: GuidedCheckIn, _ b: GuidedCheckIn, in data: AppData) -> Bool {
+        guard a.kind == b.kind else { return false }
+        if a.kind == .therapy, a.sessionID != nil || b.sessionID != nil { return a.sessionID == b.sessionID }
+        if a.daySlotID != b.daySlotID && (a.kind == .free || (a.daySlotID != nil && b.daySlotID != nil)) { return false }
+        let slot = slot(kind: b.kind, id: b.daySlotID, settings: data.companionSettings)
+        let anchor: (Date) -> Date = { slot?.anchor(for: $0) ?? Calendar.current.startOfDay(for: $0) }
+        return anchor(a.date) == anchor(b.date)
+    }
     static func reopen(_ entry: GuidedCheckIn, in data: AppData) -> GuidedCheckIn { existing(for: entry, in: data) ?? entry }
     static func entry(_ slot: DailyCheckInSlot, at date: Date = Date()) -> GuidedCheckIn {
         GuidedCheckIn(date: date, kind: slot.kind, daySlotID: slot.id, customTitle: slot.kind == .free ? slot.title : nil)
@@ -61,6 +69,13 @@ enum MoodDailyPolicy {
         let slots = DayCheckInPolicy.slots(data.companionSettings)
         if let id = entry.daySlotID { return slots.first { $0.id == id } }
         return slots.first { $0.enabled && $0.contains(entry.date) }
+    }
+    static func sameBucket(_ a: MoodCheckIn, _ b: MoodCheckIn, in data: AppData) -> Bool {
+        let left = slot(for: a, data: data), right = slot(for: b, data: data)
+        guard left?.id == right?.id else { return false }
+        let first = left?.anchor(for: a.date) ?? Calendar.current.startOfDay(for: a.date)
+        let second = right?.anchor(for: b.date) ?? Calendar.current.startOfDay(for: b.date)
+        return first == second
     }
     static func existing(for entry: MoodCheckIn, in data: AppData) -> MoodCheckIn? {
         guard data.companionSettings.allowMultipleCheckInsPerSlot != true else { return nil }

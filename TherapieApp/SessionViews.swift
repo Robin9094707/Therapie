@@ -24,10 +24,10 @@ struct SessionConductorContent: View {
     var body: some View {
         TherapyScreen {
             VStack(spacing: 16) {
-                TherapyDiscussionCard(alwaysVisible: true)
-                if store.data.aiSettings.enabled { NavigationLink { AIBuddyView(inSession: true) } label: { Label("KI-Begleiter für diese Stunde", systemImage: "sparkles") }.buttonStyle(.bordered) }
                 if let session = store.data.currentSession {
                     SwiftUI.TimelineView(.periodic(from: .now, by: 1)) { context in activeCard(session, now: context.date) }
+                    TherapyDiscussionCard(alwaysVisible: true)
+                    if store.data.aiSettings.enabled { NavigationLink { AIBuddyView(inSession: true) } label: { Label("KI-Begleiter für diese Stunde", systemImage: "sparkles") }.buttonStyle(.bordered) }
                     GlassCard {
                         VStack(alignment: .leading, spacing: 10) {
                             Label("Während der Stunde", systemImage: "square.and.pencil").font(.headline)
@@ -49,6 +49,7 @@ struct SessionConductorContent: View {
                         }
                     }
                 }
+                if store.data.currentSession == nil { TherapyDiscussionCard(alwaysVisible: true) }
                 templates
                 history
             }

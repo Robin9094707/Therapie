@@ -7,7 +7,14 @@ final class BuddyMockProtocol: URLProtocol {
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
-        if let body = request.httpBody, let value = try? JSONSerialization.jsonObject(with: body) as? [String: Any] { Self.requests.append(value) }
+        var bytes = request.httpBody
+        if bytes == nil, let stream = request.httpBodyStream {
+            stream.open(); defer { stream.close() }
+            var buffer = [UInt8](repeating: 0, count: 4096), body = Data()
+            while stream.hasBytesAvailable { let size = stream.read(&buffer, maxLength: buffer.count); if size <= 0 { break }; body.append(contentsOf: buffer.prefix(size)) }
+            bytes = body
+        }
+        if let body = bytes, let value = try? JSONSerialization.jsonObject(with: body) as? [String: Any] { Self.requests.append(value) }
         let raw = Self.responses.isEmpty ? Data("{}".utf8) : Self.responses.removeFirst()
         client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: Self.status, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: raw); client?.urlProtocolDidFinishLoading(self)
@@ -39,6 +46,9 @@ final class BuddyMockProtocol: URLProtocol {
         try expect(GuidedCheckInMutation.apply(edit, complete: true, to: &data) && data.guidedCheckIns.count == 1 && data.guidedCheckIns[0].summary == "Korrigiert", "Explicit edits preserve identity")
         let tomorrow = DayCheckInPolicy.entry(morning, at: date("2026-10-02T05:00:00Z"))
         try expect(GuidedCheckInMutation.apply(tomorrow, complete: true, to: &data), "Following day remains available")
+        var shifted = first; shifted.date = tomorrow.date
+        let beforeShift = data
+        try expect(!GuidedCheckInMutation.apply(shifted, complete: true, to: &data) && data == beforeShift, "Moving an existing check-in into an occupied day cannot create a duplicate")
         let beforeMidnight = DayCheckInPolicy.entry(night, at: date("2026-09-30T21:30:00Z"))
         try expect(GuidedCheckInMutation.apply(beforeMidnight, complete: true, to: &data), "Night before midnight saved")
         let afterMidnight = DayCheckInPolicy.entry(night, at: date("2026-10-01T01:00:00Z"))
