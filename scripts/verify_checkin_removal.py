@@ -23,7 +23,7 @@ try:
     if phone['state'] != 'Booted':
         run('xcrun', 'simctl', 'boot', udid)
     run('open', '-a', 'Simulator', '--args', '-CurrentDeviceUDID', udid, check=False)
-    boot = run('xcrun', 'simctl', 'bootstatus', udid, '-b', timeout=180)
+    boot = run('xcrun', 'simctl', 'bootstatus', udid, '-b', timeout=300)
     (output / 'boot.log').write_text(boot)
 except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as error:
     captured = error.stdout or ''
