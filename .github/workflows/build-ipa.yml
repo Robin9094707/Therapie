@@ -140,6 +140,19 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
+      - name: Upload compact native UI previews
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Therapie-UI-Previews
+          path: |
+            build/checkin-regression/previews
+            build/checkin-regression/status.json
+            build/checkin-regression/test.log
+            build/checkin-regression/preview-export.log
+          if-no-files-found: ignore
+          retention-days: 30
+
       - name: Build simulator app
         if: github.event_name == 'workflow_dispatch' && inputs.verify_simulator
         run: |

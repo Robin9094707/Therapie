@@ -397,6 +397,7 @@ struct MainTabView: View {
 struct DashboardView: View {
     @EnvironmentObject private var store: AppStore
     @State private var showNote = false
+    @State private var openedNoteFixture = false
     @State private var showEnergy = false
     @State private var showReflection = false
 
@@ -431,7 +432,7 @@ struct DashboardView: View {
                     NavigationLink { TasksView() } label: { Label("Aufgaben", systemImage: "checklist") }
                 }
             }
-            .onAppear { if ProcessInfo.processInfo.arguments.contains("--show-note") { showNote = true } }
+            .onAppear { if !openedNoteFixture && ProcessInfo.processInfo.arguments.contains("--show-note") { openedNoteFixture = true; showNote = true } }
             .sheet(isPresented: $showNote) {
                 AddNoteView()
                     .presentationDetents([.large])

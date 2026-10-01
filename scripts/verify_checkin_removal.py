@@ -57,6 +57,14 @@ with (output / 'test.log').open('w') as log:
         log.write('\nFocused UI test timed out; runtime verification failed.\n')
 (output / 'status.json').write_text(json.dumps({'status': 'passed' if code == 0 else 'failed', 'device': phone['name']}))
 try:
+    previews = run('xcrun', 'xcresulttool', 'export', 'attachments', '--path',
+                   str(output / 'CheckInTests.xcresult'), '--output-path', str(output / 'previews'),
+                   timeout=30, check=False)
+    (output / 'preview-export.log').write_text(previews)
+except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
+    print('Preview export unavailable; preserving the actual test result.', flush=True)
+
+try:
     run('xcrun', 'simctl', 'shutdown', udid, timeout=15, check=False)
 except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
     print('Simulator cleanup did not finish; preserving the actual test result.', flush=True)

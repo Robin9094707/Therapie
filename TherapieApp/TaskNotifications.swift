@@ -86,8 +86,10 @@ final class TaskNotificationCoordinator: NSObject, UNUserNotificationCenterDeleg
             content.categoryIdentifier = Self.energyCategory
             content.userInfo = ["energyReview": true]
             content.sound = .default
-            let parts = Calendar.current.dateComponents([.weekday, .hour, .minute], from: date)
-            requests.append(UNNotificationRequest(identifier: Self.energyIdentifier, content: content, trigger: UNCalendarNotificationTrigger(dateMatching: parts, repeats: true)))
+            if date > Date() {
+                let parts = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
+                requests.append(UNNotificationRequest(identifier: Self.energyIdentifier, content: content, trigger: UNCalendarNotificationTrigger(dateMatching: parts, repeats: false)))
+            }
         }
         let allCheckInSlots = CheckInReminderPlanner.slots(data: snapshot)
         let checkInSlots = Array(allCheckInSlots.prefix(min(20, max(0, 48 - requests.count))))

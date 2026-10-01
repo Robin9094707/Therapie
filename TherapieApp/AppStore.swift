@@ -112,7 +112,7 @@ final class AppStore: ObservableObject {
                 }
                 if ProcessInfo.processInfo.arguments.contains("--show-note") {
                     let imagePath = "Media/ui-photo.png", audioPath = "Recordings/ui-audio.wav"
-                    let image = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWLsAAAAASUVORK5CYII=")!
+                    let image = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAIAAADZF8uwAAAAF0lEQVR4nGPM23KHgRBgIqhiVNEAKAIAhtcCFmfRl0oAAAAASUVORK5CYII=")!
                     try? image.write(to: root.appendingPathComponent(imagePath))
                     // One second of unsigned 8-bit PCM: a real playable, non-private audio fixture.
                     var wav = Data("RIFF".utf8)
