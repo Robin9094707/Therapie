@@ -1,0 +1,107 @@
+name: Verify and deliver Therapie 3008
+on:
+  push:
+    branches: ['delivery/v3008.0.0']
+permissions:
+  contents: write
+  actions: read
+jobs:
+  deliver:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download successful source and IPA
+        uses: actions/download-artifact@v4
+        with:
+          pattern: Therapie-v3008.0.0-*
+          run-id: 36929554018
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          path: artifacts
+      - name: Download actual UI test evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: Therapie-UI-Previews
+          run-id: 36929554018
+          github-token: ${{ github.token }}
+          path: ui
+      - name: Recover pre-update source
+        uses: actions/checkout@v4
+        with:
+          ref: 9c9aa3d1961366fa48651f488324707d801bc581
+          path: previous
+      - name: Package pre-update checkpoint
+        run: git -C previous archive --format=zip --output=../artifacts/Therapie-v3007.0.0-vor-KI-source.zip HEAD
+      - name: Validate actual packed files and simulator result
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import zipfile, plistlib, json, hashlib, re
+          root = Path('artifacts')
+          for name, commit in [
+              ('Therapie-v3008.0.0-source.zip', '3dff6b2bb933dee4fcd91509f4c655ed1a3f6318'),
+              ('Therapie-v3007.0.0-vor-KI-source.zip', '9c9aa3d1961366fa48651f488324707d801bc581')]:
+              with zipfile.ZipFile(root / name) as archive:
+                  assert archive.testzip() is None
+                  assert archive.comment.decode() == commit
+                  assert 'project.yml' in archive.namelist()
+              print(name, 'verified source commit', commit)
+          with zipfile.ZipFile(root / 'Therapie-v3008.0.0.ipa') as archive:
+              assert archive.testzip() is None
+              app = 'Payload/Therapie.app/'
+              info = plistlib.loads(archive.read(app + 'Info.plist'))
+              assert info['CFBundleIdentifier'] == 'eu.rjuhas.therapie'
+              assert info['CFBundleShortVersionString'] == '3008.0.0'
+              assert info['CFBundleVersion'] == '15'
+              assert archive.getinfo(app + info['CFBundleExecutable']).file_size > 0
+              extensions = [p for p in archive.namelist() if p.startswith(app + 'PlugIns/') and p.endswith('.appex/Info.plist')]
+              assert len(extensions) == 1
+              widget = plistlib.loads(archive.read(extensions[0]))
+              assert widget['CFBundleIdentifier'] == 'eu.rjuhas.therapie.liveactivity'
+              assert widget['NSExtension']['NSExtensionPointIdentifier'] == 'com.apple.widgetkit-extension'
+              prefix = extensions[0].removesuffix('Info.plist')
+              assert archive.getinfo(prefix + widget['CFBundleExecutable']).file_size > 0
+              assert any('therapie' in entry['CFBundleURLSchemes'] for entry in info['CFBundleURLTypes'])
+              print('Actual IPA verified: 3008.0.0 build 15, app + WidgetKit extension, correct identity and URL scheme')
+          status = json.loads((Path('ui') / 'status.json').read_text())
+          assert status['status'] == 'passed', status
+          log = (Path('ui') / 'test.log').read_text()
+          assert re.search(r'Executed 6 tests, with 0 failures', log)
+          for test in [
+              'testAIBuddyNativeActionsAndJournal',
+              'testCheckInTaskRemovalWithKeyboardAndMultipleRows',
+              'testNoteAttachmentsKeepParentOpenAndReopenReadOnly',
+              'testSavedCheckInOpensReadOnlyAndEditsExplicitly',
+              'testTherapyCancellationAndRestore',
+              'testTodayCustomizationRoutineConfirmationAndArchiveFilters']:
+              assert re.search(r"Test Case '.*" + test + r"\]' passed", log), test
+          print('All six actual native UI tests passed on', status['device'])
+          for path in sorted(root.iterdir()):
+              if path.suffix in ['.zip', '.ipa']:
+                  print(path.name, path.stat().st_size, hashlib.sha256(path.read_bytes()).hexdigest())
+          PY
+      - name: Publish verified download files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > release-notes.txt <<'EOF'
+          Update 3008.0.0 (Build 15): Tagesfenster mit Schutz vor doppelten Check-ins, temporäres Rückgängig, Heute-Routinen mit Bestätigung und Konfetti, gesammelte Therapie-Gesprächspunkte, flexible Termine, robustere AlarmKit-Aktualisierung und konfigurierbare Widgets.
+
+          Optionaler KI-Begleiter mit eigenem OpenAI-API-Schlüssel, Tages-/Wochenrückblicken, bearbeitbaren nativen Aktionen und Therapietagebuch. Fotos und Sprache nur nach Freigabe. Neue Daten und Einstellungen sind in Export/Import und Backups enthalten; der API-Schlüssel bleibt lokal im Schlüsselbund.
+
+          Validiert: iPhone-App und Widget-Erweiterung, 412 Modell-/Backup-/Planungs-/KI-Prüfungen, unabhängiger ZIP64-Reader und sechs tatsächliche iPhone-Simulator-UI-Tests. Zusätzlich wurden CRC, Version, Bundle-Identität und Quellcode-Commit der gepackten Dateien geprüft.
+
+          Die IPA ist unsigniert. Live-Widgets benötigen beim Signieren die gemeinsame App-Gruppe group.eu.rjuhas.therapie. AlarmKit-Klingeln, Mikrofon und echter OpenAI-Zugriff müssen zusätzlich auf dem installierten iPhone geprüft werden.
+
+          Rückkehrpunkt vor dem Update: 9c9aa3d1961366fa48651f488324707d801bc581 / backup/v3007.0.0-before-ai-2026-10-01. Für einen Code-Rollback auf 3007 ist auch ein Datenbackup von vor dem Update nötig; neue Daten verwenden Schema 10.
+
+          Hauptprüfung: https://github.com/Robin9094707/Therapie/actions/runs/36929554018
+          EOF
+          gh release create v3008.0.0 \
+            --repo Robin9094707/Therapie \
+            --target 3dff6b2bb933dee4fcd91509f4c655ed1a3f6318 \
+            --title 'Therapie 3008.0.0 · Dein Begleiter' \
+            --notes-file release-notes.txt \
+            artifacts/Therapie-v3008.0.0.ipa \
+            artifacts/Therapie-v3008.0.0-source.zip \
+            artifacts/Therapie-v3007.0.0-vor-KI-source.zip
