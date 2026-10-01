@@ -245,7 +245,7 @@ struct CheckInReminderSlot: Equatable, Identifiable {
     var reminderID: UUID
     var kind: GuidedCheckInKind
     var fireAt: Date
-    var id: String { "therapy.checkin.\(reminderID).\(Int(fireAt.timeIntervalSince1970))" }
+    var id: String { "therapy.checkin.\(reminderID).\(kind.rawValue).\(Int(fireAt.timeIntervalSince1970))" }
 }
 enum CheckInReminderPlanner {
     static func slots(data: AppData, now: Date = Date(), calendar: Calendar = .current) -> [CheckInReminderSlot] {
@@ -347,7 +347,8 @@ enum TherapyReport {
         }
         if options.includeTasks {
             lines.append("AUFGABEN · aktueller Stand")
-            for task in data.weeklyTasks.filter({ included($0.createdAt) || ($0.completedAt.map(included) ?? false) || ($0.dueDate.map(included) ?? false) }).sorted(by: { $0.createdAt < $1.createdAt }) {
+            let excludedTaskIDs = Set(data.guidedCheckIns.filter { options.excludedCheckInIDs.contains($0.id) }.flatMap { $0.taskIDs + $0.tasks.map(\.id) })
+            for task in data.weeklyTasks.filter({ !excludedTaskIDs.contains($0.id) && (included($0.createdAt) || ($0.completedAt.map(included) ?? false) || ($0.dueDate.map(included) ?? false)) }).sorted(by: { $0.createdAt < $1.createdAt }) {
                 lines.append("\(task.completed ? "Erledigt" : "Offen"): \(task.title)")
                 if !task.details.isEmpty { lines.append(task.details) }
                 if let value = task.smallStep, !value.isEmpty { lines.append("Kleiner Schritt: " + value) }

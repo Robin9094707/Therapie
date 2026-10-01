@@ -163,6 +163,12 @@ import Foundation
         companion.weeklyTasks = [WeeklyTask(createdAt: now, weekOfYear: 40, yearForWeekOfYear: 2026, title: "TASK-PRIVATE", details: "")]
         reportOptions.includeTasks = false
         try expect(!TherapyReport.text(data: companion, options: reportOptions).contains("TASK-PRIVATE"), "Task opt-out excludes task details")
+        reportOptions.includeTasks = true
+        companion.guidedCheckIns[0].taskIDs = [companion.weeklyTasks[0].id]
+        try expect(!TherapyReport.text(data: companion, options: reportOptions).contains("TASK-PRIVATE"), "Excluded check-in also hides its linked tasks")
+        companion.companionSettings.checkInReminders = [CheckInReminder(id: morning.id, kind: .morning, time: time), CheckInReminder(id: morning.id, kind: .evening, time: time)]
+        let colliding = CheckInReminderPlanner.slots(data: companion, now: now, calendar: calendar)
+        try expect(Set(colliding.map(\.id)).count == colliding.count, "Imported shared reminder UUIDs cannot collide across kinds")
         print("Passed \(count) companion migration, optional answers, routine identity, snooze, vacation and DST checks.")
     }
 }

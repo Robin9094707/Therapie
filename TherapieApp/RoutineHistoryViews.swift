@@ -56,7 +56,10 @@ struct RoutineHistoryCard: View {
                                     Text(item.date.formatted(date: .abbreviated, time: .shortened)).font(.caption.weight(.semibold))
                                     Text("\(item.previousOutcome == .done ? "Erledigt" : "Ausgelassen") → \(item.outcome == .done ? "Erledigt" : "Ausgelassen")").font(.caption)
                                     Text(item.reason).font(.subheadline)
-                                    if item.previousNote != item.note { Text("Vorherige Notiz: " + (item.previousNote.isEmpty ? "–" : item.previousNote)).font(.caption).foregroundStyle(.secondary) }
+                                    if item.previousNote != item.note {
+                                        Text("Vorherige Notiz: " + (item.previousNote.isEmpty ? "–" : item.previousNote)).font(.caption).foregroundStyle(.secondary)
+                                        Text("Neue Notiz: " + (item.note.isEmpty ? "–" : item.note)).font(.caption)
+                                    }
                                 }
                             }
                         }.frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)

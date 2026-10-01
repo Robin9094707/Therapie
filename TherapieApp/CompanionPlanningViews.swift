@@ -119,7 +119,7 @@ struct TherapyReportView: View {
                     Toggle("Routinenprotokoll", isOn: $routines)
                     Toggle("Notizen", isOn: $notes)
                     Toggle("Meine Namen", isOn: $names)
-                    Text("Entwürfe sind ausgeschlossen. Aufgaben und Ziele zeigen ihren heutigen Stand. Fotos und Aufnahmen werden nicht mitgesendet.").font(.caption).foregroundStyle(.secondary)
+                    Text("Entwürfe und Aufgaben aus abgewählten Check-ins sind ausgeschlossen. Aufgaben und Ziele zeigen ihren heutigen Stand. Fotos und Aufnahmen werden nicht mitgesendet.").font(.caption).foregroundStyle(.secondary)
                 }
                 if checkIns {
                     Section("Einzelne Check-ins auswählen") {
