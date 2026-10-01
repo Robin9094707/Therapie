@@ -1,3 +1,16 @@
+## Update 3006.0.0
+
+- Insights bündelt Diagramme, persönliche Stimmungsvergleiche, Trends, Akku-Stichwörter und den Einstieg zum Wochenbericht. Das Stimmungsbarometer lässt sich von 0 bis 100 einstellen; frühere Werte bleiben erhalten.
+- Morgen (5–11), Mittag (11–14), Nachmittag (14–18) und Abend (18–23) sind standardmäßig aktiv. Nacht (23–5) ist optional. Zeitfenster und eigene Check-ins sind einstellbar. Neue Tages-Check-ins sind außerhalb ihrer Fenster gesperrt; bestehende Entwürfe bleiben bearbeitbar.
+- Geführte Check-ins unterstützen einzelne Akku-Stichwörter mit optionalem Satz und Wirkung. Beim Abschließen werden ihre Statistikdaten zusammen mit dem Check-in gespeichert; wiederholtes Speichern dupliziert sie nicht.
+- Notizen haben einen größeren Editor, Listenhilfen, Fotos, Sprachaufnahmen und Archivanhänge. Lösen oder Löschen einer Notiz lässt Dateien im Archiv erhalten. Das Archiv nutzt denselben sicheren Notizeditor.
+- Wochenberichte sind echte A4-PDFs mit maximal 1–3 Seiten, gewählten Bereichen und bis zu drei bewusst ausgewählten Bildern. Standard ist die letzte Kalenderwoche. Vorschau, Drucken und PDF-Teilen sind integriert. Kürzungen und nicht abgedruckte Einträge werden ausgewiesen; Aufgaben und Ziele zeigen den heutigen Stand.
+- AlarmKit ist optional auch für Tages-Check-ins, Aufgaben und Wochenenergie verfügbar. Öffnen und Änderungen aktualisieren den begrenzten Vorrat unabhängig von der Mitteilungsfreigabe. Erledigte/entfernte Erinnerungen werden bereinigt. Geräte-Alarmkennungen bleiben lokal.
+- Profilname und Tageszeit bestimmen die Begrüßung; die Animation berücksichtigt reduzierte Bewegung. Bestehende Verlaufs-, Therapie-, Backup- und Archivfunktionen bleiben erreichbar.
+- Schema 8 importiert frühere Daten mit optionalen Ergänzungen. Vor dem Upgrade wird `therapy-data.pre-3006.json` angelegt. Der vorherige Quellstand liegt im Git-Branch `backup/before-3006-2026-10-01`.
+
+CI prüft Migration, vollständige verschlüsselte Sicherungen, lesbaren ZIP-Export, Erinnerungsplanung, Tagesfenster und den tatsächlichen PDF-Renderer. Der iPhone-Build und sein Bundle werden validiert. Alarmzustellung, Mikrofon und Drucker benötigen einen Test auf dem iPhone; ein erfolgreicher Build ersetzt ihn nicht.
+
 # Therapie – Autismus-Therapiebegleiter für iPhone
 
 Eine private, lokal-first iOS-App zur Organisation von Therapieterminen, Wochenaufgaben, Notizen, Fotos, Sprachaufnahmen, Rückblicken und Erinnerungen.

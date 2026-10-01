@@ -3,6 +3,8 @@ import SwiftUI
 struct CompanionTodayCard: View {
     @EnvironmentObject private var store: AppStore
     @State private var checkIn: GuidedCheckIn?
+    @State private var showDaySettings = false
+    @State private var showPDF = false
     @State private var showPlanning = false
     @State private var showReport = false
     @State private var showEntries = false
@@ -15,6 +17,8 @@ struct CompanionTodayCard: View {
                     SectionHeader(title: "Ein Moment für dich", icon: "sparkles", subtitle: "Ankommen, Energie spüren, einen kleinen Schritt wählen.")
                     Spacer(minLength: 0)
                     Menu {
+                        Button("Tageszeiten & eigene Check-ins", systemImage: "clock") { showDaySettings = true }
+                        Button("Wochenbericht als PDF", systemImage: "printer") { showPDF = true }
                         Button("Check-in-Erinnerungen", systemImage: "bell") { showPlanning = true }
                         Button("Für meinen Therapietermin", systemImage: "doc.text") { showReport = true }
                         Divider()
@@ -22,12 +26,10 @@ struct CompanionTodayCard: View {
                         Button("Ruhige Darstellung", systemImage: "leaf") { calmInterface = true; store.refreshReadableFiles() }
                     } label: { Image(systemName: "slider.horizontal.3").frame(width: 44, height: 44) }.accessibilityLabel("Darstellung wählen")
                 }
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 10) { checkInButton(.morning); checkInButton(.evening); checkInButton(.therapy) }
-                    VStack(alignment: .leading, spacing: 10) { checkInButton(.morning); checkInButton(.evening); checkInButton(.therapy) }
-                }
+                DayCheckInButtons { checkIn = $0 }
+                Button("Therapie-Check-in", systemImage: "leaf") { checkIn = GuidedCheckIn(kind: .therapy) }.buttonStyle(.bordered)
                 ForEach(store.data.guidedCheckIns.filter(\.isDraft).prefix(2)) { draft in
-                    Button { checkIn = draft } label: { Label("\(draft.kind.title) fortsetzen · Schritt \(draft.step + 1)", systemImage: "arrow.uturn.forward") }.font(.subheadline)
+                    Button { checkIn = draft } label: { Label("\(draft.displayTitle) fortsetzen · Schritt \(draft.step + 1)", systemImage: "arrow.uturn.forward") }.font(.subheadline)
                 }
                 Divider()
                 HStack {
@@ -43,15 +45,15 @@ struct CompanionTodayCard: View {
                 }
             }
         }
-        .sheet(isPresented: $showPlanning) { CheckInReminderSettingsView(reminders: store.data.companionSettings.checkInReminders ?? []) }
+        .sheet(isPresented: $showDaySettings) { DayCheckInSettingsView(slots: DayCheckInPolicy.slots(store.data.companionSettings)) }
+        .sheet(isPresented: $showPDF) { WeeklyPDFReportView() }
+        .sheet(isPresented: $showPlanning) { CheckInReminderSettingsView(reminders: store.data.companionSettings.checkInReminders ?? [], slots: DayCheckInPolicy.slots(store.data.companionSettings)) }
         .sheet(isPresented: $showReport) { TherapyReportView() }
         .sheet(item: $checkIn) { GuidedCheckInView(entry: $0) }
         .sheet(isPresented: $showEntries) { EntryHubView() }
         .sheet(isPresented: $showRoutines) { NavigationStack { RoutineHubView() } }
     }
-    private func checkInButton(_ kind: GuidedCheckInKind) -> some View {
-        Button { checkIn = GuidedCheckIn(kind: kind) } label: { Label(kind == .morning ? "Morgen" : kind == .evening ? "Abend" : "Therapie", systemImage: kind.symbol).padding(.vertical, 6) }.buttonStyle(.bordered).buttonBorderShape(.capsule)
-    }
+
 }
 struct EntryHubView: View {
     @EnvironmentObject private var store: AppStore
@@ -101,11 +103,11 @@ struct GuidedCheckInCard: View {
     var body: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 14) {
-                HStack { Label(entry.kind.title, systemImage: entry.kind.symbol).font(.headline); Spacer(); if entry.isDraft { Text("Entwurf").font(.caption).foregroundStyle(.secondary) } }
+                HStack { Label(entry.displayTitle, systemImage: entry.kind.symbol).font(.headline); Spacer(); if entry.isDraft { Text("Entwurf").font(.caption).foregroundStyle(.secondary) } }
                 GuidedCheckInSummary(entry: entry)
                 ResponsiveButtonRow {
                     Button(entry.isDraft ? "Fortsetzen" : "Bearbeiten", systemImage: "pencil", action: edit).buttonStyle(.bordered)
-                    ShareLink(item: GuidedCheckInExport.text(entry), subject: Text(entry.kind.title)) { Label("Teilen", systemImage: "square.and.arrow.up") }.buttonStyle(.bordered)
+                    ShareLink(item: GuidedCheckInExport.text(entry), subject: Text(entry.displayTitle)) { Label("Teilen", systemImage: "square.and.arrow.up") }.buttonStyle(.bordered)
                     Button("Löschen", systemImage: "trash", role: .destructive) { deleting = true }.buttonStyle(.bordered)
                 }
                 if !entry.mediaIDs.isEmpty {
@@ -119,19 +121,20 @@ struct GuidedCheckInCard: View {
             }
         }.alert("Check-in löschen?", isPresented: $deleting) {
             Button("Abbrechen", role: .cancel) {}
-            Button("Löschen", role: .destructive) { store.data.guidedCheckIns.removeAll { $0.id == entry.id } }
-        } message: { Text("Die bereits angelegten Aufgaben und Fotos bleiben im Archiv erhalten.") }
+            Button("Löschen", role: .destructive) { store.deleteGuided(entry.id) }
+        } message: { Text("Die bereits angelegten Aufgaben und Fotos bleiben im Archiv erhalten. Zugehörige Akku-Punkte werden entfernt.") }
     }
 }
 enum GuidedCheckInExport {
     static func text(_ entry: GuidedCheckIn) -> String {
-        var lines = [entry.kind.title, entry.date.formatted(date: .complete, time: .shortened)]
+        var lines = [entry.displayTitle, entry.date.formatted(date: .complete, time: .shortened)]
         if let mood = entry.mood { lines.append("Stimmung: " + MoodCheckIn.moodTitles[max(0, min(4, mood - 1))]) }
         if let battery = entry.batteryPercent { lines.append("Akku: \(battery) %") }
         if let stress = entry.stress { lines.append("Stress: \(stress)/5") }
         if let sensory = entry.sensoryLoad { lines.append("Reize: \(sensory)/5") }
         if let sleep = entry.sleepHours { lines.append("Schlaf: \(sleep.formatted()) Stunden") }
         for (label, text) in [("Rückblick", entry.summary), ("Gibt Energie", entry.givesEnergy), ("Kostet Energie", entry.takesEnergy), ("Kleiner Erfolg", entry.smallWin), ("Jetzt brauche ich", entry.nextNeed), ("Therapiefrage", entry.therapyQuestion)] where !text.isEmpty { lines.append(label + ": " + text) }
+        for point in entry.energyPoints ?? [] { lines.append(point.direction.title + ": " + point.title + (point.note.isEmpty ? "" : " – " + point.note)) }
         for task in entry.tasks where !task.title.isEmpty { lines.append("Aufgabe (\(task.source)): \(task.title)\nKleiner Schritt: \(task.smallStep)\n\(task.details)") }
         if !entry.mediaIDs.isEmpty { lines.append("Fotos: \(entry.mediaIDs.count) · separat im Archiv teilen") }
         return lines.joined(separator: "\n\n")

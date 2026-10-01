@@ -74,8 +74,8 @@ final class AppStore: ObservableObject {
                 data = try decoder.decode(AppData.self, from: raw)
                 let version = (try JSONSerialization.jsonObject(with: raw) as? [String: Any])?["schemaVersion"] as? Int ?? 1
                 refreshLegacyAlarms = version < 6 && !data.schedule.alarmIDs.isEmpty
-                let snapshot = root.appendingPathComponent("therapy-data.pre-3004.json")
-                if version < 7 && !fm.fileExists(atPath: snapshot.path) {
+                let snapshot = root.appendingPathComponent("therapy-data.pre-3006.json")
+                if version < 8 && !fm.fileExists(atPath: snapshot.path) {
                     try raw.write(to: snapshot, options: [.atomic, .completeFileProtection])
                 }
             } catch {
@@ -241,6 +241,7 @@ final class AppStore: ObservableObject {
         var clean = entry
         clean.date = min(clean.date, Date())
         clean.mood = max(1, min(5, clean.mood))
+        clean.moodPercent = clean.moodPercent.map { max(0, min(100, $0)) }
         clean.battery = max(1, min(5, clean.battery))
         clean.stress = clean.stress.map { max(1, min(5, $0)) }
         clean.sensoryLoad = clean.sensoryLoad.map { max(1, min(5, $0)) }
@@ -268,6 +269,11 @@ final class AppStore: ObservableObject {
         clean.impact = max(1, min(5, clean.impact))
         snapshot.batteryPoints.removeAll { $0.id == clean.id }
         snapshot.batteryPoints.insert(clean, at: 0)
+        for index in snapshot.guidedCheckIns.indices {
+            if let position = snapshot.guidedCheckIns[index].energyPoints?.firstIndex(where: { $0.id == clean.id }) {
+                snapshot.guidedCheckIns[index].energyPoints?[position] = clean
+            }
+        }
         data = snapshot
     }
 
@@ -349,9 +355,11 @@ final class AppStore: ObservableObject {
         data = snapshot
     }
     func saveNote(_ note: TherapyNote) {
+        var clean = note; clean.updatedAt = Date()
+        clean.mediaIDs = Array(Set(clean.mediaIDs ?? [])).sorted { $0.uuidString < $1.uuidString }
         var snapshot = data
         snapshot.notes.removeAll { $0.id == note.id }
-        snapshot.notes.insert(note, at: 0)
+        snapshot.notes.insert(clean, at: 0)
         data = snapshot
     }
     func saveMediaDetails(_ item: MediaItem) {
@@ -462,6 +470,7 @@ final class AppStore: ObservableObject {
         var snapshot = data
         snapshot.media.removeAll { $0.id == item.id }
         for index in snapshot.guidedCheckIns.indices { snapshot.guidedCheckIns[index].mediaIDs.removeAll { $0 == item.id } }
+        for index in snapshot.notes.indices { snapshot.notes[index].mediaIDs?.removeAll { $0 == item.id } }
         data = snapshot
     }
 

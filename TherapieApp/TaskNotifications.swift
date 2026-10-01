@@ -89,14 +89,15 @@ final class TaskNotificationCoordinator: NSObject, UNUserNotificationCenterDeleg
             let parts = Calendar.current.dateComponents([.weekday, .hour, .minute], from: date)
             requests.append(UNNotificationRequest(identifier: Self.energyIdentifier, content: content, trigger: UNCalendarNotificationTrigger(dateMatching: parts, repeats: true)))
         }
-        let checkInSlots = CheckInReminderPlanner.slots(data: snapshot)
+        let allCheckInSlots = CheckInReminderPlanner.slots(data: snapshot)
+        let checkInSlots = Array(allCheckInSlots.prefix(min(20, max(0, 48 - requests.count))))
         for slot in checkInSlots {
             let content = UNMutableNotificationContent()
-            content.title = slot.kind.title
+            content.title = slot.title ?? slot.kind.title
             content.body = "Ein kurzer Moment für dich. Du kannst jede Frage überspringen und später weitermachen."
             content.sound = .default
             content.categoryIdentifier = Self.checkInCategory
-            content.userInfo = ["checkInKind": slot.kind.rawValue]
+            content.userInfo = ["checkInKind": slot.kind.rawValue, "slotID": slot.slotID?.uuidString ?? ""]
             let parts = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: slot.fireAt)
             requests.append(UNNotificationRequest(identifier: slot.id, content: content, trigger: UNCalendarNotificationTrigger(dateMatching: parts, repeats: false)))
         }
@@ -130,6 +131,7 @@ final class TaskNotificationCoordinator: NSObject, UNUserNotificationCenterDeleg
             }
             guard revision == generation else { return }
             store?.checkInReminderStatus = checkInSlots.isEmpty ? "Keine Check-in-Erinnerungen ausstehend." : "\(checkInSlots.count) Check-in-Erinnerungen für die nächsten 7 Tage geplant. Erledigte Check-ins entfernen den Hinweis für diesen Tag. Öffne die App regelmäßig zum Erneuern."
+            if allCheckInSlots.count > checkInSlots.count { store?.checkInReminderStatus += " \(allCheckInSlots.count - checkInSlots.count) spätere Hinweise passen aktuell nicht in den Vorrat; App regelmäßig öffnen." }
             let coveredIDs = Set(routineSlots.map(\.id))
             let firstGap = routineCandidates.first { !coveredIDs.contains($0.id) }?.fireAt
             let coverage = firstGap?.formatted(date: .abbreviated, time: .shortened) ?? routineSlots.last?.fireAt.formatted(date: .abbreviated, time: .shortened) ?? "–"
@@ -158,7 +160,7 @@ final class TaskNotificationCoordinator: NSObject, UNUserNotificationCenterDeleg
             defer { completionHandler() }
             guard let store = self.store else { return }
             if response.notification.request.content.categoryIdentifier == Self.checkInCategory {
-                if let raw = response.notification.request.content.userInfo["checkInKind"] as? String, let kind = GuidedCheckInKind(rawValue: raw) { store.openDailyCheckIn(kind) }
+                if let raw = response.notification.request.content.userInfo["checkInKind"] as? String, let kind = GuidedCheckInKind(rawValue: raw) { store.openDailyCheckIn(kind, slotID: (response.notification.request.content.userInfo["slotID"] as? String).flatMap(UUID.init(uuidString:))) }
                 refresh(store)
                 return
             }

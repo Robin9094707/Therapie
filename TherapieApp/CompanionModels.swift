@@ -1,13 +1,13 @@
 import Foundation
 
 enum GuidedCheckInKind: String, Codable, CaseIterable, Identifiable, Hashable {
-    case morning, evening, therapy, free
+    case morning, noon, afternoon, evening, night, therapy, free
     var id: String { rawValue }
     var title: String {
-        switch self { case .morning: "Morgen-Check-in"; case .evening: "Abend-Check-in"; case .therapy: "Therapie-Check-in"; case .free: "Freier Check-in" }
+        switch self { case .morning: "Morgen-Check-in"; case .noon: "Mittags-Check-in"; case .afternoon: "Nachmittags-Check-in"; case .night: "Nacht-Check-in"; case .evening: "Abend-Check-in"; case .therapy: "Therapie-Check-in"; case .free: "Freier Check-in" }
     }
     var symbol: String {
-        switch self { case .morning: "sun.max.fill"; case .evening: "moon.stars.fill"; case .therapy: "leaf.fill"; case .free: "sparkles" }
+        switch self { case .morning: "sun.max.fill"; case .noon: "sun.max"; case .afternoon: "sun.haze.fill"; case .night: "moon.fill"; case .evening: "moon.stars.fill"; case .therapy: "leaf.fill"; case .free: "sparkles" }
     }
 }
 struct CheckInTaskDraft: Codable, Equatable, Identifiable {
@@ -39,6 +39,11 @@ struct GuidedCheckIn: Codable, Equatable, Identifiable {
     var taskIDs: [UUID] = []
     var isDraft = true
     var step = 0
+    var moodPercent: Int?
+    var energyPoints: [BatteryPoint]?
+    var daySlotID: UUID?
+    var customTitle: String?
+    var displayTitle: String { customTitle ?? kind.title }
 }
 struct RoutineTime: Codable, Equatable, Identifiable {
     var id = UUID()
@@ -104,6 +109,9 @@ struct CompanionSettings: Codable, Equatable {
     var offerTherapyCheckIn = true
     // Optional additions retain schema-7 backups and existing local snapshots.
     var checkInReminders: [CheckInReminder]?
+    var dayCheckInSlots: [DailyCheckInSlot]?
+    var taskAlarmsEnabled: Bool?
+    var energyReviewAlarm: Bool?
 }
 struct RoutineOccurrence: Identifiable, Equatable {
     var routineID: UUID
@@ -227,6 +235,16 @@ enum GuidedCheckInMutation {
                 }
             }
             clean.taskIDs = links
+            if let points = clean.energyPoints {
+                let valid = points.filter { !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.map { point in
+                    var point = point; point.date = clean.date; point.checkInID = clean.id
+                    point.title = point.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                    point.impact = max(1, min(5, point.impact)); return point
+                }
+                data.batteryPoints.removeAll { $0.checkInID == clean.id }
+                data.batteryPoints.append(contentsOf: valid)
+                clean.energyPoints = valid
+            }
         }
         data.guidedCheckIns.removeAll { $0.id == clean.id }
         data.guidedCheckIns.insert(clean, at: 0)
@@ -240,30 +258,34 @@ struct CheckInReminder: Codable, Equatable, Identifiable {
     var enabled = true
     var time = RoutineTime(hour: 7, minute: 0, weekendHour: 9, weekendMinute: 0)
     var pauseOnVacation = true
+    var alarmEnabled: Bool?
+    var slotID: UUID?
 }
 struct CheckInReminderSlot: Equatable, Identifiable {
     var reminderID: UUID
     var kind: GuidedCheckInKind
     var fireAt: Date
+    var slotID: UUID?
+    var title: String?
     var id: String { "therapy.checkin.\(reminderID).\(kind.rawValue).\(Int(fireAt.timeIntervalSince1970))" }
 }
 enum CheckInReminderPlanner {
     static func slots(data: AppData, now: Date = Date(), calendar: Calendar = .current) -> [CheckInReminderSlot] {
         var output: [CheckInReminderSlot] = []
         let today = calendar.startOfDay(for: now)
-        // Two reminders per day, seven days of capacity. The editor enforces one per kind.
-        var seenKinds = Set<GuidedCheckInKind>()
+        var seen = Set<String>()
         for reminder in data.companionSettings.checkInReminders ?? [] where reminder.enabled {
-            guard [.morning, .evening].contains(reminder.kind), seenKinds.insert(reminder.kind).inserted else { continue }
+            let configured = DayCheckInPolicy.slot(kind: reminder.kind, id: reminder.slotID, settings: data.companionSettings)
+            guard let configured, configured.enabled, seen.insert(configured.id.uuidString).inserted else { continue }
             for offset in 0..<7 {
                 guard let day = calendar.date(byAdding: .day, value: offset, to: today) else { continue }
                 let weekday = calendar.component(.weekday, from: day), clock = reminder.time.clock(weekday: weekday)
                 guard reminder.time.weekdays.contains(weekday),
                       let date = calendar.date(bySettingHour: clock.hour, minute: clock.minute, second: 0, of: day, matchingPolicy: .nextTime, repeatedTimePolicy: .first, direction: .forward),
-                      calendar.isDate(date, inSameDayAs: day), date > now else { continue }
+                      calendar.isDate(date, inSameDayAs: day), date > now, configured.contains(date, calendar: calendar) else { continue }
                 if reminder.pauseOnVacation, let until = data.companionSettings.vacationUntil, date < until { continue }
-                if data.guidedCheckIns.contains(where: { !$0.isDraft && $0.kind == reminder.kind && calendar.isDate($0.date, inSameDayAs: day) }) { continue }
-                output.append(CheckInReminderSlot(reminderID: reminder.id, kind: reminder.kind, fireAt: date))
+                if data.guidedCheckIns.contains(where: { !$0.isDraft && ($0.daySlotID == configured.id || ($0.daySlotID == nil && $0.kind == reminder.kind && reminder.kind != .free)) && configured.anchor(for: $0.date, calendar: calendar) == configured.anchor(for: date, calendar: calendar) }) { continue }
+                output.append(CheckInReminderSlot(reminderID: reminder.id, kind: reminder.kind, fireAt: date, slotID: configured.id, title: configured.title))
             }
         }
         return output.sorted { $0.fireAt == $1.fireAt ? $0.id < $1.id : $0.fireAt < $1.fireAt }
@@ -326,13 +348,15 @@ enum TherapyReport {
             lines.append("CHECK-INS · \(entries.count) abgeschlossen")
             if let mean = meanBattery(entries) { lines.append("Akku-Mittelwert: \(Int(mean.rounded())) % aus \(entries.compactMap(\.batteryPercent).count) Angaben. Übersprungene Antworten sind nicht eingerechnet.") }
             for entry in entries {
-                lines.append("\(stamp(entry.date)) · \(entry.kind.title)")
+                lines.append("\(stamp(entry.date)) · \(entry.displayTitle)")
                 if let value = entry.mood { lines.append("Stimmung: " + MoodCheckIn.moodTitles[max(0, min(4, value - 1))]) }
                 if let value = entry.batteryPercent { lines.append("Akku: \(value) %") }
                 if let value = entry.stress { lines.append("Stress: \(value)/5") }
                 if let value = entry.sensoryLoad { lines.append("Reize: \(value)/5") }
                 if let value = entry.sleepHours { lines.append("Schlaf: \(value.formatted()) Stunden") }
                 for (label, value) in [("Rückblick", entry.summary), ("Energiegeber", entry.givesEnergy), ("Energienehmer", entry.takesEnergy), ("Erfolg", entry.smallWin), ("Bedürfnis", entry.nextNeed), ("Therapiefrage", entry.therapyQuestion)] where !value.isEmpty { lines.append(label + ": " + value) }
+                if options.includeMoodEntries, let value = entry.moodPercent { lines.append("Stimmungsbarometer: \(value)/100") }
+                for point in entry.energyPoints ?? [] { lines.append("\(point.direction.title): \(point.title) · \(point.impact)/5" + (point.note.isEmpty ? "" : " · " + point.note)) }
                 if !entry.mediaIDs.isEmpty { lines.append("\(entry.mediaIDs.count) verknüpfte Fotos · Bilddateien separat teilen") }
                 // Tasks are shared only through the separately selected task section.
             }

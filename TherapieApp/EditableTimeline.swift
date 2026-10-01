@@ -179,10 +179,10 @@ struct TherapyEditableTimeline: View {
         case .energy(let value): snapshot.energyEntries.removeAll { $0.id == value.id }
         case .reflection(let value): snapshot.reflections.removeAll { $0.id == value.id }
         case .mood(let value): store.deleteCheckIn(value); return
-        case .point(let value): snapshot.batteryPoints.removeAll { $0.id == value.id }
+        case .point(let value): store.deleteBatteryPoint(value.id); return
         case .review(let value): snapshot.weekReviews.removeAll { $0.id == value.id }
         case .weeklyEnergy(let value): snapshot.weeklyEnergyReviews.removeAll { $0.id == value.id }
-        case .guided(let value): snapshot.guidedCheckIns.removeAll { $0.id == value.id }
+        case .guided(let value): store.deleteGuided(value.id); return
         case .session(let value):
             snapshot.sessionHistory.removeAll { $0.id == value.id }
             for i in snapshot.notes.indices where snapshot.notes[i].sessionID == value.id { snapshot.notes[i].sessionID = nil }

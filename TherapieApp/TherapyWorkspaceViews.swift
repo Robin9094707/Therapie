@@ -150,7 +150,7 @@ struct TherapyNoteEditorView: View {
     init(note: TherapyNote = TherapyNote(title: "", text: "", tags: [])) {
         initial = note; _note = State(initialValue: note); _tags = State(initialValue: note.tags.joined(separator: ", "))
     }
-    private var canSave: Bool { !note.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !note.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    private var canSave: Bool { !note.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !note.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !(note.mediaIDs ?? []).isEmpty }
     var body: some View {
         TherapyEditorSheet(title: note.author == NoteAuthor.therapist.rawValue ? "Beitrag für die Therapie" : "Therapie-Notiz", dirty: note != initial || tags != initial.tags.joined(separator: ", "), canSave: canSave, save: {
             var clean = note
@@ -159,14 +159,23 @@ struct TherapyNoteEditorView: View {
             store.saveNote(clean)
         }) {
             Section("Festhalten") {
-                TextField("Titel", text: $note.title, axis: .vertical).lineLimit(1...3)
-                TextField("Was ist wichtig?", text: $note.text, axis: .vertical).lineLimit(5...16)
+                TherapyInputField(title: "Titel", prompt: "Deine Notiz benennen", multiline: false, text: $note.title)
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("Deine Gedanken", systemImage: "text.alignleft").font(.subheadline).foregroundStyle(.secondary)
+                    TextEditor(text: $note.text).frame(minHeight: 220).scrollContentBackground(.hidden)
+                        .padding(10).background(Color.indigo.opacity(0.04), in: RoundedRectangle(cornerRadius: 16)).accessibilityLabel("Notiztext")
+                    HStack {
+                        Button("Liste", systemImage: "list.bullet") { note.text += (note.text.isEmpty ? "" : "\n") + "• " }
+                        Button("Checkliste", systemImage: "checklist") { note.text += (note.text.isEmpty ? "" : "\n") + "☐ " }
+                    }.buttonStyle(.bordered)
+                }
                 Toggle("Wichtig · oben anheften", isOn: Binding(get: { note.isImportant ?? false }, set: { note.isImportant = $0 }))
                 Picker("Verfasst von", selection: Binding(get: { note.author ?? NoteAuthor.me.rawValue }, set: { note.author = $0 })) {
                     ForEach(NoteAuthor.allCases) { Text($0.rawValue).tag($0.rawValue) }
                 }
                 DatePicker("Datum", selection: $note.createdAt, in: ...Date(), displayedComponents: [.date, .hourAndMinute])
             }
+            NoteAttachmentsSection(note: $note)
             Section("Einordnen") {
                 TherapyLinkFields(folder: $note.folderID, topic: $note.topicID)
                 Picker("Bereich", selection: Binding(get: { note.category ?? TherapyCategory.other.rawValue }, set: { note.category = $0 })) {
@@ -461,6 +470,7 @@ struct TherapyGoalsView: View {
 }
 
 struct TherapyNotesCollectionView: View {
+    var searchText = ""
     @EnvironmentObject private var store: AppStore
     var folderID: UUID? = nil
     var topicID: UUID? = nil
@@ -472,7 +482,7 @@ struct TherapyNotesCollectionView: View {
     @State private var confirmDelete = false
     private var notes: [TherapyNote] {
         store.data.notes.filter {
-            (folderID == nil || $0.folderID == folderID) && (topicID == nil || $0.topicID == topicID)
+            (searchText.isEmpty || ([$0.title, $0.text] + $0.tags).joined(separator: " ").localizedCaseInsensitiveContains(searchText)) && (folderID == nil || $0.folderID == folderID) && (topicID == nil || $0.topicID == topicID)
                 && (!importantOnly || $0.isImportant == true) && (!therapistOnly || $0.author == NoteAuthor.therapist.rawValue || $0.author == NoteAuthor.together.rawValue)
                 && (sessionID == nil || $0.sessionID == sessionID)
         }.sorted { ($0.isImportant ?? false) == ($1.isImportant ?? false) ? $0.createdAt > $1.createdAt : $0.isImportant == true }
@@ -502,6 +512,7 @@ struct TherapyNotesCollectionView: View {
                             } label: { Image(systemName: "ellipsis.circle").frame(width: 44, height: 44) }
                         }
                         Text(note.text).font(.subheadline).lineLimit(6)
+                        if let ids = note.mediaIDs, !ids.isEmpty { Label("\(ids.count) Anhänge · Foto / Audio / Dokument", systemImage: "paperclip").font(.caption).foregroundStyle(.secondary) }
                         Text("\(note.author ?? NoteAuthor.me.rawValue) · \(note.createdAt.formatted(date: .abbreviated, time: .shortened))").font(.caption).foregroundStyle(.secondary)
                         Button("Ganze Notiz öffnen") { draft = note }.font(.caption.bold())
                     }
@@ -554,7 +565,7 @@ struct TherapyMaterialsView: View {
     @State private var knownMediaIDs: Set<UUID> = []
     private var items: [MediaItem] {
         store.data.media.filter {
-            (folderID == nil || $0.folderID == folderID) && (topicID == nil || $0.topicID == topicID)
+            (searchText.isEmpty || ([$0.title, $0.text] + $0.tags).joined(separator: " ").localizedCaseInsensitiveContains(searchText)) && (folderID == nil || $0.folderID == folderID) && (topicID == nil || $0.topicID == topicID)
                 && (category == nil || $0.category == category)
                 && (query.isEmpty || ([$0.title, $0.note, $0.source ?? ""] + $0.tags).contains { $0.localizedCaseInsensitiveContains(query) })
         }.sorted { $0.createdAt > $1.createdAt }

@@ -6,9 +6,23 @@ struct CheckInReminderSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State var reminders: [CheckInReminder]
     @State private var error: String?
-    init(reminders: [CheckInReminder]) {
-        let defaults = [CheckInReminder(kind: .morning, enabled: false), CheckInReminder(kind: .evening, enabled: false, time: RoutineTime(hour: 20, minute: 30, weekendHour: 21, weekendMinute: 0))]
-        _reminders = State(initialValue: defaults.map { fallback in reminders.first { $0.kind == fallback.kind } ?? fallback })
+    let slots: [DailyCheckInSlot]
+    init(reminders: [CheckInReminder], slots: [DailyCheckInSlot]) {
+        self.slots = slots
+        _reminders = State(initialValue: slots.map { slot in
+            var value = reminders.first { $0.slotID == slot.id || ($0.slotID == nil && $0.kind == slot.kind && slot.kind != .free) } ?? CheckInReminder(kind: slot.kind, enabled: false, time: RoutineTime(hour: slot.kind == .morning ? 7 : slot.kind == .noon ? 12 : slot.kind == .afternoon ? 16 : slot.kind == .evening ? 20 : slot.startHour, minute: 0))
+            value.slotID = slot.id
+            return value
+        })
+    }
+    private func valid(_ reminder: CheckInReminder) -> Bool {
+        guard reminder.enabled else { return true }
+        guard let slot = slots.first(where: { $0.id == reminder.slotID }), slot.enabled, !reminder.time.weekdays.isEmpty else { return false }
+        return reminder.time.weekdays.allSatisfy { day in
+            let clock = reminder.time.clock(weekday: day)
+            let hour = clock.hour
+            return slot.startHour == slot.endHour || (slot.startHour < slot.endHour ? hour >= slot.startHour && hour < slot.endHour : hour >= slot.startHour || hour < slot.endHour)
+        }
     }
     var body: some View {
         NavigationStack {
@@ -16,14 +30,21 @@ struct CheckInReminderSettingsView: View {
                 Section {
                     Text("Ein freundlicher Hinweis für deinen Check-in. Fragen bleiben freiwillig; Entwürfe kannst du später fortsetzen.")
                     Button("Mitteilungen erlauben", systemImage: "bell") { Task { await TaskNotificationCoordinator.shared.requestAccess(store) } }
+                    Button("AlarmKit-Wecker erlauben", systemImage: "alarm") { Task { await RoutineAlarmCoordinator.shared.requestAccess(store) } }
+                    Text(store.routineAlarmStatus).font(.caption).foregroundStyle(.secondary)
                     if !store.checkInReminderStatus.isEmpty { Text(store.checkInReminderStatus).font(.caption).foregroundStyle(.secondary) }
                 }
-                ForEach($reminders) { $reminder in
-                    Section(reminder.kind.title) {
-                        Toggle("Erinnerung aktiv", isOn: $reminder.enabled)
-                        if reminder.enabled {
-                            CheckInClockFields(time: $reminder.time)
-                            Toggle("Im Urlaubsmodus pausieren", isOn: $reminder.pauseOnVacation)
+                ForEach(reminders) { initial in
+                    let reminder = identifiedEditorBinding($reminders, to: initial)
+                    let slot = slots.first { $0.id == initial.slotID }
+                    Section(slot?.title ?? initial.kind.title) {
+                        Toggle("Erinnerung aktiv", isOn: reminder.enabled)
+                        if reminder.wrappedValue.enabled {
+                            CheckInClockFields(time: reminder.time)
+                            Toggle("Zusätzlich als AlarmKit-Wecker", isOn: Binding(get: { reminder.wrappedValue.alarmEnabled ?? false }, set: { reminder.wrappedValue.alarmEnabled = $0 }))
+                            Toggle("Im Urlaubsmodus pausieren", isOn: reminder.pauseOnVacation)
+                            Text("Check-in verfügbar: " + (slot?.windowText ?? "entfernt")).font(.caption).foregroundStyle(.secondary)
+                            if !valid(reminder.wrappedValue) { Text("Aktiviere diesen Check-in und wähle eine Zeit innerhalb seines Zeitfensters sowie mindestens einen Wochentag.").font(.caption).foregroundStyle(.orange) }
                         }
                     }
                 }
@@ -38,7 +59,7 @@ struct CheckInReminderSettingsView: View {
                         Button("Speichern") {
                             store.data.companionSettings.checkInReminders = reminders
                             if let failure = store.lastSaveError { error = failure } else { dismiss() }
-                        }.disabled(reminders.contains { $0.enabled && $0.time.weekdays.isEmpty })
+                        }.disabled(!reminders.allSatisfy(valid))
                     }
                 }
         }

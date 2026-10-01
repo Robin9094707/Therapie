@@ -40,9 +40,16 @@ struct ReminderCenterView: View {
                 Toggle("Aufgabentitel auf Sperrbildschirm verbergen", isOn: $store.data.reminderPreferences.privateTaskTitles)
                 Toggle("Aufgaben mit Ton erinnern", isOn: $store.data.reminderPreferences.taskSound)
             }
+            Section("AlarmKit-Wecker") {
+                Toggle("Aufgaben standardmäßig auch als Wecker", isOn: Binding(get: { store.data.companionSettings.taskAlarmsEnabled ?? false }, set: { store.data.companionSettings.taskAlarmsEnabled = $0 }))
+                Button("Wecker freigeben & aktualisieren", systemImage: "alarm") { Task { await RoutineAlarmCoordinator.shared.requestAccess(store) } }
+                Text(store.routineAlarmStatus).font(.footnote).foregroundStyle(.secondary)
+                Text("Für Aufgaben, Tages-Check-ins und Routinen kannst du Wecker einzeln einschalten. Beim Öffnen und nach Änderungen wird der begrenzte Vorrat erneuert. Die AlarmKit-Freigabe ist unabhängig von Mitteilungen.").font(.caption).foregroundStyle(.secondary)
+            }
             Section("Energie am Therapietag") {
                 Toggle("Wochenenergie vor der Therapie eintragen", isOn: $store.data.reminderPreferences.energyReviewEnabled)
                 if store.data.reminderPreferences.energyReviewEnabled {
+                    Toggle("Zusätzlich als AlarmKit-Wecker", isOn: Binding(get: { store.data.companionSettings.energyReviewAlarm ?? false }, set: { store.data.companionSettings.energyReviewAlarm = $0 }))
                     Stepper("\(store.data.reminderPreferences.energyReviewMinutesBeforeTherapy) Minuten vorher", value: $store.data.reminderPreferences.energyReviewMinutesBeforeTherapy, in: 0...1440, step: 15)
                     Text("Folgt deinem Therapietag und deiner Uhrzeit. Der Hinweis öffnet den Wochen-Energierückblick.").font(.caption).foregroundStyle(.secondary)
                 }
@@ -54,7 +61,7 @@ struct ReminderCenterView: View {
                 Text("Verschieben passt die regelmäßige Uhrzeit und gegebenenfalls einen Erinnerungstag an. Du kannst beides jederzeit in der Aufgabe bearbeiten.").font(.caption).foregroundStyle(.secondary)
             }
             Section("Therapie-Alarme") {
-                Text("Therapietermine verwenden AlarmKit. Aktualisiere sie über Kalender → Mit iPhone synchronisieren. Aufgabenerinnerungen verwenden Mitteilungen mit Aktionen für Erledigen, Verschieben und Weiterarbeiten.").font(.footnote)
+                Text("Therapietermine verwenden AlarmKit. Aktualisiere sie über Kalender → Mit iPhone synchronisieren. Aufgaben können zusätzlich AlarmKit nutzen; zum Erledigen und Verschieben öffnet der Wecker die App.").font(.footnote)
                 NavigationLink { TherapyCalendarView() } label: { Label("Therapie-Alarme & Kalender", systemImage: "alarm") }
             }
         }.navigationTitle("Erinnerungen")

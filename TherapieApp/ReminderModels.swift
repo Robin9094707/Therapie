@@ -5,6 +5,7 @@ struct TaskReminder: Codable, Equatable {
     var weekdays = Array(1...7)
     var hour = 18
     var minute = 0
+    var alarmEnabled: Bool?
 }
 
 struct ReminderPreferences: Codable, Equatable {

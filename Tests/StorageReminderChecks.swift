@@ -33,6 +33,19 @@ struct StorageReminderChecks {
         try photo.write(to: legacy.appendingPathComponent("Media/p.jpg"))
         try Data().write(to: legacy.appendingPathComponent("Recordings/empty.m4a"))
         data.media = [MediaItem(kind: .photo, title: "Bild", note: "Wichtige Beschreibung", tags: ["Privat"], relativePath: "Media/p.jpg"), MediaItem(kind: .audio, title: "Leer", note: "", tags: [], relativePath: "Recordings/empty.m4a")]
+        data.notes[0].mediaIDs = data.media.map(\.id)
+        data.notes[0].updatedAt = Date()
+        data.moodCheckIns = [MoodCheckIn(mood: 4, battery: 3, moodPercent: 76)]
+        data.guidedCheckIns[0].moodPercent = 77
+        let point = BatteryPoint(title: "Technik", direction: .gives, note: "Ruhe beim Tüfteln", checkInID: data.guidedCheckIns[0].id)
+        data.guidedCheckIns[0].energyPoints = [point]
+        data.batteryPoints = [point]
+        data.companionSettings.dayCheckInSlots = DailyCheckInSlot.defaults + [DailyCheckInSlot(name: "Mein Moment", startHour: 12, endHour: 13)]
+        data.companionSettings.taskAlarmsEnabled = true
+        data.companionSettings.energyReviewAlarm = true
+        data.companionSettings.checkInReminders?[0].alarmEnabled = true
+        data.companionSettings.checkInReminders?[0].slotID = DailyCheckInSlot.defaults[0].id
+        data.weeklyTasks[0].reminder?.alarmEnabled = true
         try BackupArchive.encoder().encode(data).write(to: legacy.appendingPathComponent("therapy-data.json"))
         let legacyRecovery = BackupArchive.recoveryURL(legacy)
         try fm.createDirectory(at: legacyRecovery, withIntermediateDirectories: true)

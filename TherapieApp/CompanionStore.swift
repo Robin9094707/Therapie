@@ -4,6 +4,7 @@ extension AppStore {
     func saveGuided(_ entry: GuidedCheckIn, complete: Bool) {
         var clean = entry, snapshot = data
         clean.date = min(clean.date, Date())
+        clean.moodPercent = clean.moodPercent.map { max(0, min(100, $0)) }
         clean.mood = clean.mood.map { max(1, min(5, $0)) }
         clean.batteryPercent = clean.batteryPercent.map { max(0, min(100, $0)) }
         clean.stress = clean.stress.map { max(1, min(5, $0)) }
@@ -64,12 +65,41 @@ extension AppStore {
         var snapshot = data
         if RoutineHistoryMutation.correct(id: id, outcome: outcome, note: note, reason: reason, in: &snapshot) { data = snapshot }
     }
-    func openDailyCheckIn(_ kind: GuidedCheckInKind) {
-        guard [.morning, .evening].contains(kind) else { return }
-        let today = data.guidedCheckIns.filter { $0.kind == kind && Calendar.current.isDateInToday($0.date) }.sorted { $0.date > $1.date }
-        pendingGuidedCheckIn = today.first(where: \.isDraft) ?? today.first ?? GuidedCheckIn(kind: kind)
+    func openDailyCheckIn(_ kind: GuidedCheckInKind, slotID: UUID? = nil) {
+        guard DayCheckInPolicy.allows(kind: kind, id: slotID, settings: data.companionSettings),
+              let slot = DayCheckInPolicy.slot(kind: kind, id: slotID, settings: data.companionSettings) else {
+            checkInReminderStatus = "Dieser Check-in liegt außerhalb seines Zeitfensters oder ist deaktiviert."; return
+        }
+        let now = Date()
+        let entries = data.guidedCheckIns.filter { ($0.daySlotID == slot.id || ($0.daySlotID == nil && $0.kind == kind && kind != .free)) && slot.anchor(for: $0.date) == slot.anchor(for: now) }.sorted { $0.date > $1.date }
+        pendingGuidedCheckIn = entries.first(where: \.isDraft) ?? entries.first ?? DayCheckInPolicy.entry(slot, at: now)
+    }
+    func deleteGuided(_ id: UUID) {
+        var snapshot = data
+        snapshot.guidedCheckIns.removeAll { $0.id == id }
+        snapshot.batteryPoints.removeAll { $0.checkInID == id }
+        data = snapshot
+    }
+    func deleteBatteryPoint(_ id: UUID) {
+        var snapshot = data
+        snapshot.batteryPoints.removeAll { $0.id == id }
+        for index in snapshot.guidedCheckIns.indices { snapshot.guidedCheckIns[index].energyPoints?.removeAll { $0.id == id } }
+        data = snapshot
     }
     func consumeRoutineAlarmRoute() {
+        if let route = UserDefaults.standard.string(forKey: "therapy.companion.open") {
+            UserDefaults.standard.removeObject(forKey: "therapy.companion.open")
+            let parts = route.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+            if parts.first == "energy" { openEnergyReview = true }
+            if parts.count >= 2 {
+                switch parts[0] {
+                case "routine": notificationRoutineID = UUID(uuidString: parts[1])
+                case "task": if let id = UUID(uuidString: parts[1]), data.weeklyTasks.contains(where: { $0.id == id && !$0.completed }) { notificationTaskID = id }
+                case "checkin": if let kind = GuidedCheckInKind(rawValue: parts[1]) { openDailyCheckIn(kind, slotID: parts.count > 2 ? UUID(uuidString: parts[2]) : nil) }
+                default: break
+                }
+            }
+        }
         if let raw = UserDefaults.standard.string(forKey: "therapy.routine.open"), let id = UUID(uuidString: raw) {
             notificationRoutineID = id
             UserDefaults.standard.removeObject(forKey: "therapy.routine.open")

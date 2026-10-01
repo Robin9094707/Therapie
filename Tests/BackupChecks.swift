@@ -70,6 +70,19 @@ struct BackupChecks {
             try bytes.write(to: root.appendingPathComponent(path))
             data.media.append(MediaItem(kind: kind, title: kind.displayName, note: "Metadaten bleiben erhalten", tags: ["Therapie"], relativePath: path, folderID: folder.id, topicID: topic.id))
         }
+        data.notes[0].mediaIDs = data.media.map(\.id)
+        data.notes[0].updatedAt = Date()
+        data.moodCheckIns = [MoodCheckIn(mood: 4, battery: 3, moodPercent: 76)]
+        data.guidedCheckIns[0].moodPercent = 77
+        let point = BatteryPoint(title: "Technik", direction: .gives, note: "Ruhe beim Tüfteln", checkInID: data.guidedCheckIns[0].id)
+        data.guidedCheckIns[0].energyPoints = [point]
+        data.batteryPoints = [point]
+        data.companionSettings.dayCheckInSlots = DailyCheckInSlot.defaults + [DailyCheckInSlot(name: "Mein Moment", startHour: 12, endHour: 13)]
+        data.companionSettings.taskAlarmsEnabled = true
+        data.companionSettings.energyReviewAlarm = true
+        data.companionSettings.checkInReminders?[0].alarmEnabled = true
+        data.companionSettings.checkInReminders?[0].slotID = DailyCheckInSlot.defaults[0].id
+        data.weeklyTasks[0].reminder?.alarmEnabled = true
         try BackupArchive.encoder().encode(data).write(to: root.appendingPathComponent("therapy-data.json"))
         let prefs = PortablePreferences(appearance: "dark", calmInterface: false, haptics: false, confetti: false)
         let archive = try BackupArchive.export(data: data, root: root, preferences: prefs, options: BackupOptions(), password: password, version: "3002.0.0")
@@ -158,10 +171,10 @@ struct BackupChecks {
         prefs.apply(defaults)
         try expect(PortablePreferences.capture(defaults) == prefs, "Appearance, calm, haptics and confetti restored")
         var oldJSON = try JSONSerialization.jsonObject(with: BackupArchive.encoder().encode(data)) as! [String: Any]
-        for version in 1...6 {
+        for version in 1...7 {
             oldJSON["schemaVersion"] = version
             let migrated = try BackupArchive.decoder().decode(AppData.self, from: JSONSerialization.data(withJSONObject: oldJSON))
-            try expect(migrated.schemaVersion == 7 && migrated.notes.count == 1 && migrated.media[0].attachmentOmitted == nil, "Schema \(version) migrates for backups")
+            try expect(migrated.schemaVersion == 8 && migrated.notes.count == 1 && migrated.media[0].attachmentOmitted == nil, "Schema \(version) migrates for backups")
         }
         print("Passed \(count) encrypted backup checks: complete model, streaming attachments, password authentication, tampering, paths, omissions, settings and recovery.")
     }

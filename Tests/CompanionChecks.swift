@@ -21,7 +21,7 @@ import Foundation
         object["schemaVersion"] = 6
         for key in ["guidedCheckIns", "routines", "routineCompletions", "routineSnoozes", "companionSettings"] { object.removeValue(forKey: key) }
         let migrated = try BackupArchiveCompatible.decode(JSONSerialization.data(withJSONObject: object))
-        try expect(migrated.schemaVersion == 7 && migrated.routines.isEmpty && migrated.guidedCheckIns.isEmpty, "Schema 6 migration defaults")
+        try expect(migrated.schemaVersion == 8 && migrated.routines.isEmpty && migrated.guidedCheckIns.isEmpty, "Schema 6 migration defaults")
         entry.mood = nil; entry.batteryPercent = nil; data.guidedCheckIns = [entry]
         try expect(try BackupArchiveCompatible.decode(BackupArchiveCompatible.encode(data)).guidedCheckIns[0].batteryPercent == nil, "Skipped answers stay absent")
         var mutationData = AppData()
@@ -109,6 +109,7 @@ import Foundation
         companion.companionSettings.checkInReminders![0].enabled = false
         try expect(CheckInReminderPlanner.slots(data: companion, now: now, calendar: calendar).isEmpty, "Disabled check-in reminder cancels all hints")
         companion.companionSettings.vacationUntil = nil
+        companion.companionSettings.dayCheckInSlots = DailyCheckInSlot.defaults.map { slot in var value = slot; if value.kind == .morning { value.startHour = 0; value.endHour = 0 }; return value }
         companion.companionSettings.checkInReminders = [CheckInReminder(time: RoutineTime(hour: 2, minute: 30))]
         let springHints = CheckInReminderPlanner.slots(data: companion, now: dstNow, calendar: calendar)
         try expect(springHints.filter { calendar.isDate($0.fireAt, inSameDayAs: date("2026-03-29T12:00:00Z")) }.count == 1, "Missing spring check-in clock produces exactly one hint")
@@ -119,7 +120,7 @@ import Foundation
         var legacySettings = legacyObject["companionSettings"] as! [String: Any]
         legacySettings.removeValue(forKey: "checkInReminders"); legacyObject["companionSettings"] = legacySettings
         let oldSettings = try BackupArchiveCompatible.decode(JSONSerialization.data(withJSONObject: legacyObject))
-        try expect(oldSettings.companionSettings.checkInReminders == nil && oldSettings.schemaVersion == 7, "Previous schema-7 settings decode with reminders off")
+        try expect(oldSettings.companionSettings.checkInReminders == nil && oldSettings.schemaVersion == 8, "Previous schema-7 settings decode with reminders off")
         let originalLog = RoutineCompletion(routineID: routine.id, timeID: time.id, scheduledAt: now, recordedAt: now, outcome: .done)
         companion.routines = [routine]; companion.routineCompletions = [originalLog]
         RoutineHistoryMutation.preserveTitles(in: &companion, routine: routine)

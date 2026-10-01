@@ -91,6 +91,7 @@ struct WeeklyTaskEditorView: View {
             Section {
                 Toggle("Bis zum Erledigen erinnern", isOn: reminder.enabled)
                 if reminder.wrappedValue.enabled {
+                    Toggle("Zusätzlich als AlarmKit-Wecker", isOn: Binding(get: { reminder.wrappedValue.alarmEnabled ?? store.data.companionSettings.taskAlarmsEnabled ?? false }, set: { reminder.wrappedValue.alarmEnabled = $0 }))
                     DatePicker("Uhrzeit", selection: reminderTime, displayedComponents: .hourAndMinute)
                     WeekdaySelection(days: reminder.weekdays)
                     Button("Täglich erinnern") { reminder.wrappedValue.weekdays = Array(1...7) }

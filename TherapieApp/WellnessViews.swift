@@ -106,7 +106,7 @@ struct WellnessHubView: View {
                 Button("Endgültig löschen", role: .destructive) {
                     switch deletion {
                     case .mood(let entry): store.deleteCheckIn(entry)
-                    case .point(let point): store.data.batteryPoints.removeAll { $0.id == point.id }
+                    case .point(let point): store.deleteBatteryPoint(point.id)
                     case .review(let review): store.data.weekReviews.removeAll { $0.id == review.id }
                     case nil: break
                     }
@@ -442,7 +442,7 @@ struct MoodEditorView: View {
             Form {
                 Section {
                     DatePicker("Wann?", selection: $entry.date, in: ...Date(), displayedComponents: [.date, .hourAndMinute])
-                    moodPicker
+                    MoodBarometerControl(percent: Binding(get: { entry.moodPercent ?? (entry.mood - 1) * 25 }, set: { entry.moodPercent = $0; entry.mood = MoodBarometer.score($0) }))
                     Stepper("Akku: \(entry.battery)/5", value: $entry.battery, in: 1...5)
                     Text("1 = fast leer · 5 = voll").font(.caption).foregroundStyle(.secondary)
                 } header: { Text("Wie geht es dir?") } footer: { Text("Zwei Werte reichen für einen kurzen Check-in. Alles Weitere ist freiwillig.") }
@@ -515,24 +515,6 @@ struct MoodEditorView: View {
                 Button("Entfernen", role: .destructive) { points.removeAll { $0.id == deletePoint } }
             } message: { Text("Diese Änderung wird erst mit dem Check-in gespeichert.") }
         }
-    }
-    private var moodPicker: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Stimmung: \(entry.moodTitle)").font(.headline)
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) { ForEach(1...5, id: \.self) { score in moodButton(score) } }
-                VStack { ForEach(1...5, id: \.self) { score in moodButton(score) } }
-            }
-        }.padding(.vertical, 6)
-    }
-    private func moodButton(_ score: Int) -> some View {
-        Button { entry.mood = score } label: {
-            Text(MoodCheckIn.moodFaces[score - 1]).font(.title).frame(minWidth: 44, minHeight: 52)
-                .frame(maxWidth: .infinity).background(entry.mood == score ? Color.indigo.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(entry.mood == score ? Color.indigo : Color.clear, lineWidth: 2))
-        }.buttonStyle(.plain).accessibilityLabel(MoodCheckIn.moodTitles[score - 1])
-            .accessibilityAddTraits(entry.mood == score ? .isSelected : [])
-            .accessibilityIdentifier("wellness.mood-\(score)")
     }
     private func optionalScore(_ title: String, value: Binding<Int?>) -> some View {
         VStack(alignment: .leading) {

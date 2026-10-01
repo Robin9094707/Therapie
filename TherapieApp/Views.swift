@@ -369,8 +369,8 @@ struct MainTabView: View {
                 .tabItem { Label("Heute", systemImage: "sparkles") }
                 .tag(0)
 
-            WellnessHubView()
-                .tabItem { Label("Stimmung", systemImage: "face.smiling") }
+            InsightsHubView()
+                .tabItem { Label("Insights", systemImage: "chart.xyaxis.line") }
                 .tag(1)
 
             TherapyHubView()
@@ -412,6 +412,7 @@ struct DashboardView: View {
         NavigationStack {
             TherapyScreen {
                 VStack(spacing: 16) {
+                    PersonalWelcomeCard()
                     hero
                     CompanionTodayCard()
                     quickActions
@@ -449,7 +450,7 @@ struct DashboardView: View {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .top, spacing: 14) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(greeting)
+                        Text("Deine Therapiewoche")
                             .font(.system(.title2, design: .rounded, weight: .bold))
                             .lineLimit(2)
                             .minimumScaleFactor(0.8)
@@ -520,19 +521,6 @@ struct DashboardView: View {
                 }
             }
         }
-    }
-
-    private var greeting: String {
-        let hour = Calendar.current.component(.hour, from: Date())
-        let prefix: String
-        switch hour {
-        case 5..<12: prefix = "Guten Morgen"
-        case 12..<18: prefix = "Hallo"
-        default: prefix = "Guten Abend"
-        }
-
-        let name = store.data.profile.userName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return name.isEmpty ? prefix : prefix + ", " + name
     }
 
     private var quickActions: some View {
@@ -1182,37 +1170,7 @@ struct LibraryView: View {
     }
 
     private var notesSection: some View {
-        LazyVStack(spacing: 12) {
-            if store.data.notes.isEmpty {
-                GlassCard {
-                    ContentUnavailableView("Noch keine Notizen", systemImage: "note.text")
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 26)
-                }
-            }
-
-            ForEach($store.data.notes) { $note in
-                if matches([note.title, note.text] + note.tags) {
-                GlassCard {
-                    VStack(alignment: .leading, spacing: 9) {
-                        TextField("Titel", text: $note.title)
-                            .font(.headline)
-                        Button("Notiz löschen", systemImage: "trash", role: .destructive) { noteToDelete = note.id; confirmDelete = true }
-                            .font(.caption)
-
-                        TextField("Notiz", text: $note.text, axis: .vertical)
-                            .lineLimit(2...8)
-
-                        if !note.tags.isEmpty {
-                            Text(note.tags.map { "#" + $0 }.joined(separator: " "))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                }
-            }
-        }
+        TherapyNotesCollectionView(searchText: searchText)
     }
 
     private var energySection: some View {
@@ -1861,6 +1819,7 @@ struct AudioRecordingView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var recorder = AudioRecorderService()
 
+    var onSaved: ((UUID) -> Void)? = nil
     @State private var currentURL: URL?
     @State private var title = ""
     @State private var tags = ""
@@ -1943,6 +1902,8 @@ struct AudioRecordingView: View {
                     title: title,
                     tags: parseTags(tags)
                 )
+                if let failure = store.lastSaveError { errorMessage = failure; return }
+                if let item = store.data.media.first(where: { $0.relativePath == "Recordings/" + currentURL.lastPathComponent }) { onSaved?(item.id) }
                 dismiss()
             }
         } else {

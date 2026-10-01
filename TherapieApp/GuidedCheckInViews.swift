@@ -39,6 +39,8 @@ struct GuidedCheckInView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State var entry: GuidedCheckIn
     @State private var battery = 50
+    @State private var moodDial = 50
+    @State private var pointDraft: BatteryPoint?
     @State private var selection: PhotosPickerItem?
     @State private var importing = false
     @State private var error: String?
@@ -49,7 +51,7 @@ struct GuidedCheckInView: View {
         NavigationStack {
             TherapyScreen {
                 VStack(alignment: .leading, spacing: 20) {
-                    HStack { Label(entry.kind.title, systemImage: entry.kind.symbol).font(.headline); Spacer(); Text("\(step + 1) / 8").font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
+                    HStack { Label(entry.displayTitle, systemImage: entry.kind.symbol).font(.headline); Spacer(); Text("\(step + 1) / 8").font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
                     ProgressView(value: Double(step + 1), total: 8).tint(.indigo)
                     GlassCard(emphasized: true) {
                         VStack(alignment: .leading, spacing: 20) {
@@ -64,7 +66,8 @@ struct GuidedCheckInView: View {
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Schließen") { if entry.isDraft { persistDraft(); if store.lastSaveError == nil { dismiss() } } else { showExit = true } } } }
             .safeAreaInset(edge: .bottom) { footer.padding(16).background(.regularMaterial) }
             .alert("Bearbeitung beenden?", isPresented: $showExit) { Button("Weiter bearbeiten", role: .cancel) {}; Button("Änderungen verwerfen", role: .destructive) { dismiss() } } message: { Text("Änderungen am abgeschlossenen Check-in werden erst beim abschließenden Speichern übernommen. Neu importierte Fotos bleiben als Materialien im Archiv.") }
-            .onAppear { battery = entry.batteryPercent ?? 50 }
+            .onAppear { battery = entry.batteryPercent ?? 50; moodDial = entry.moodPercent ?? ((entry.mood ?? 3) - 1) * 25 }
+            .sheet(item: $pointDraft) { point in CheckInKeywordEditor(point: point) { value in var all = entry.energyPoints ?? []; all.removeAll { $0.id == value.id }; all.append(value); entry.energyPoints = all } }
             .onChange(of: selection) { _, value in if let value { Task { await addPhoto(value) } } }
         }
     }
@@ -77,19 +80,19 @@ struct GuidedCheckInView: View {
             TherapyInputField(title: "Ein Gedanke zum Einstieg", symbol: "thought.bubble", text: $entry.summary)
         case 1:
             Text("Wie geht es dir gerade?")
-            VStack(spacing: 8) {
-                ForEach(1...5, id: \.self) { value in
-                    Button { entry.mood = value; TherapyEffects.shared.light() } label: {
-                        HStack { Text(MoodCheckIn.moodFaces[value - 1]).font(.title2); Text(MoodCheckIn.moodTitles[value - 1]); Spacer(); if entry.mood == value { Image(systemName: "checkmark.circle.fill") } }.padding(12).background(entry.mood == value ? Color.indigo.opacity(0.12) : Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 16))
-                    }.buttonStyle(.plain).accessibilityAddTraits(entry.mood == value ? .isSelected : [])
-                }
-            }
+            MoodBarometerControl(percent: $moodDial).onChange(of: moodDial) { _, value in entry.moodPercent = value; entry.mood = MoodBarometer.score(value) }
+            Button(entry.mood == nil ? "Diese Stimmung übernehmen" : "Stimmung wurde gewählt", systemImage: "checkmark.circle") { entry.moodPercent = moodDial; entry.mood = MoodBarometer.score(moodDial) }.buttonStyle(.bordered)
         case 2:
             Text("Ziehe im Akku oder nutze den Regler. Auch 0 % ist okay.").foregroundStyle(.secondary)
             EnergyBatteryControl(percent: $battery).onChange(of: battery) { _, value in entry.batteryPercent = value }
             Button(entry.batteryPercent == nil ? "Diesen Akkustand übernehmen" : "Akku wurde gewählt", systemImage: "checkmark.circle") { entry.batteryPercent = battery }.buttonStyle(.bordered)
-            field("Was lädt deinen Akku auf?", text: $entry.givesEnergy)
-            field("Was kostet dich Energie?", text: $entry.takesEnergy)
+            CheckInKeywordSection(points: Binding(get: { entry.energyPoints ?? [] }, set: { entry.energyPoints = $0 }), add: { pointDraft = BatteryPoint(direction: $0) }, edit: { pointDraft = $0 })
+            if !entry.givesEnergy.isEmpty || !entry.takesEnergy.isEmpty {
+                DisclosureGroup("Bisherige Beschreibungen behalten / bearbeiten") {
+                    field("Was lädt deinen Akku auf?", text: $entry.givesEnergy)
+                    field("Was kostet dich Energie?", text: $entry.takesEnergy)
+                }
+            }
         case 3:
             optionalScale("Wie stark ist dein Stress?", value: $entry.stress)
             optionalScale("Wie stark belasten dich Reize?", value: $entry.sensoryLoad)
@@ -129,6 +132,9 @@ struct GuidedCheckInView: View {
     private var intro: String {
         switch entry.kind {
         case .morning: "Starte mit einem ruhigen Blick auf dich. Was brauchst du für einen guten Morgen?"
+        case .noon: "Ein kurzer Zwischenstand zur Tagesmitte. Was hat dir Energie gegeben?"
+        case .afternoon: "Wie geht es dir nach diesem Teil deines Tages? Was brauchst du für den Rest?"
+        case .night: "Ein ruhiger Moment in der Nacht. Halte nur fest, was dir jetzt wichtig ist."
         case .evening: "Der Tag darf jetzt ausklingen. Halte fest, was wichtig war und was dir gutgetan hat."
         case .therapy: "Nimm dir einen Moment nach deiner Therapiestunde. Was nimmst du mit, und welche kleinen Schritte folgen?"
         case .free: "Ein Moment nur für dich. Halte fest, wie es dir geht und was du gerade brauchst."
@@ -161,14 +167,15 @@ struct GuidedCheckInView: View {
     private func advance(_ amount: Int) { withAnimation(reduceMotion ? nil : .smooth) { entry.step = max(0, min(7, step + amount)) }; persistDraft() }
     private func persistDraft() { guard entry.isDraft else { return }; store.saveGuided(entry, complete: false); error = store.lastSaveError }
     private func clearStep() {
-        switch step { case 1: entry.mood = nil; case 2: entry.batteryPercent = nil; entry.givesEnergy = ""; entry.takesEnergy = ""; case 3: entry.stress = nil; entry.sensoryLoad = nil; entry.sleepHours = nil; case 4: entry.summary = ""; entry.smallWin = ""; entry.nextNeed = ""; case 5: if entry.isDraft { entry.tasks = [] }; case 6: entry.therapyQuestion = ""; default: break }
+        switch step { case 1: entry.mood = nil; entry.moodPercent = nil; case 2: entry.batteryPercent = nil; entry.energyPoints = []; entry.givesEnergy = ""; entry.takesEnergy = ""; case 3: entry.stress = nil; entry.sensoryLoad = nil; entry.sleepHours = nil; case 4: entry.summary = ""; entry.smallWin = ""; entry.nextNeed = ""; case 5: if entry.isDraft { entry.tasks = [] }; case 6: entry.therapyQuestion = ""; default: break }
     }
     private func addPhoto(_ item: PhotosPickerItem) async {
         importing = true; defer { importing = false; selection = nil }
         do {
             guard let bytes = try await item.loadTransferable(type: Data.self), let image = UIImage(data: bytes), let jpeg = image.jpegData(compressionQuality: 0.85) else { throw ServiceError.permissionDenied("Das Foto konnte nicht gelesen werden.") }
-            let title = entry.kind.title + " – " + Date().formatted(date: .abbreviated, time: .omitted)
-            try store.importPhoto(bytes: jpeg, fileExtension: "jpg", title: title, note: "Foto zum geführten Check-in", tags: [entry.kind.title], location: nil)
+            let title = entry.displayTitle + " – " + Date().formatted(date: .abbreviated, time: .omitted)
+            try store.importPhoto(bytes: jpeg, fileExtension: "jpg", title: title, note: "Foto zum geführten Check-in", tags: [entry.displayTitle], location: nil)
+            if let failure = store.lastSaveError { error = failure; return }
             if let id = store.data.media.first?.id { entry.mediaIDs.append(id); persistDraft() }
         } catch { self.error = error.localizedDescription }
     }
@@ -186,6 +193,7 @@ struct GuidedCheckInSummary: View {
             ForEach([("Rückblick", entry.summary), ("Gibt Energie", entry.givesEnergy), ("Kostet Energie", entry.takesEnergy), ("Kleiner Erfolg", entry.smallWin), ("Jetzt brauche ich", entry.nextNeed), ("Für die Therapie", entry.therapyQuestion)], id: \.0) { title, text in
                 if !text.isEmpty { VStack(alignment: .leading, spacing: 4) { Text(title).font(.subheadline.bold()); Text(text).textSelection(.enabled) } }
             }
+            ForEach(entry.energyPoints ?? []) { point in Label(point.title + (point.note.isEmpty ? "" : " · " + point.note), systemImage: point.direction.symbol).font(.subheadline).foregroundStyle(point.direction == .gives ? .teal : .orange) }
             ForEach(entry.tasks.filter { !$0.title.isEmpty }) { task in Label(task.title, systemImage: "checklist").font(.subheadline) }
             if !entry.mediaIDs.isEmpty { Label("\(entry.mediaIDs.count) verknüpfte Fotos", systemImage: "photo") }
         }

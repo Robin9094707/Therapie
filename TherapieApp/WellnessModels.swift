@@ -51,6 +51,7 @@ struct MoodCheckIn: Identifiable, Codable, Equatable {
     var smallWin = ""
     var nextNeed = ""
     var favorite = false
+    var moodPercent: Int?
 
     static let emotionOptions = ["Ruhig", "Glücklich", "Zufrieden", "Stolz", "Dankbar", "Unsicher",
                                  "Traurig", "Ängstlich", "Gereizt", "Überfordert", "Müde", "Motiviert"]
@@ -184,7 +185,7 @@ enum WellnessAnalytics {
             let old = legacy[day] ?? []
             let new = guided[day] ?? []
             return DailyWellnessValue(date: day,
-                mood: average(entries.map { Double($0.mood) } + new.compactMap { $0.mood.map(Double.init) }),
+                mood: average(entries.map { ($0.moodPercent.map { 1 + Double($0) / 25 } ?? Double($0.mood)) } + new.compactMap { $0.moodPercent.map { 1 + Double($0) / 25 } ?? $0.mood.map(Double.init) }),
                 battery: average(entries.map { Double($0.battery) } + old.map { Double($0.level) } + new.compactMap { $0.batteryPercent.map { 1 + Double($0) / 25 } }),
                 stress: average(entries.compactMap { $0.stress.map(Double.init) } + new.compactMap { $0.stress.map(Double.init) }),
                 sensory: average(entries.compactMap { $0.sensoryLoad.map(Double.init) } + new.compactMap { $0.sensoryLoad.map(Double.init) }),
