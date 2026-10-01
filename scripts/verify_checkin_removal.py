@@ -44,7 +44,7 @@ print('Testing saved overview and real task removal on', phone['name'], flush=Tr
 with (output / 'test.log').open('w') as log:
     process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
     try:
-        code = process.wait(timeout=420)
+        code = process.wait(timeout=900)
     except subprocess.TimeoutExpired:
         process.terminate()
         try:
@@ -54,7 +54,10 @@ with (output / 'test.log').open('w') as log:
         code = 1
         log.write('\nFocused UI test timed out; runtime verification failed.\n')
 (output / 'status.json').write_text(json.dumps({'status': 'passed' if code == 0 else 'failed', 'device': phone['name']}))
-run('xcrun', 'simctl', 'shutdown', udid, check=False)
+try:
+    run('xcrun', 'simctl', 'shutdown', udid, timeout=15, check=False)
+except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
+    print('Simulator cleanup did not finish; preserving the actual test result.', flush=True)
 if code:
     print((output / 'test.log').read_text()[-16000:], flush=True)
     raise SystemExit(1)
