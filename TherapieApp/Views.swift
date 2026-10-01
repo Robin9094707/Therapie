@@ -39,6 +39,7 @@ struct RootView: View {
         .onOpenURL { url in
             guard url.scheme == "therapie" else { return }
             switch url.host {
+            case "widgetsetup": store.notificationWidgetSetup = true
             case "session": openSession = true
             case "today": store.selectedTab = 0
             case "archive": store.selectedTab = 3
@@ -59,6 +60,7 @@ struct RootView: View {
             if let id = store.notificationRoutineID { RoutineDetailView(routineID: id) }
         }
         .onChange(of: store.notificationSession) { _, value in if value { store.notificationSession = false; openSession = true } }
+        .sheet(isPresented: $store.notificationWidgetSetup) { WidgetSetupHelpView() }
         .sheet(isPresented: $store.notificationRoutines) { NavigationStack { RoutineHubView() } }
         .sheet(isPresented: $store.notificationReminders) { NavigationStack { ReminderCenterView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { store.notificationReminders = false } } } } }
         .sheet(isPresented: $store.notificationTherapy) { TherapyAppointmentsView() }
@@ -73,12 +75,14 @@ struct RootView: View {
                 store.consumeRoutineAlarmRoute()
                 if Date().timeIntervalSince(lastReminderRefresh) >= 300 && store.loadError == nil && store.lastSaveError == nil {
                     lastReminderRefresh = Date()
+                    store.pruneUndo()
                     TaskNotificationCoordinator.shared.refresh(store)
                 }
                 do { try await Task.sleep(for: .seconds(1)) } catch { break }
             }
         }
         .overlay { TherapyCelebrationOverlay() }
+        .safeAreaInset(edge: .bottom) { UndoChangesButton() }
         .transaction { if reduceMotion { $0.animation = nil } }
         .task {
             if !permissionSetupDone && !ProcessInfo.processInfo.arguments.contains("--ui-testing") {
@@ -400,6 +404,10 @@ struct MainTabView: View {
                 .tabItem { Label("Archiv", systemImage: "square.stack.3d.up.fill") }
                 .tag(3)
 
+            if store.data.aiSettings.enabled {
+                NavigationStack { AIBuddyView() }
+                    .tabItem { Label("KI", systemImage: "bubble.left.and.text.bubble.right") }.tag(5)
+            }
             SettingsView()
                 .tabItem { Label("Profil", systemImage: "person.crop.circle.fill") }
                 .tag(4)
@@ -476,6 +484,7 @@ struct DashboardView: View {
     @ViewBuilder private func dashboardCard(_ card: HomeCard) -> some View {
         switch card {
         case .appointment: TherapyAppointmentCard()
+        case .discussion: TherapyDiscussionCard()
         case .checkIns: CompanionTodayCard()
         case .routines: TodayRoutinesCard()
         case .overview: TodayOverviewCard()
@@ -642,7 +651,7 @@ struct TherapyCalendarView: View {
     @State private var syncing = false
 
     private var therapyWeekdayMatch: Bool {
-        Calendar.current.component(.weekday, from: selectedDate) == store.data.schedule.weekday
+        !TherapyDateHelper.appointments(on: selectedDate, schedule: store.data.schedule).isEmpty
     }
 
     private var dayNotes: [TherapyNote] {
@@ -1239,6 +1248,7 @@ struct SettingsView: View {
                     profileCard
                     AppearanceCard()
                     HomeAndWidgetSettingsCard()
+                    AIBuddySettingsCard()
                     GlassCard {
                         NavigationLink { WellnessSettingsView() } label: {
                             Label("Stimmung: Ziele, Erinnerungen & Freigaben", systemImage: "heart.text.clipboard")

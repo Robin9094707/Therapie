@@ -10,7 +10,10 @@ extension AppStore {
         clean.stress = clean.stress.map { max(1, min(5, $0)) }
         clean.sensoryLoad = clean.sensoryLoad.map { max(1, min(5, $0)) }
         clean.sleepHours = clean.sleepHours.map { max(0, min(24, $0)) }
-        GuidedCheckInMutation.apply(clean, complete: complete, to: &snapshot)
+        guard GuidedCheckInMutation.apply(clean, complete: complete, to: &snapshot) else {
+            lastSaveError = "Für diesen Check-in gibt es heute schon einen Eintrag. Öffne ihn zum Bearbeiten; deine neue Eingabe bleibt hier erhalten."
+            return
+        }
         data = snapshot
     }
     func offerCheckIn(for session: RunningTherapySession) {
@@ -71,8 +74,7 @@ extension AppStore {
             checkInReminderStatus = "Dieser Check-in liegt außerhalb seines Zeitfensters oder ist deaktiviert."; return
         }
         let now = Date()
-        let entries = data.guidedCheckIns.filter { ($0.daySlotID == slot.id || ($0.daySlotID == nil && $0.kind == kind && kind != .free)) && slot.anchor(for: $0.date) == slot.anchor(for: now) }.sorted { $0.date > $1.date }
-        pendingGuidedCheckIn = entries.first(where: \.isDraft) ?? entries.first ?? DayCheckInPolicy.entry(slot, at: now)
+        pendingGuidedCheckIn = DayCheckInPolicy.reopen(DayCheckInPolicy.entry(slot, at: now), in: data)
     }
     func deleteGuided(_ id: UUID) {
         var snapshot = data

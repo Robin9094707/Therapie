@@ -6,8 +6,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    CURRENT_PROJECT_VERSION: 14
-    MARKETING_VERSION: 3007.0.0
+    CURRENT_PROJECT_VERSION: 15
+    MARKETING_VERSION: 3008.0.0
 targets:
   TherapieApp:
     type: application

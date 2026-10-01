@@ -10,13 +10,13 @@ import Foundation
         let cal = Calendar.therapyCalendar
         let now = date("2026-09-30T12:00:00Z")
         let defaults = DailyCheckInSlot.defaults
-        try expect(defaults.count == 5 && defaults.filter(\.enabled).count == 4, "Four daytime defaults and opt-in night")
+        try expect(defaults.count == 5 && defaults.filter(\.enabled).count == 4, "Morning, noon, evening and night defaults; afternoon optional")
         let morning = defaults[0], night = defaults[4]
         try expect(morning.contains(date("2026-10-01T03:00:00Z"), calendar: cal), "Morning starts at 5 local")
         try expect(!morning.contains(date("2026-10-01T09:00:00Z"), calendar: cal), "Morning end is exclusive at 11 local")
         try expect(night.contains(date("2026-10-01T01:00:00Z"), calendar: cal) && night.contains(date("2026-09-30T21:00:00Z"), calendar: cal), "Night spans midnight")
         try expect(night.anchor(for: date("2026-10-01T01:00:00Z"), calendar: cal) == night.anchor(for: date("2026-09-30T21:00:00Z"), calendar: cal), "Night shares one anchor across midnight")
-        try expect(!DayCheckInPolicy.allows(kind: .night, settings: CompanionSettings(), at: date("2026-10-01T01:00:00Z"), calendar: cal), "Disabled night blocked")
+        try expect(DayCheckInPolicy.allows(kind: .night, settings: CompanionSettings(), at: date("2026-10-01T01:00:00Z"), calendar: cal), "Night is a default slot")
         try expect(!DayCheckInPolicy.allows(kind: .morning, id: UUID(), settings: CompanionSettings(), at: date("2026-10-01T05:00:00Z"), calendar: cal), "Deleted slot cannot fall back to another slot")
         try expect(DayCheckInPolicy.allows(kind: .therapy, settings: CompanionSettings(), at: now), "Therapy remains available anytime")
         let custom = DailyCheckInSlot(name: "Ruhe", startHour: 13, endHour: 16)
@@ -88,7 +88,7 @@ import Foundation
         var legacy = try JSONSerialization.jsonObject(with: JSONEncoder().encode(AppData())) as! [String: Any]
         legacy["schemaVersion"] = 7
         let restored = try JSONDecoder().decode(AppData.self, from: JSONSerialization.data(withJSONObject: legacy))
-        try expect(restored.schemaVersion == 9 && restored.companionSettings.dayCheckInSlots == nil && restored.companionSettings.taskAlarmsEnabled == nil, "Schema 7 adds safe optional defaults")
+        try expect(restored.schemaVersion == 10 && restored.companionSettings.dayCheckInSlots == nil && restored.companionSettings.taskAlarmsEnabled == nil, "Schema 7 adds safe optional defaults")
         print("Passed \(count) insights, timed check-in, atomic battery, alarm inventory and PDF selection checks.")
     }
 }

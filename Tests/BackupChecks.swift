@@ -46,6 +46,12 @@ struct BackupChecks {
         data.routineSnoozes = [RoutineSnooze(id: "portable-occurrence", until: Date())]
         data.guidedCheckIns = [GuidedCheckIn(kind: .therapy, mood: 4, batteryPercent: 0, stress: 2, sensoryLoad: 3, sleepHours: 7.5, summary: "Geführter Rückblick", therapyQuestion: "Was hilft?", tasks: [CheckInTaskDraft(title: "Erster Schritt", source: "Aus der Therapie")], isDraft: false)]
         data.companionSettings = CompanionSettings(vacationUntil: Date(), privateRoutineTitles: false, offerTherapyCheckIn: true, checkInReminders: [CheckInReminder(kind: .morning, time: RoutineTime(weekdays: [2, 3, 4, 5, 6], hour: 6, minute: 30, weekendHour: 9, weekendMinute: 0))])
+        data.aiSettings.enabled = true; data.aiSettings.model = "gpt-6-luna"; data.aiSettings.contextDays = 14; data.aiSettings.allowVoiceUploads = true
+        data.aiMessages = [AIBuddyMessage(role: "assistant", text: "Mein Rückblick", reply: AIBuddyReply(title: "Meine Woche", message: "Eine gute Pause", sections: [], actions: [AIBuddyAction(kind: .note, title: "Gedanke", text: "Gut", weekdays: [])], suggestedDays: 14))]
+        data.therapyDiscussionAcknowledgedIDs = ["guided-discussed"]
+        data.schedule.recurrence = TherapyRecurrence(interval: 2, additionalWeeklySlots: [TherapyWeeklySlot(weekday: 5, hour: 10)])
+        data.schedule.extraAppointments = [TherapyExtraAppointment(title: "Zusatzgespräch")]
+        data.companionSettings.allowMultipleCheckInsPerSlot = false; data.companionSettings.alarmShowsActualTitles = true
         data.schedule.alarmIDs = ["local-device-only"]
         data.preferences.includeLocationForNewMedia = false
         data.schedule.location = "Praxis"
@@ -189,14 +195,20 @@ struct BackupChecks {
         prefs.apply(defaults)
         try expect(PortablePreferences.capture(defaults) == prefs, "Appearance, calm, haptics and confetti restored")
         var oldJSON = try JSONSerialization.jsonObject(with: BackupArchive.encoder().encode(data)) as! [String: Any]
-        for version in 1...8 {
+        for version in 1...9 {
             oldJSON["schemaVersion"] = version
             let migrated = try BackupArchive.decoder().decode(AppData.self, from: JSONSerialization.data(withJSONObject: oldJSON))
-            try expect(migrated.schemaVersion == 9 && migrated.notes.count == 1 && migrated.media[0].attachmentOmitted == nil, "Schema \(version) migrates for backups")
+            try expect(migrated.schemaVersion == 10 && migrated.notes.count == 1 && migrated.media[0].attachmentOmitted == nil, "Schema \(version) migrates for backups")
         }
         oldJSON["schemaVersion"] = 8; oldJSON.removeValue(forKey: "dashboard"); oldJSON.removeValue(forKey: "archivePreferences")
         let oldWithoutSettings = try BackupArchive.decoder().decode(AppData.self, from: JSONSerialization.data(withJSONObject: oldJSON))
         try expect(oldWithoutSettings.dashboard == DashboardPreferences() && oldWithoutSettings.archivePreferences == ArchivePreferences(), "Real pre-personalization backup migrates safely")
+        oldJSON["schemaVersion"] = 9
+        for key in ["aiSettings", "aiMessages", "therapyDiscussionAcknowledgedIDs"] { oldJSON.removeValue(forKey: key) }
+        var oldSchedule = oldJSON["schedule"] as! [String: Any]; oldSchedule.removeValue(forKey: "recurrence"); oldSchedule.removeValue(forKey: "extraAppointments"); oldJSON["schedule"] = oldSchedule
+        let preAI = try BackupArchive.decoder().decode(AppData.self, from: JSONSerialization.data(withJSONObject: oldJSON))
+        try expect(!preAI.aiSettings.enabled && preAI.aiMessages.isEmpty && preAI.schedule.recurrence == nil && preAI.therapyDiscussionAcknowledgedIDs.isEmpty, "Actual schema-9 backup preserves weekly plan and defaults AI off")
+        try expect(!String(decoding: try BackupArchive.encoder().encode(data), as: UTF8.self).contains("apiKey"), "API keys never belong to backup model")
         print("Passed \(count) encrypted backup checks: complete model, streaming attachments, password authentication, tampering, paths, omissions, settings and recovery.")
     }
 }

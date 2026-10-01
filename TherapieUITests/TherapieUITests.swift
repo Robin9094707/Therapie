@@ -240,6 +240,12 @@ final class TherapieUITests: XCTestCase {
         let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: complete)
         XCTAssertEqual(XCTWaiter.wait(for: [gone], timeout: 10), .completed, "Completed routine must leave the due list")
         capture("Heute nach bestätigter Routine")
+        let undo = app.buttons["input.undo"].firstMatch
+        XCTAssertTrue(undo.waitForExistence(timeout: 5)); undo.tap()
+        XCTAssertTrue(complete.waitForExistence(timeout: 10), "Undo restores the due routine")
+        complete.tap(); app.alerts.buttons["Ja, ich habe sie erledigt"].tap()
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: complete)], timeout: 10), .completed)
+        capture("Routine nach Rückgängig erneut bestätigt")
         app.tabBars.buttons["Archiv"].tap()
         XCTAssertTrue(app.staticTexts["Deine Zeitreise"].waitForExistence(timeout: 10))
         capture("Archiv Timeline nach Tagen")
@@ -253,6 +259,28 @@ final class TherapieUITests: XCTestCase {
         entry.tap()
         XCTAssertTrue(app.buttons["Bearbeiten"].waitForExistence(timeout: 10))
         capture("Archiveintrag bleibt bearbeitbar")
+    }
+
+    @MainActor
+    func testAIBuddyNativeActionsAndJournal() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--show-dashboard", "--buddy-fixture"]
+        app.launch()
+        let action = app.buttons["ai.action.note"].firstMatch
+        XCTAssertTrue(action.waitForExistence(timeout: 25))
+        capture("KI-Begleiter mit sichtbarem Kontext und Aktionen")
+        for _ in 0..<4 where !action.isHittable { app.swipeUp() }
+        action.tap()
+        XCTAssertTrue(app.navigationBars["KI-Vorschlag bearbeiten"].waitForExistence(timeout: 10))
+        capture("Bearbeitbarer KI-Vorschlag")
+        app.buttons["Speichern"].tap()
+        XCTAssertTrue(app.buttons["ai.action.note"].firstMatch.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["ai.action.note"].firstMatch.isEnabled, "Saved action cannot run twice")
+        let summary = app.buttons["ai.save.summary"].firstMatch
+        for _ in 0..<4 where !summary.isHittable { app.swipeUp() }
+        summary.tap()
+        XCTAssertFalse(app.buttons["ai.save.summary"].firstMatch.isEnabled)
+        capture("KI-Rückblick im Tagebuch gespeichert")
     }
 
     @MainActor

@@ -24,6 +24,8 @@ struct SessionConductorContent: View {
     var body: some View {
         TherapyScreen {
             VStack(spacing: 16) {
+                TherapyDiscussionCard(alwaysVisible: true)
+                if store.data.aiSettings.enabled { NavigationLink { AIBuddyView(inSession: true) } label: { Label("KI-Begleiter für diese Stunde", systemImage: "sparkles") }.buttonStyle(.bordered) }
                 if let session = store.data.currentSession {
                     SwiftUI.TimelineView(.periodic(from: .now, by: 1)) { context in activeCard(session, now: context.date) }
                     GlassCard {

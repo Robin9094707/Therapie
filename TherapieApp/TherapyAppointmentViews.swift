@@ -40,6 +40,7 @@ struct TodayOverviewCard: View {
                     NavigationLink { InsightsHubView() } label: { tile("Check-ins heute", value: "\(todayCheckIns)", icon: "face.smiling") }
                     NavigationLink { TasksView() } label: { tile("Offene Aufgaben", value: "\(store.data.weeklyTasks.filter { !$0.completed }.count)", icon: "checklist") }
                     NavigationLink { RoutineHubView() } label: { tile("Deine Routinen", value: "\(store.data.routines.count)", icon: "repeat") }
+                    NavigationLink { TherapyJournalView() } label: { tile("Therapietagebuch", value: "Gedanken & Rückblicke", icon: "book.closed") }
                     NavigationLink { LibraryView() } label: { tile("Notizen & Medien", value: "\(store.data.notes.count) · \(store.data.media.count)", icon: "photo.on.rectangle.angled") }
                 }
                 if let mood = store.data.moodCheckIns.sorted(by: { $0.date > $1.date }).first {
@@ -82,9 +83,10 @@ struct TherapyAppointmentsView: View {
                     }), displayedComponents: .hourAndMinute)
                     Stepper("Dauer: \(store.data.schedule.durationMinutes) Minuten", value: $store.data.schedule.durationMinutes, in: 5...240, step: 5)
                 }
+                TherapyRecurrenceSection()
                 Section {
                     ForEach(TherapyDateHelper.occurrences(schedule: store.data.schedule, count: 8, includeExcluded: true), id: \.self) { date in appointment(date) }
-                } header: { Text("Kommende Wochen") } footer: { Text("Eine Absage betrifft nur diesen Tag. Dein wöchentlicher Therapieplan bleibt erhalten.") }
+                } header: { Text("Kommende Wochen") } footer: { Text("Neue Absagen betreffen den ausgewählten Termin. Dein Therapieplan bleibt erhalten.") }
                 Section {
                     Button("Therapiepause / Urlaub anlegen", systemImage: "sun.max") { destination = .vacation }.accessibilityIdentifier("therapy.vacation.add")
                     ForEach((store.data.schedule.therapyVacations ?? []).filter { $0.endedAt == nil && $0.end > Date() }.sorted { $0.start < $1.start }) { vacation in
@@ -98,6 +100,8 @@ struct TherapyAppointmentsView: View {
                     }
                 } header: { Text("Therapiepause") } footer: { Text("Während der gewählten Tage gibt es keine Therapietermine oder Therapie-Wecker. Deine Alltagsroutinen bleiben separat einstellbar.") }
                 Section("Therapie-Wecker") {
+                    Toggle("Echte Routine-Titel in AlarmKit anzeigen", isOn: Binding(get: { store.data.companionSettings.alarmShowsActualTitles ?? true }, set: { store.data.companionSettings.alarmShowsActualTitles = $0 }))
+                    Text("Die Bezeichnung, zum Beispiel Tabletten, erscheint auch auf dem Sperrbildschirm. Neutrale Titel bleiben optional.").font(.caption).foregroundStyle(.secondary)
                     Toggle("AlarmKit vor der Therapie", isOn: Binding(get: { store.data.schedule.therapyAlarmsEnabled ?? !store.data.schedule.alarmIDs.isEmpty }, set: { store.data.schedule.therapyAlarmsEnabled = $0 }))
                     ForEach([0, 5, 15, 30, 60, 120, 1440], id: \.self) { offset in
                         Toggle(offset == 0 ? "Zum Beginn" : offset == 1440 ? "Am Tag davor" : "\(offset) Minuten vorher", isOn: Binding(get: { store.data.schedule.reminderOffsetsMinutes.contains(offset) }, set: { enabled in
@@ -158,7 +162,7 @@ private struct TherapyCancellationEditor: View {
     @State private var note = ""
     var body: some View {
         TherapyEditorSheet(title: "Termin absagen", dirty: !note.isEmpty || reason != .me, save: {
-            var snapshot = store.data; TherapyScheduleActions.cancel(TherapyCancellation(date: date, reason: reason, note: note), schedule: &snapshot.schedule); store.data = snapshot
+            var snapshot = store.data; TherapyScheduleActions.cancel(TherapyCancellation(date: date, exactTime: true, reason: reason, note: note), schedule: &snapshot.schedule); store.data = snapshot
         }) {
             Section { Text(date.formatted(date: .complete, time: .shortened)); Picker("Grund", selection: $reason) { ForEach(TherapyCancellationReason.allCases) { Text($0.title).tag($0) } }; TherapyInputField(title: "Zusätzliche Information", prompt: "Optional", text: $note) }
             Section { Text("Die Absage wird gespeichert und der nächste stattfindende Termin angezeigt. Du kannst diesen Termin jederzeit wiederherstellen.").font(.footnote).foregroundStyle(.secondary) }

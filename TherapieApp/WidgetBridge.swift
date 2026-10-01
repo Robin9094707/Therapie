@@ -4,7 +4,7 @@ import WidgetKit
 @MainActor
 enum TherapyWidgetBridge {
     private static var lastCache: Data?
-    static func refresh(_ store: AppStore) {
+    static func refresh(_ store: AppStore, force: Bool = false) {
         guard store.loadError == nil, store.lastSaveError == nil else { return }
         guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: TherapyWidgetSnapshot.appGroup) else {
             store.widgetStatus = "Widgets sind vorbereitet. Der gemeinsame Zugriff benötigt beim Signieren die App-Gruppe group.eu.rjuhas.therapie für App und Erweiterung."
@@ -15,7 +15,7 @@ enum TherapyWidgetBridge {
             let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
             var comparable = snapshot; comparable.generatedAt = Date(timeIntervalSince1970: 0)
             let signature = try encoder.encode(comparable)
-            if signature != lastCache {
+            if signature != lastCache || force {
                 let url = container.appendingPathComponent(TherapyWidgetSnapshot.fileName)
                 try encoder.encode(snapshot).write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
                 lastCache = signature

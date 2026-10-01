@@ -8,6 +8,7 @@ final class AppStore: ObservableObject {
             guard !isLoading else { return }
             save()
             if lastSaveError == nil {
+                rememberChange(from: oldValue, to: data)
                 TherapyEffects.shared.changed(from: oldValue, to: data)
                 var previous = oldValue.schedule, current = data.schedule
                 previous.calendarEventIdentifier = nil; current.calendarEventIdentifier = nil
@@ -36,11 +37,17 @@ final class AppStore: ObservableObject {
     @Published var selectedTab = 0
     @Published var notificationRoutines = false
     @Published var notificationReminders = false
+    @Published var notificationWidgetSetup = false
     @Published var widgetStatus = ""
     @Published var routineAlarmStatus = ""
+    @Published var undoAvailable = false
+    var undoSteps: [AppUndoStep] = []
+    var deferredMediaDeletion: [String: Date] = [:]
+    var undoInProgress = false
     private var writeBlocked = false
 
     private var isLoading = true
+    lazy var aiController = AIBuddyController(store: self)
     lazy var sessionController = TherapySessionController(store: self)
     private var backupWorkItem: DispatchWorkItem?
     private var readableWorkItem: DispatchWorkItem?
@@ -88,8 +95,8 @@ final class AppStore: ObservableObject {
                 decoder.dateDecodingStrategy = .iso8601
                 data = try decoder.decode(AppData.self, from: raw)
                 let version = (try JSONSerialization.jsonObject(with: raw) as? [String: Any])?["schemaVersion"] as? Int ?? 1
-                let snapshot = root.appendingPathComponent("therapy-data.pre-3007.json")
-                if version < 9 && !fm.fileExists(atPath: snapshot.path) {
+                let snapshot = root.appendingPathComponent("therapy-data.pre-3008.json")
+                if version < 10 && !fm.fileExists(atPath: snapshot.path) {
                     try raw.write(to: snapshot, options: [.atomic, .completeFileProtection])
                 }
             } catch {
@@ -113,6 +120,13 @@ final class AppStore: ObservableObject {
                     data.notes = [TherapyNote(createdAt: Date(), title: "Heute festgehalten", text: "Ein kleiner guter Moment.", tags: ["Alltag"]), TherapyNote(createdAt: past, title: "Früherer Rückblick", text: "Mein Archiv bleibt erhalten.", tags: [])]
                     let clock = Calendar.current.dateComponents([.hour, .minute], from: Date().addingTimeInterval(-300))
                     data.routines = [DailyRoutine(title: "Mein kleiner Tages-Schritt", times: [RoutineTime(hour: clock.hour!, minute: clock.minute!)])]
+                }
+                if ProcessInfo.processInfo.arguments.contains("--buddy-fixture") {
+                    data.aiSettings.enabled = true
+                    let action = AIBuddyAction(kind: .note, title: "Ein guter Moment", text: "Heute tat mir eine Pause gut.", weekdays: [])
+                    let reply = AIBuddyReply(title: "Mein kleiner Rückblick", message: "Du hast dir heute Raum für eine Pause gegeben.", sections: [AIBuddySection(heading: "Für die nächste Stunde", text: "Welche Pause möchtest du beibehalten?")], actions: [action], suggestedDays: 7)
+                    data.aiMessages = [AIBuddyMessage(role: "assistant", text: reply.journalText, reply: reply, contextStart: Date().addingTimeInterval(-6 * 86400), contextEnd: Date(), model: "Lokale Testdaten")]
+                    selectedTab = 5
                 }
                 if ProcessInfo.processInfo.arguments.contains("--show-checkin") { pendingGuidedCheckIn = GuidedCheckIn(kind: .morning, mood: 4, batteryPercent: 65, step: 2) }
                 if ProcessInfo.processInfo.arguments.contains("--show-checkin-tasks") { pendingGuidedCheckIn = GuidedCheckIn(kind: .morning, step: 5) }
@@ -229,6 +243,8 @@ final class AppStore: ObservableObject {
         CalendarSyncService.shared.removeSyncedEvent(identifier: data.schedule.calendarEventIdentifier)
         AlarmService.shared.cancelAllOwnedAlarms()
         RoutineAlarmCoordinator.shared.cancel()
+        aiController.cancel()
+        clearUndo()
         isLoading = true
         data = restored
         writeBlocked = false
@@ -262,6 +278,8 @@ final class AppStore: ObservableObject {
         WeeklyReminderService.cancel()
         BackupService.shared.clearFolder()
         prepared.manifest.preferences.apply()
+        aiController.cancel()
+        clearUndo()
         isLoading = true
         data = restored
         writeBlocked = false; loadError = nil; lastSaveError = nil
@@ -521,7 +539,7 @@ final class AppStore: ObservableObject {
     }
 
     func deleteMedia(_ item: MediaItem) {
-        try? FileManager.default.removeItem(at: fileURL(for: item))
+        // Keep the binary until the undo window expires. Metadata is removed atomically below.
         var snapshot = data
         snapshot.media.removeAll { $0.id == item.id }
         for index in snapshot.guidedCheckIns.indices { snapshot.guidedCheckIns[index].mediaIDs.removeAll { $0 == item.id } }
@@ -530,6 +548,9 @@ final class AppStore: ObservableObject {
     }
 
     func resetAllData() {
+        aiController.cancel()
+        AIBuddyKeychain.remove()
+        clearUndo()
         BackupDiskAccess.lock.lock(); defer { BackupDiskAccess.lock.unlock() }
         backupWorkItem?.cancel()
         readableWorkItem?.cancel()

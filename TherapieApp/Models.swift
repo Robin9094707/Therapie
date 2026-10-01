@@ -24,6 +24,31 @@ struct TherapySchedule: Codable, Equatable {
     var cancellations: [TherapyCancellation]?
     var therapyVacations: [TherapyVacation]?
     var therapyAlarmsEnabled: Bool?
+    var recurrence: TherapyRecurrence?
+    var extraAppointments: [TherapyExtraAppointment]?
+}
+
+enum TherapyRecurrenceUnit: String, Codable, CaseIterable, Identifiable {
+    case days, weeks, months
+    var id: String { rawValue }
+    var title: String { switch self { case .days: "Tage"; case .weeks: "Wochen"; case .months: "Monate" } }
+}
+struct TherapyWeeklySlot: Codable, Equatable, Identifiable {
+    var id = UUID()
+    var weekday = 5
+    var hour = 15
+    var minute = 0
+}
+struct TherapyRecurrence: Codable, Equatable {
+    var unit: TherapyRecurrenceUnit = .weeks
+    var interval = 1
+    var anchor = Date()
+    var additionalWeeklySlots: [TherapyWeeklySlot] = []
+}
+struct TherapyExtraAppointment: Codable, Equatable, Identifiable {
+    var id = UUID()
+    var date = Date()
+    var title = "Zusatztermin"
 }
 
 struct AppPreferences: Codable, Equatable {
@@ -125,7 +150,7 @@ struct TherapySessionReflection: Identifiable, Codable, Equatable {
 }
 
 struct AppData: Codable, Equatable {
-    var schemaVersion = 9
+    var schemaVersion = 10
     var profile = UserProfile()
     var schedule = TherapySchedule()
     var preferences = AppPreferences()
@@ -156,11 +181,14 @@ struct AppData: Codable, Equatable {
 
     var dashboard = DashboardPreferences()
     var archivePreferences = ArchivePreferences()
+    var therapyDiscussionAcknowledgedIDs: [String] = []
+    var aiSettings = AIBuddySettings()
+    var aiMessages: [AIBuddyMessage] = []
 
     init() {}
 
     enum CodingKeys: String, CodingKey {
-        case dashboard, archivePreferences
+        case dashboard, archivePreferences, therapyDiscussionAcknowledgedIDs, aiSettings, aiMessages
         case schemaVersion, profile, schedule, preferences, weeklyTasks, notes, energyEntries, media, reflections
         case moodCheckIns, batteryPoints, weekReviews, wellnessSettings
         case therapyFolders, therapyTopics, therapyGoals, sessionTemplates, currentSession, sessionHistory, sessionPreferences
@@ -171,7 +199,7 @@ struct AppData: Codable, Equatable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let version = try c.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
-        guard (1...9).contains(version) else {
+        guard (1...10).contains(version) else {
             throw DecodingError.dataCorruptedError(forKey: .schemaVersion, in: c,
                                                    debugDescription: "Diese Daten benötigen eine neuere App-Version.")
         }
@@ -182,7 +210,10 @@ struct AppData: Codable, Equatable {
         companionSettings = try c.decodeIfPresent(CompanionSettings.self, forKey: .companionSettings) ?? CompanionSettings()
         dashboard = try c.decodeIfPresent(DashboardPreferences.self, forKey: .dashboard) ?? DashboardPreferences()
         archivePreferences = try c.decodeIfPresent(ArchivePreferences.self, forKey: .archivePreferences) ?? ArchivePreferences()
-        schemaVersion = 9
+        therapyDiscussionAcknowledgedIDs = try c.decodeIfPresent([String].self, forKey: .therapyDiscussionAcknowledgedIDs) ?? []
+        aiSettings = try c.decodeIfPresent(AIBuddySettings.self, forKey: .aiSettings) ?? AIBuddySettings()
+        aiMessages = try c.decodeIfPresent([AIBuddyMessage].self, forKey: .aiMessages) ?? []
+        schemaVersion = 10
         profile = try c.decode(UserProfile.self, forKey: .profile)
         schedule = try c.decodeIfPresent(TherapySchedule.self, forKey: .schedule) ?? TherapySchedule()
         preferences = try c.decodeIfPresent(AppPreferences.self, forKey: .preferences) ?? AppPreferences()
@@ -234,11 +265,56 @@ extension Date {
 struct TherapyDateHelper {
     static func regularOccurrence(schedule: TherapySchedule, after date: Date = Date(), calendar: Calendar = .current) -> Date? {
         guard (1...7).contains(schedule.weekday), (0...23).contains(schedule.hour), (0...59).contains(schedule.minute) else { return nil }
-        let parts = DateComponents(hour: schedule.hour, minute: schedule.minute, second: 0, weekday: schedule.weekday)
-        return calendar.nextDate(after: date.addingTimeInterval(-0.001), matching: parts, matchingPolicy: .nextTime, repeatedTimePolicy: .first, direction: .forward)
+        var candidates = (schedule.extraAppointments ?? []).map(\.date).filter { $0 >= date.addingTimeInterval(-0.001) }
+        if let rule = schedule.recurrence {
+            let interval = max(1, min(52, rule.interval))
+            let anchor = calendar.startOfDay(for: rule.anchor)
+            let start = calendar.startOfDay(for: max(anchor, date))
+            // Calendar arithmetic keeps clocks stable across DST and leap years.
+            for offset in 0..<4000 {
+                guard let day = calendar.date(byAdding: .day, value: offset, to: start) else { break }
+                var clocks: [(Int, Int)] = []
+                switch rule.unit {
+                case .days:
+                    let elapsed = calendar.dateComponents([.day], from: anchor, to: day).day ?? -1
+                    if elapsed >= 0 && elapsed % interval == 0 { clocks = [(schedule.hour, schedule.minute)] }
+                case .weeks:
+                    var weeks = calendar; weeks.firstWeekday = 2; weeks.minimumDaysInFirstWeek = 4
+                    let firstWeek = weeks.dateInterval(of: .weekOfYear, for: anchor)!.start
+                    let week = weeks.dateInterval(of: .weekOfYear, for: day)!.start
+                    let elapsed = weeks.dateComponents([.weekOfYear], from: firstWeek, to: week).weekOfYear ?? -1
+                    if elapsed >= 0 && elapsed % interval == 0 {
+                        let weekday = calendar.component(.weekday, from: day)
+                        if weekday == schedule.weekday { clocks.append((schedule.hour, schedule.minute)) }
+                        clocks += rule.additionalWeeklySlots.filter { $0.weekday == weekday }.map { ($0.hour, $0.minute) }
+                    }
+                case .months:
+                    let firstMonth = calendar.dateInterval(of: .month, for: anchor)!.start
+                    let month = calendar.dateInterval(of: .month, for: day)!.start
+                    let elapsed = calendar.dateComponents([.month], from: firstMonth, to: month).month ?? -1
+                    let lastDay = calendar.range(of: .day, in: .month, for: day)?.count ?? 28
+                    if elapsed >= 0 && elapsed % interval == 0 && calendar.component(.day, from: day) == min(lastDay, calendar.component(.day, from: anchor)) { clocks = [(schedule.hour, schedule.minute)] }
+                }
+                let dates = clocks.compactMap { hour, minute -> Date? in
+                    guard (0...23).contains(hour), (0...59).contains(minute) else { return nil }
+                    return calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day, matchingPolicy: .nextTime, repeatedTimePolicy: .first, direction: .forward)
+                }.filter { $0 >= date.addingTimeInterval(-0.001) && calendar.isDate($0, inSameDayAs: day) }
+                if let next = dates.min() { candidates.append(next); break }
+            }
+        } else {
+            let parts = DateComponents(hour: schedule.hour, minute: schedule.minute, second: 0, weekday: schedule.weekday)
+            if let next = calendar.nextDate(after: date.addingTimeInterval(-0.001), matching: parts, matchingPolicy: .nextTime, repeatedTimePolicy: .first, direction: .forward) { candidates.append(next) }
+        }
+        return candidates.min()
     }
+    static func appointments(on day: Date, schedule: TherapySchedule, calendar: Calendar = .current) -> [Date] {
+        let start = calendar.startOfDay(for: day)
+        let end = calendar.date(byAdding: .day, value: 1, to: start)!
+        return occurrences(schedule: schedule, after: start, count: 8, calendar: calendar).filter { $0 < end }
+    }
+
     static func cancellation(schedule: TherapySchedule, on date: Date, calendar: Calendar = .current) -> TherapyCancellation? {
-        schedule.cancellations?.first { $0.restoredAt == nil && calendar.isDate($0.date, inSameDayAs: date) }
+        schedule.cancellations?.first { $0.restoredAt == nil && ($0.exactTime == true ? abs($0.date.timeIntervalSince(date)) < 1 : calendar.isDate($0.date, inSameDayAs: date)) }
     }
     static func vacation(schedule: TherapySchedule, at date: Date) -> TherapyVacation? {
         schedule.therapyVacations?.first { $0.endedAt == nil && $0.start <= date && date < $0.end }
@@ -279,6 +355,7 @@ struct TherapyCancellation: Codable, Equatable, Identifiable {
     var id = UUID()
     var date: Date
     var createdAt = Date()
+    var exactTime: Bool?
     var reason: TherapyCancellationReason = .me
     var note = ""
     var restoredAt: Date?
@@ -293,7 +370,7 @@ struct TherapyVacation: Codable, Equatable, Identifiable {
 enum TherapyScheduleActions {
     static func cancel(_ entry: TherapyCancellation, schedule: inout TherapySchedule, calendar: Calendar = .current) {
         var all = schedule.cancellations ?? []
-        if let index = all.firstIndex(where: { $0.restoredAt == nil && calendar.isDate($0.date, inSameDayAs: entry.date) }) { all[index].reason = entry.reason; all[index].note = entry.note }
+        if let index = all.firstIndex(where: { $0.restoredAt == nil && (entry.exactTime == true ? abs($0.date.timeIntervalSince(entry.date)) < 1 : calendar.isDate($0.date, inSameDayAs: entry.date)) }) { all[index].reason = entry.reason; all[index].note = entry.note }
         else { all.insert(entry, at: 0) }
         schedule.cancellations = all
     }

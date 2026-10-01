@@ -31,6 +31,8 @@ final class RoutineAlarmCoordinator {
     static let shared = RoutineAlarmCoordinator()
     private let storageKey = "therapy.routine.alarms"
     private var revision = 0
+    private var refreshing = false
+    private var refreshRequested = false
     func requestAccess(_ store: AppStore) async {
         do {
             let granted = try await AlarmService.shared.requestAuthorization()
@@ -39,7 +41,17 @@ final class RoutineAlarmCoordinator {
         } catch { store.routineAlarmStatus = error.localizedDescription }
     }
     func refresh(_ store: AppStore) async {
-        revision += 1; let generation = revision
+        refreshRequested = true
+        guard !refreshing else { return }
+        refreshing = true
+        defer { refreshing = false }
+        repeat {
+            refreshRequested = false
+            await reconcile(store)
+        } while refreshRequested && !Task.isCancelled
+    }
+    private func reconcile(_ store: AppStore) async {
+        let generation = revision
         guard store.lastSaveError == nil, store.loadError == nil else { return }
         if !store.data.schedule.alarmIDs.isEmpty {
             do {
@@ -58,13 +70,19 @@ final class RoutineAlarmCoordinator {
             return slot.id + "." + digest
         }
         let valid = Set(desired.map(key))
-        if let alarms = try? AlarmManager.shared.alarms {
+        let inventory = try? AlarmManager.shared.alarms
+        let alarms = inventory ?? []
+        let alerting = Set(alarms.filter { $0.state == .alerting }.map(\.id))
+        if inventory != nil {
             let live = Set(alarms.map(\.id))
             for (key, raw) in owned where UUID(uuidString: raw).map({ !live.contains($0) }) ?? true { owned.removeValue(forKey: key) }
         }
         var cancellationFailures = 0
         for (key, raw) in owned where !valid.contains(key) {
             if let id = UUID(uuidString: raw) {
+                // Passing its fire time never means that a ringing alarm should be dismissed.
+                // Explicit completion/removal may cancel it; ordinary refreshes leave it ringing.
+                if alerting.contains(id) && AlarmOwnershipPolicy.keepAlerting(key: key, data: store.data) { continue }
                 do { try AlarmManager.shared.cancel(id: id); owned.removeValue(forKey: key) }
                 catch { cancellationFailures += 1 }
             } else { owned.removeValue(forKey: key) }
@@ -102,6 +120,7 @@ final class RoutineAlarmCoordinator {
     }
     func cancel() {
         revision += 1
+        refreshRequested = false
         var owned = UserDefaults.standard.dictionary(forKey: storageKey) as? [String: String] ?? [:]
         for (key, raw) in owned {
             guard let id = UUID(uuidString: raw) else { owned.removeValue(forKey: key); continue }

@@ -27,10 +27,10 @@ struct PersonalizationChecks {
         var legacy = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
         legacy["schemaVersion"] = 8; legacy.removeValue(forKey: "dashboard"); legacy.removeValue(forKey: "archivePreferences")
         let migrated = try decoder.decode(AppData.self, from: JSONSerialization.data(withJSONObject: legacy))
-        try expect(migrated.schemaVersion == 9 && migrated.dashboard == DashboardPreferences(), "Schema 8 receives safe defaults")
+        try expect(migrated.schemaVersion == 10 && migrated.dashboard == DashboardPreferences(), "Schema 8 receives safe defaults")
         try expect(migrated.archivePreferences == ArchivePreferences(), "Legacy archive defaults")
         try expect(try decoder.decode(DashboardPreferences.self, from: Data("{}".utf8)) == DashboardPreferences(), "Partial settings migrate")
-        legacy["schemaVersion"] = 10
+        legacy["schemaVersion"] = 999
         do { _ = try decoder.decode(AppData.self, from: JSONSerialization.data(withJSONObject: legacy)); throw Failure.assertion("Future data accepted") } catch is DecodingError { count += 1 }
         let spring = date("2026-03-29T12:00:00Z"), autumn = date("2026-10-25T12:00:00Z")
         for day in [spring, autumn] {

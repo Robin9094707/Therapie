@@ -20,10 +20,10 @@ struct DailyCheckInSlot: Codable, Equatable, Identifiable {
     }
     static let defaults: [DailyCheckInSlot] = [
         .init(id: UUID(uuidString: "10000000-0000-0000-0000-000000000001")!, kind: .morning, name: "Morgen", startHour: 5, endHour: 11),
-        .init(id: UUID(uuidString: "10000000-0000-0000-0000-000000000002")!, kind: .noon, name: "Mittag", startHour: 11, endHour: 14),
-        .init(id: UUID(uuidString: "10000000-0000-0000-0000-000000000003")!, kind: .afternoon, name: "Nachmittag", startHour: 14, endHour: 18),
+        .init(id: UUID(uuidString: "10000000-0000-0000-0000-000000000002")!, kind: .noon, name: "Mittag", startHour: 11, endHour: 18),
+        .init(id: UUID(uuidString: "10000000-0000-0000-0000-000000000003")!, kind: .afternoon, name: "Nachmittag", enabled: false, startHour: 14, endHour: 18),
         .init(id: UUID(uuidString: "10000000-0000-0000-0000-000000000004")!, kind: .evening, name: "Abend", startHour: 18, endHour: 23),
-        .init(id: UUID(uuidString: "10000000-0000-0000-0000-000000000005")!, kind: .night, name: "Nacht", enabled: false, startHour: 23, endHour: 5)
+        .init(id: UUID(uuidString: "10000000-0000-0000-0000-000000000005")!, kind: .night, name: "Nacht", enabled: true, startHour: 23, endHour: 5)
     ]
 }
 enum DayCheckInPolicy {
@@ -38,6 +38,20 @@ enum DayCheckInPolicy {
         guard let value = slot(kind: kind, id: id, settings: settings) else { return false }
         return value.enabled && value.contains(date, calendar: calendar)
     }
+    static func existing(for entry: GuidedCheckIn, in data: AppData, calendar: Calendar = .current) -> GuidedCheckIn? {
+        guard data.companionSettings.allowMultipleCheckInsPerSlot != true else { return nil }
+        let configured = slot(kind: entry.kind, id: entry.daySlotID, settings: data.companionSettings)
+        return data.guidedCheckIns.filter { saved in
+            if entry.kind == .therapy, let sessionID = entry.sessionID { return saved.kind == .therapy && saved.sessionID == sessionID }
+            guard saved.kind == entry.kind else { return false }
+            if let slotID = entry.daySlotID {
+                guard saved.daySlotID == slotID || (saved.daySlotID == nil && entry.kind != .free) else { return false }
+            } else if saved.daySlotID != nil && entry.kind == .free { return false }
+            let anchor: (Date) -> Date = { configured?.anchor(for: $0, calendar: calendar) ?? calendar.startOfDay(for: $0) }
+            return anchor(saved.date) == anchor(entry.date)
+        }.sorted { a, b in a.isDraft != b.isDraft ? !a.isDraft : a.date > b.date }.first
+    }
+    static func reopen(_ entry: GuidedCheckIn, in data: AppData) -> GuidedCheckIn { existing(for: entry, in: data) ?? entry }
     static func entry(_ slot: DailyCheckInSlot, at date: Date = Date()) -> GuidedCheckIn {
         GuidedCheckIn(date: date, kind: slot.kind, daySlotID: slot.id, customTitle: slot.kind == .free ? slot.title : nil)
     }
@@ -112,7 +126,7 @@ enum CompanionAlarmPlanner {
         var slots = RoutinePlanner.slots(data: data, now: now, calendar: calendar).compactMap { slot -> CompanionAlarmSlot? in
             guard let routine = data.routines.first(where: { $0.id == slot.occurrence.routineID }), routine.urgentAlarm else { return nil }
             let detail = routine.times.first { $0.id == slot.occurrence.timeID }?.title ?? ""
-            return .init(id: slot.id, group: "routine.\(routine.id).\(slot.occurrence.timeID)", fireAt: slot.fireAt, title: data.companionSettings.privateRoutineTitles ? "Deine wichtige Routine" : routine.title + (detail.isEmpty ? "" : " · " + detail), route: "routine|\(routine.id)")
+            return .init(id: slot.id, group: "routine.\(routine.id).\(slot.occurrence.timeID)", fireAt: slot.fireAt, title: data.companionSettings.alarmShowsActualTitles == false ? "Deine wichtige Routine" : routine.title + (detail.isEmpty ? "" : " · " + detail), route: "routine|\(routine.id)")
         }
         for slot in CheckInReminderPlanner.slots(data: data, now: now, calendar: calendar) {
             guard let reminder = data.companionSettings.checkInReminders?.first(where: { $0.id == slot.reminderID }), reminder.alarmEnabled == true else { continue }
@@ -177,5 +191,20 @@ enum CompanionAlarmPlanner {
         }
         for slot in all where selected.count < max(0, budget) { if ids.insert(slot.id).inserted { selected.append(slot) } }
         return selected.sorted { $0.fireAt == $1.fireAt ? $0.id < $1.id : $0.fireAt < $1.fireAt }
+    }
+}
+
+/// Device-independent decision, shared with alarm regression checks.
+enum AlarmOwnershipPolicy {
+    static func keepAlerting(key: String, data: AppData) -> Bool {
+        if key.hasPrefix("therapy.routine.") {
+            guard let routine = data.routines.first(where: { key.hasPrefix("therapy.routine.\($0.id).") }), routine.urgentAlarm,
+                  RoutinePlanner.active(routine, settings: data.companionSettings, at: Date()) else { return false }
+            return !data.routineCompletions.contains { key.hasPrefix("therapy.routine.\($0.routineID).\($0.timeID).\(Int($0.scheduledAt.timeIntervalSince1970)).") }
+        }
+        if key.hasPrefix("therapy.task.") { return data.weeklyTasks.contains { !$0.completed && key.hasPrefix("therapy.task.\($0.id).") } }
+        if key.hasPrefix("session.") { return data.currentSession.map { $0.pausedAt == nil && $0.endedAt == nil } ?? false }
+        if key.hasPrefix("therapy.") { return data.schedule.therapyAlarmsEnabled ?? false }
+        return true
     }
 }

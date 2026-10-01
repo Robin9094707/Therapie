@@ -27,7 +27,7 @@ struct CompanionTodayCard: View {
                     } label: { Image(systemName: "slider.horizontal.3").frame(width: 44, height: 44) }.accessibilityLabel("Darstellung wählen")
                 }
                 DayCheckInButtons { checkIn = $0 }
-                Button("Therapie-Check-in", systemImage: "leaf") { checkIn = GuidedCheckIn(kind: .therapy) }.buttonStyle(.bordered)
+                Button("Therapie-Check-in", systemImage: "leaf") { checkIn = DayCheckInPolicy.reopen(GuidedCheckIn(kind: .therapy), in: store.data) }.buttonStyle(.bordered)
                 ForEach(store.data.guidedCheckIns.filter(\.isDraft).prefix(2)) { draft in
                     Button { checkIn = draft } label: { Label("\(draft.displayTitle) fortsetzen · Schritt \(draft.step + 1)", systemImage: "arrow.uturn.forward") }.font(.subheadline)
                 }
@@ -72,7 +72,7 @@ struct EntryHubView: View {
                     Text("Ein Foto, eine Stimmung oder ein kompletter Check-in. Alles bleibt in deinem persönlichen Archiv.").foregroundStyle(.secondary)
                     GlassCard {
                         VStack(alignment: .leading, spacing: 16) {
-                            Button("Geführter Check-in", systemImage: "sparkles") { checkIn = GuidedCheckIn() }
+                            Button("Geführter Check-in", systemImage: "sparkles") { checkIn = DayCheckInPolicy.reopen(GuidedCheckIn(), in: store.data) }
                             Button("Stimmung & Energie", systemImage: "face.smiling") { showMood = true }
                             Button("Akku-Geber oder Akku-Nehmer", systemImage: "battery.75percent") { showBattery = true }
                             Button("Neues Foto", systemImage: "photo.badge.plus") { showPhoto = true }

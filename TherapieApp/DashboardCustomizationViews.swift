@@ -60,6 +60,7 @@ struct DashboardCustomizationView: View {
 struct TodayRoutinesCard: View {
     @EnvironmentObject private var store: AppStore
     @State private var confirming: RoutineOccurrence?
+    @State private var showConfirmation = false
     @State private var detailID: UUID?
     var body: some View {
         SwiftUI.TimelineView(.periodic(from: .now, by: 30)) { context in
@@ -79,7 +80,7 @@ struct TodayRoutinesCard: View {
                                 Button { detailID = routine.id } label: { Label(routine.title, systemImage: routine.symbol).font(.headline).multilineTextAlignment(.leading) }.buttonStyle(.plain)
                                 Text("Fällig seit " + occurrence.due.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
                                 if let snooze = store.data.routineSnoozes.first(where: { $0.id == occurrence.id && $0.until > context.date }) { Text("Erinnerung verschoben bis " + snooze.until.formatted(date: .omitted, time: .shortened)).font(.caption).foregroundStyle(.secondary) }
-                                Button("Als erledigt bestätigen", systemImage: "checkmark.circle.fill") { confirming = occurrence }.buttonStyle(.bordered).accessibilityIdentifier("today.routine.complete")
+                                Button("Als erledigt bestätigen", systemImage: "checkmark.circle.fill") { confirming = occurrence; showConfirmation = true }.buttonStyle(.bordered).accessibilityIdentifier("today.routine.complete")
                             }
                             if occurrence.id != due.last?.id { Divider() }
                         }
@@ -88,7 +89,7 @@ struct TodayRoutinesCard: View {
                 }
             }
         }
-        .alert("Routine wirklich erledigt?", isPresented: Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } })) {
+        .alert("Routine wirklich erledigt?", isPresented: $showConfirmation) {
             Button("Abbrechen", role: .cancel) { confirming = nil }
             Button("Ja, ich habe sie erledigt") {
                 if let occurrence = confirming { store.resolveRoutine(occurrence, outcome: .done) }
@@ -194,8 +195,34 @@ struct HomeAndWidgetSettingsCard: View {
                 Button("Heute-Seite gestalten", systemImage: "slider.horizontal.3") { customize = true }.buttonStyle(.bordered)
                 Toggle("Titel in Widgets anzeigen", isOn: $store.data.dashboard.showWidgetTitles)
                 Text("Halte den iPhone-Home-Bildschirm gedrückt und wähle Bearbeiten → Widget hinzufügen → Therapie. Du findest Übersichten für Termine, Routinen, Erinnerungen und deine laufende Stunde.").font(.subheadline).foregroundStyle(.secondary)
+                Text("Widget gedrückt halten → Widget bearbeiten: Datenquelle und Titel-Filter wählen. Ohne gemeinsamen Datenzugriff lässt sich ein manueller Termin einstellen; er ist klar als manuell gekennzeichnet.").font(.caption).foregroundStyle(.secondary)
                 Text(store.widgetStatus).font(.caption).foregroundStyle(.secondary)
             }
         }.sheet(isPresented: $customize) { DashboardCustomizationView(preferences: store.data.dashboard) }
+    }
+}
+
+struct WidgetSetupHelpView: View {
+    @EnvironmentObject private var store: AppStore
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Dein Widget") {
+                    Text(store.widgetStatus)
+                    Button("App-Daten jetzt aktualisieren", systemImage: "arrow.clockwise") { TherapyWidgetBridge.refresh(store, force: true) }
+                    Toggle("Titel in Widgets anzeigen", isOn: $store.data.dashboard.showWidgetTitles)
+                }
+                Section("Am iPhone einstellen") {
+                    Text("Halte das Widget gedrückt und wähle Widget bearbeiten. Aktuelle App-Daten zeigen Termine, fällige Routinen, offene Erinnerungen und den laufenden Timer. Du kannst Routinen/Erinnerungen nach einem Titel filtern.")
+                    Text("Falls die Installation keinen gemeinsamen App-Gruppen-Zugriff erlaubt: Manuell eingestellter Termin / Hinweis wählen, Datum oder wöchentlichen Wochentag und Uhrzeit festlegen. Das Widget kennzeichnet diese Angaben als manuell und verändert deine App-Daten nicht.")
+                }
+                Section("Gemeinsame Daten") {
+                    Text("Automatische Live-Daten brauchen beim Signieren dieselbe App-Gruppe group.eu.rjuhas.therapie in App und Erweiterung. Eine Widget-Einstellung kann eine entfernte iOS-Berechtigung nicht ersetzen. Nach einer passenden Installation App öffnen und das Widget gegebenenfalls neu hinzufügen.").font(.caption)
+                }
+            }.navigationTitle("Widget einrichten").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { dismiss() } } }
+                .onAppear { TherapyWidgetBridge.refresh(store, force: true) }
+        }
     }
 }

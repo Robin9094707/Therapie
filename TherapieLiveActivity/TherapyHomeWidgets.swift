@@ -4,27 +4,31 @@ import WidgetKit
 struct TherapyHomeEntry: TimelineEntry {
     var date: Date
     var snapshot: TherapyWidgetSnapshot
+    var manual = false
 }
-struct TherapyHomeProvider: TimelineProvider {
+struct TherapyHomeProvider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> TherapyHomeEntry { TherapyHomeEntry(date: .now, snapshot: .init()) }
-    func getSnapshot(in context: Context, completion: @escaping (TherapyHomeEntry) -> Void) {
-        completion(TherapyHomeEntry(date: .now, snapshot: context.isPreview ? preview() : read()))
+    func snapshot(for configuration: TherapyWidgetOptions, in context: Context) async -> TherapyHomeEntry {
+        TherapyHomeEntry(date: .now, snapshot: context.isPreview ? preview() : read(configuration), manual: configuration.source == .manual)
     }
-    func getTimeline(in context: Context, completion: @escaping (Timeline<TherapyHomeEntry>) -> Void) {
-        let snapshot = read(), now = Date(), end = now.addingTimeInterval(24 * 3600)
+    func timeline(for configuration: TherapyWidgetOptions, in context: Context) async -> Timeline<TherapyHomeEntry> {
+        let snapshot = read(configuration), now = Date(), end = now.addingTimeInterval(24 * 3600)
         var dates = [now]
         dates += snapshot.nextAppointments.filter { $0 > now && $0 < end }.flatMap { [$0, $0.addingTimeInterval(1)] }
         dates += snapshot.reminders.flatMap { [$0.due, $0.expiresAt] }.filter { $0 > now && $0 < end }
         dates += snapshot.session?.phases.flatMap { [$0.start, $0.end] }.filter { $0 > now && $0 < end } ?? []
         if let midnight = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: now)) { dates.append(midnight) }
-        let entries = Set(dates).sorted().prefix(120).map { TherapyHomeEntry(date: $0, snapshot: snapshot) }
-        completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(30 * 60))))
+        let entries = Set(dates).sorted().prefix(120).map { TherapyHomeEntry(date: $0, snapshot: snapshot, manual: configuration.source == .manual) }
+        return Timeline(entries: entries, policy: .after(now.addingTimeInterval(30 * 60)))
     }
-    private func read() -> TherapyWidgetSnapshot {
+    private func read(_ configuration: TherapyWidgetOptions) -> TherapyWidgetSnapshot {
+        if let manual = configuration.snapshot(at: Date()) { return manual }
         guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: TherapyWidgetSnapshot.appGroup),
               let raw = try? Data(contentsOf: container.appendingPathComponent(TherapyWidgetSnapshot.fileName)) else { return .init() }
         let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
-        return (try? decoder.decode(TherapyWidgetSnapshot.self, from: raw)) ?? .init()
+        var snapshot = (try? decoder.decode(TherapyWidgetSnapshot.self, from: raw)) ?? .init()
+        if let filter = configuration.filter?.trimmingCharacters(in: .whitespacesAndNewlines), !filter.isEmpty { snapshot.reminders = snapshot.reminders.filter { $0.title.localizedCaseInsensitiveContains(filter) } }
+        return snapshot
     }
     private func preview() -> TherapyWidgetSnapshot {
         let now = Date()
@@ -61,7 +65,7 @@ struct TherapySessionWidget: Widget {
 }
 enum TherapyHomeWidgetConfiguration {
     static func make(_ category: TherapyHomeWidgetKind) -> some WidgetConfiguration {
-        StaticConfiguration(kind: "TherapyHome." + category.rawValue, provider: TherapyHomeProvider()) { entry in
+        AppIntentConfiguration(kind: "TherapyHome." + category.rawValue, intent: TherapyWidgetOptions.self, provider: TherapyHomeProvider()) { entry in
             TherapyHomeWidgetView(entry: entry, category: category)
                 .containerBackground(for: .widget) {
                     LinearGradient(colors: [.indigo.opacity(0.14), Color(uiColor: .systemBackground)], startPoint: .topLeading, endPoint: .bottomTrailing)
@@ -90,8 +94,8 @@ struct TherapyHomeWidgetView: View {
         VStack(alignment: .leading, spacing: compact ? 4 : 10) {
             Label(category.title, systemImage: category.symbol).font(compact ? .caption.bold() : .subheadline.bold()).foregroundStyle(.indigo).lineLimit(1)
             if !entry.snapshot.configured {
-                Text("App einmal öffnen").font(.headline)
-                if !compact { Text("Danach erscheinen deine aktuellen Angaben.").font(.caption).foregroundStyle(.secondary) }
+                Text("Widget einrichten").font(.headline)
+                if !compact { Text("Gedrückt halten → Widget bearbeiten. App-Daten benötigen gemeinsamen Zugriff; ein manueller Termin ist ebenfalls möglich.").font(.caption).foregroundStyle(.secondary) }
             } else {
                 switch category {
                 case .appointment: appointment
@@ -103,10 +107,10 @@ struct TherapyHomeWidgetView: View {
                 case .session: session
                 }
             }
-            if !compact { Spacer(minLength: 0); Text("Therapie · Für dich").font(.caption2).foregroundStyle(.secondary) }
+            if !compact { Spacer(minLength: 0); Text(entry.manual ? "Manuell eingestellt · keine Live-Daten" : "Therapie · Für dich").font(.caption2).foregroundStyle(.secondary) }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .widgetURL(URL(string: category.route))
+        .widgetURL(URL(string: entry.snapshot.configured ? category.route : "therapie://widgetsetup"))
         .privacySensitive()
     }
     @ViewBuilder private var appointment: some View {

@@ -30,7 +30,8 @@ final class TherapyEffects: ObservableObject {
         let goalCompleted = new.therapyGoals.contains { goal in
             goal.status == .completed && old.therapyGoals.contains { $0.id == goal.id && $0.status != .completed }
         }
-        if taskCompleted || goalCompleted { completed(); return }
+        let routineCompleted = new.routineCompletions.contains { log in log.outcome == .done && !old.routineCompletions.contains(where: { $0.id == log.id }) }
+        if taskCompleted || goalCompleted || routineCompleted { completed(); return }
         func count(_ value: AppData) -> Int {
             value.weeklyTasks.count + value.notes.count + value.media.count + value.reflections.count
                 + value.moodCheckIns.count + value.batteryPoints.count + value.weekReviews.count

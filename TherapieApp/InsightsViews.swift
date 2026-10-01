@@ -71,12 +71,14 @@ struct DayCheckInButtons: View {
         SwiftUI.TimelineView(.periodic(from: .now, by: 30)) { context in
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 145))], spacing: 10) {
                 ForEach(DayCheckInPolicy.slots(store.data.companionSettings).filter(\.enabled)) { slot in
-                    let allowed = slot.contains(context.date)
+                    let entry = DayCheckInPolicy.reopen(DayCheckInPolicy.entry(slot, at: context.date), in: store.data)
+                    let exists = store.data.guidedCheckIns.contains { $0.id == entry.id }
+                    let allowed = exists || slot.contains(context.date)
                     Button {
-                        guard DayCheckInPolicy.allows(kind: slot.kind, id: slot.id, settings: store.data.companionSettings) else { return }
-                        open(DayCheckInPolicy.entry(slot))
+                        guard exists || DayCheckInPolicy.allows(kind: slot.kind, id: slot.id, settings: store.data.companionSettings) else { return }
+                        open(entry)
                     } label: {
-                        VStack(alignment: .leading, spacing: 5) { Label(slot.title.replacingOccurrences(of: "-Check-in", with: ""), systemImage: slot.kind.symbol).font(.subheadline.bold()); Text(slot.windowText).font(.caption).foregroundStyle(.secondary) }.frame(maxWidth: .infinity, alignment: .leading).padding(10)
+                        VStack(alignment: .leading, spacing: 5) { Label(slot.title.replacingOccurrences(of: "-Check-in", with: ""), systemImage: slot.kind.symbol).font(.subheadline.bold()); Text(exists ? (entry.isDraft ? "Entwurf fortsetzen" : "Heute erledigt · bearbeiten") : slot.windowText).font(.caption).foregroundStyle(.secondary) }.frame(maxWidth: .infinity, alignment: .leading).padding(10)
                     }.buttonStyle(.bordered).disabled(!allowed).accessibilityHint(allowed ? "Check-in starten" : "Verfügbar zwischen " + slot.windowText)
                 }
             }
@@ -91,7 +93,9 @@ struct DayCheckInSettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section { Text("Neue Tages-Check-ins sind nur innerhalb ihres Zeitfensters verfügbar. Begonnene Entwürfe und ältere Einträge kannst du weiterhin bearbeiten. Therapie- und freie Check-ins sind jederzeit möglich.") }
+                Section {
+                    Toggle("Mehrere Check-ins je Zeitfenster erlauben", isOn: Binding(get: { store.data.companionSettings.allowMultipleCheckInsPerSlot ?? false }, set: { store.data.companionSettings.allowMultipleCheckInsPerSlot = $0 }))
+                    Text("Standardmäßig wird derselbe Check-in pro Tag wieder geöffnet. Eigene Zeitfenster zählen separat. Neue Tages-Check-ins sind nur innerhalb ihres Zeitfensters verfügbar. Begonnene Entwürfe und ältere Einträge kannst du weiterhin bearbeiten. Therapie- und freie Check-ins sind jederzeit möglich.") }
                 ForEach(slots) { initial in
                     let slot = identifiedEditorBinding($slots, to: initial)
                     Section(initial.title) {

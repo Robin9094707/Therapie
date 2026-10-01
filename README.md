@@ -1,3 +1,29 @@
+## Update 3008.0.0 · Dein Begleiter, deine Gedanken
+
+- Vier Standard-Tagesfenster: morgens, mittags, abends und nachts. Eigene Fenster und zusätzliche Einträge sind konfigurierbar. Bereits vorhandene Entwürfe/Einträge werden wieder geöffnet. Eine zentrale Speicherprüfung verhindert doppelte Einträge; alte Duplikate bleiben bearbeitbar.
+- Bis zu 20 gespeicherte Änderungen zehn Minuten lang rückgängig machen, solange die App geöffnet bleibt. Lokale Anhänge werden erst nach Ablauf dieser Frist entfernt. Import, Wiederherstellung und vollständiges Zurücksetzen beginnen einen neuen Verlauf.
+- Heute-Routinen bestätigen zuverlässig mit eigenständigem Bestätigungszustand und Erfolgskonfetti; reduzierte Bewegung und Konfetti-Einstellungen werden berücksichtigt.
+- Offene Gesprächspunkte aus Check-ins, Wochenrückblicken und aktuellen Themen erscheinen mit Datum am Therapietag und im Stundenmodus. Besprochene Punkte werden markiert, ihre Originaleinträge bleiben erhalten.
+- Flexible Therapie: alle N Tage, Wochen oder Monate, weitere Wochentermine und einzelne Zusatztermine. Der bisherige Wochenplan bleibt bei der Migration unverändert. Neue Absagen betreffen einen genauen Termin; ältere Absagen bleiben Tagesabsagen. Kalender, Wecker und Widgets verwenden denselben Datumsresolver.
+- AlarmKit-Aktualisierungen laufen seriell und lassen bereits klingelnde Wecker aktiv. Nur ausdrückliche Erledigung/Deaktivierung oder Entfernen bereinigt deren Routinen. Echte Routine-Titel sind im Wecker voreingestellt; neutrale Titel bleiben wählbar.
+- Widgets sind über „Widget bearbeiten“ konfigurierbar: App-Daten, Titel-Filter oder ein klar gekennzeichneter manueller Termin/Hinweis. Der Einrichtungslink öffnet eine Hilfsansicht mit Aktualisierung und Status. Automatische Daten benötigen die App-Gruppe `group.eu.rjuhas.therapie` beim Signieren sowohl in App als auch Erweiterung. Ein Sideload-Signer kann diese Berechtigung entfernen; eine Widget-Einstellung kann sie nicht ersetzen.
+- Optionaler KI-Tab: persönliche OpenAI-API, GPT-5.6 Luna als Standard, GPT-6 Luna als günstigere Auswahl, weitere kompatible Modelle. Schlüssel ausschließlich im lokalen iPhone-Schlüsselbund, niemals in Exporten. Keine API-Aufrufe im Hintergrund.
+- Interaktiver Chat mit sichtbarem Zeitraum, begrenztem Kontext, Tages-/Wochenrückblicken, sauberer Darstellung, nativen Vorschlägen und Tagebuchspeicherung. Strukturierte Aktionen werden geprüft, vor dem Speichern bearbeitet und gegen Doppelausführung geschützt. Ein begrenzter Wiederholungsversuch und sichere manuelle Schaltflächen dienen als Fallback.
+- Eigene Gedanken einsprechen: Aufnahme bis zwei Minuten, ausdrücklicher Upload an das ausgewählte Transkriptionsmodell, erkannter Text vor Chatversand bearbeitbar. Fotoanalyse nur optional nach zusätzlicher Bestätigung, verkleinert und ohne automatische Archiv-Uploads.
+- Neue Einstellungen, Gesprächsmarkierungen und Chat-/Tagebuchdaten sind Bestandteil des vollständigen verschlüsselten Backups, lesbaren ZIPs und der Textdateien. Schema 1–9 bleibt importierbar; neue Daten verwenden Schema 10. Die kryptografische Container-Version bleibt unverändert.
+
+### Rückkehrpunkt
+
+Vor diesem Update: `9c9aa3d1961366fa48651f488324707d801bc581`, Branch `backup/v3007.0.0-before-ai-2026-10-01`. Source-ZIP: `Therapie-v3007.0.0-vor-KI-source.zip`. Ein Code-Rollback auf 3007 benötigt auch ein vor dem Update erstelltes Datenbackup: ältere Apps dürfen Schema 10 nicht überschreiben.
+
+### Prüfung und Installation
+
+GitHub Actions prüft Migrationen, verschlüsselte/lesbare Backups, Datums- und Alarmregeln, Offline-OpenAI-Verträge und Aktionen, kompiliert App/Widget-Erweiterung und validiert die IPA. Fokussierte iPhone-Simulatortests prüfen Check-ins, Anhänge, Termine, Heute-Routinen mit Rückgängig sowie KI-Vorschläge und Tagebuchspeicherung.
+
+Die IPA ist unsigned und muss für das eigene iPhone passend signiert werden. AlarmKit-Klingeln, Mikrofon, echte Widgets/App-Gruppen und OpenAI-Modellzugriff müssen zusätzlich auf dem installierten iPhone geprüft werden. Offline-API-Tests verwenden ausschließlich künstliche Daten und einen Mock-Transport; sie verursachen keine API-Kosten.
+
+Offizielle API-Referenzen: [GPT-5.6 Luna](https://developers.openai.com/api/docs/models/gpt-5.6-luna), [GPT-6 Luna](https://developers.openai.com/api/docs/models/gpt-6-luna), [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs), [Transkription](https://developers.openai.com/api/docs/guides/speech-to-text), [Preise](https://developers.openai.com/api/docs/pricing).
+
 ## Update 3007.0.0 · Dein Heute, deine Timeline
 
 - **Archiv-Timeline:** alle Einträge einschließlich Routinenprotokollen, gruppiert nach Tag, ISO-Woche, Monat oder Jahr. Neueste/älteste zuerst, Kalender mit Tagesauswahl, inklusive Datumsbereich, Inhaltstyp, Themen-/Ordnerfilter und Suche einschließlich Medientags. Vorhandene Detailansichten und Bearbeitungen bleiben verfügbar.

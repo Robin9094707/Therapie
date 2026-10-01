@@ -110,6 +110,8 @@ struct CompanionSettings: Codable, Equatable {
     // Optional additions retain schema-7 backups and existing local snapshots.
     var checkInReminders: [CheckInReminder]?
     var dayCheckInSlots: [DailyCheckInSlot]?
+    var allowMultipleCheckInsPerSlot: Bool?
+    var alarmShowsActualTitles: Bool?
     var taskAlarmsEnabled: Bool?
     var energyReviewAlarm: Bool?
     var sessionPhaseAlarmsEnabled: Bool?
@@ -211,7 +213,10 @@ enum RoutinePlanner {
 
 /// One snapshot mutation makes draft completion and task creation atomic and idempotent.
 enum GuidedCheckInMutation {
-    static func apply(_ entry: GuidedCheckIn, complete: Bool, to data: inout AppData) {
+    @discardableResult static func apply(_ entry: GuidedCheckIn, complete: Bool, to data: inout AppData) -> Bool {
+        // Existing legacy duplicates stay editable; new accidental duplicates never mutate data.
+        if !data.guidedCheckIns.contains(where: { $0.id == entry.id }),
+           DayCheckInPolicy.existing(for: entry, in: data) != nil { return false }
         var clean = entry
         if complete {
             clean.isDraft = false
@@ -251,6 +256,7 @@ enum GuidedCheckInMutation {
         }
         data.guidedCheckIns.removeAll { $0.id == clean.id }
         data.guidedCheckIns.insert(clean, at: 0)
+        return true
     }
 }
 

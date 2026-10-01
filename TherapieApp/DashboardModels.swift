@@ -1,10 +1,11 @@
 import Foundation
 
 enum HomeCard: String, CaseIterable, Identifiable {
-    case appointment, checkIns, routines, overview, quickActions, session, pinned, wellness, therapy, week, task, latest, reminders, goals, welcome
+    case appointment, discussion, checkIns, routines, overview, quickActions, session, pinned, wellness, therapy, week, task, latest, reminders, goals, welcome
     var id: String { rawValue }
     var title: String {
         switch self {
+        case .discussion: "Gesprächsliste am Therapietag"
         case .appointment: "Nächste Therapie"
         case .checkIns: "Check-ins"
         case .routines: "Heute fällige Routinen"
@@ -24,6 +25,7 @@ enum HomeCard: String, CaseIterable, Identifiable {
     }
     var symbol: String {
         switch self {
+        case .discussion: "text.bubble"
         case .appointment: "calendar.badge.clock"
         case .checkIns: "sparkles"
         case .routines: "checkmark.circle"

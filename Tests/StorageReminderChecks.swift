@@ -28,6 +28,13 @@ struct StorageReminderChecks {
         data.routineSnoozes = [RoutineSnooze(id: "portable-occurrence", until: Date())]
         data.guidedCheckIns = [GuidedCheckIn(kind: .therapy, mood: 4, batteryPercent: 0, stress: 2, sensoryLoad: 3, sleepHours: 7.5, summary: "Geführter Rückblick", therapyQuestion: "Was hilft?", tasks: [CheckInTaskDraft(title: "Erster Schritt", source: "Aus der Therapie")], isDraft: false)]
         data.companionSettings = CompanionSettings(vacationUntil: Date(), privateRoutineTitles: false, offerTherapyCheckIn: true, checkInReminders: [CheckInReminder(kind: .morning, time: RoutineTime(weekdays: [2, 3, 4, 5, 6], hour: 6, minute: 30, weekendHour: 9, weekendMinute: 0))])
+        data.schedule.recurrence = TherapyRecurrence(interval: 2, additionalWeeklySlots: [TherapyWeeklySlot(weekday: 5, hour: 10)])
+        data.schedule.extraAppointments = [TherapyExtraAppointment(title: "Zusatzgespräch")]
+        data.companionSettings.allowMultipleCheckInsPerSlot = false
+        data.companionSettings.alarmShowsActualTitles = true
+        data.aiSettings.enabled = true; data.aiSettings.model = "gpt-5.6-luna"; data.aiSettings.contextDays = 14
+        data.aiMessages = [AIBuddyMessage(role: "assistant", text: "Mein KI-Rückblick", reply: AIBuddyReply(title: "Meine Woche", message: "Ein ruhiger Moment", sections: [], actions: [], suggestedDays: 7))]
+        data.therapyDiscussionAcknowledgedIDs = ["guided-discussed"]
         data.reminderPreferences.energyReviewEnabled = true
         data.notes = [TherapyNote(title: "Lesbare Notiz", text: "Meine wichtige Zeile\nzweite Zeile", tags: ["wichtig"], isImportant: true)]
         data.therapyFolders = [TherapyFolder(title: "Meine Themen")]
