@@ -36,8 +36,21 @@ struct RootView: View {
                     .sheet(item: $store.pendingGuidedCheckIn) { GuidedCheckInDestination(entry: $0) }
             }
         }
-        .onOpenURL { url in if url.scheme == "therapie" && url.host == "session" { openSession = true } }
-        .onChange(of: scenePhase) { _, phase in if phase == .active { store.sessionController.synchronize(); store.consumeRoutineAlarmRoute(); store.refreshTherapyCalendar(force: false); TaskNotificationCoordinator.shared.refresh(store) } }
+        .onOpenURL { url in
+            guard url.scheme == "therapie" else { return }
+            switch url.host {
+            case "session": openSession = true
+            case "today": store.selectedTab = 0
+            case "archive": store.selectedTab = 3
+            case "appointments": store.notificationTherapy = true
+            case "routines": store.notificationRoutines = true
+            case "reminders": store.notificationReminders = true
+            case "routine": if let id = UUID(uuidString: url.lastPathComponent), store.data.routines.contains(where: { $0.id == id }) { store.notificationRoutineID = id } else { store.notificationRoutines = true }
+            case "task": if let id = UUID(uuidString: url.lastPathComponent), store.data.weeklyTasks.contains(where: { $0.id == id }) { store.notificationTaskID = id } else { store.notificationReminders = true }
+            default: break
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { store.sessionController.synchronize(); store.consumeRoutineAlarmRoute(); store.refreshTherapyCalendar(force: false); TaskNotificationCoordinator.shared.refresh(store); TherapyWidgetBridge.refresh(store) } }
         .sheet(isPresented: Binding(get: { store.notificationTaskID != nil }, set: { if !$0 { store.notificationTaskID = nil } })) {
             if let id = store.notificationTaskID, let task = store.data.weeklyTasks.first(where: { $0.id == id }) { WeeklyTaskEditorView(task: task) }
         }
@@ -46,6 +59,8 @@ struct RootView: View {
             if let id = store.notificationRoutineID { RoutineDetailView(routineID: id) }
         }
         .onChange(of: store.notificationSession) { _, value in if value { store.notificationSession = false; openSession = true } }
+        .sheet(isPresented: $store.notificationRoutines) { NavigationStack { RoutineHubView() } }
+        .sheet(isPresented: $store.notificationReminders) { NavigationStack { ReminderCenterView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { store.notificationReminders = false } } } } }
         .sheet(isPresented: $store.notificationTherapy) { TherapyAppointmentsView() }
         .sheet(isPresented: $store.notificationMood) { MoodEditorView() }
         .sheet(isPresented: $store.openEnergyReview) { WeeklyEnergyEditorView() }
@@ -365,10 +380,10 @@ struct TherapyLogoMark: View {
 // MARK: - Main navigation
 
 struct MainTabView: View {
-    @State private var selection = 0
+    @EnvironmentObject private var store: AppStore
 
     var body: some View {
-        TabView(selection: $selection) {
+        TabView(selection: $store.selectedTab) {
             DashboardView()
                 .tabItem { Label("Heute", systemImage: "sparkles") }
                 .tag(0)
@@ -400,6 +415,7 @@ struct DashboardView: View {
     @State private var openedNoteFixture = false
     @State private var showEnergy = false
     @State private var showReflection = false
+    @State private var customize = false
 
     private var currentTask: WeeklyTask? {
         let week = Date().therapyWeek
@@ -412,22 +428,31 @@ struct DashboardView: View {
     var body: some View {
         NavigationStack {
             TherapyScreen {
-                VStack(spacing: 16) {
-                    PersonalWelcomeCard()
-                    TherapyAppointmentCard()
-                    TodayOverviewCard()
-                    CompanionTodayCard()
-                    quickActions
-                    WellnessProgressCard()
-                    TherapyTodayCard()
-                    WeekOverviewCard()
-                    weeklyTaskCard
-                    latestCard
+                LazyVStack(spacing: store.data.dashboard.compactCards ? 10 : 18) {
+                    ForEach(store.data.dashboard.visibleCards) { card in
+                        dashboardCard(card)
+                            .contextMenu {
+                                Button(store.data.dashboard.pinnedCards.contains(card.rawValue) ? "Karte lösen" : "Karte oben anpinnen", systemImage: "pin") {
+                                    var preferences = store.data.dashboard
+                                    if preferences.pinnedCards.contains(card.rawValue) { preferences.pinnedCards.removeAll { $0 == card.rawValue } }
+                                    else { preferences.pinnedCards.append(card.rawValue) }
+                                    store.data.dashboard = preferences
+                                }
+                                Button("Karte ausblenden", systemImage: "eye.slash") { store.data.dashboard.hiddenCards.append(card.rawValue) }
+                                Button("Heute gestalten", systemImage: "slider.horizontal.3") { customize = true }
+                            }
+                    }
+                    if store.data.dashboard.visibleCards.isEmpty {
+                        ContentUnavailableView("Deine Heute-Seite", systemImage: "slider.horizontal.3", description: Text("Wähle deine Karten über „Heute gestalten“."))
+                        Button("Heute gestalten") { customize = true }.buttonStyle(.borderedProminent)
+                    }
                 }
             }
             .navigationTitle("Heute")
             .navigationBarTitleDisplayMode(.large)
+            .sheet(isPresented: $customize) { DashboardCustomizationView(preferences: store.data.dashboard) }
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) { Button("Heute gestalten", systemImage: "slider.horizontal.3") { customize = true }.accessibilityIdentifier("today.customize") }
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink { TasksView() } label: { Label("Aufgaben", systemImage: "checklist") }
                 }
@@ -445,6 +470,26 @@ struct DashboardView: View {
                 AddReflectionView()
                     .presentationDetents([.medium, .large])
             }
+        }
+    }
+
+    @ViewBuilder private func dashboardCard(_ card: HomeCard) -> some View {
+        switch card {
+        case .appointment: TherapyAppointmentCard()
+        case .checkIns: CompanionTodayCard()
+        case .routines: TodayRoutinesCard()
+        case .overview: TodayOverviewCard()
+        case .quickActions: quickActions
+        case .session: TodaySessionCard()
+        case .pinned: PinnedArchiveCard()
+        case .wellness: WellnessProgressCard()
+        case .therapy: TherapyTodayCard()
+        case .week: WeekOverviewCard()
+        case .task: weeklyTaskCard
+        case .latest: latestCard
+        case .reminders: TodayRemindersCard()
+        case .goals: TodayGoalsCard()
+        case .welcome: PersonalWelcomeCard()
         }
     }
 
@@ -532,7 +577,7 @@ struct DashboardView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(Array(store.data.notes.prefix(3))) { note in
+                    ForEach(Array(store.data.notes.sorted { $0.createdAt > $1.createdAt }.prefix(3))) { note in
                         VStack(alignment: .leading, spacing: 3) {
                             Text(note.title)
                                 .font(.subheadline.weight(.semibold))
@@ -1193,6 +1238,7 @@ struct SettingsView: View {
                 VStack(spacing: 16) {
                     profileCard
                     AppearanceCard()
+                    HomeAndWidgetSettingsCard()
                     GlassCard {
                         NavigationLink { WellnessSettingsView() } label: {
                             Label("Stimmung: Ziele, Erinnerungen & Freigaben", systemImage: "heart.text.clipboard")

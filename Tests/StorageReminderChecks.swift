@@ -15,6 +15,12 @@ struct StorageReminderChecks {
         let legacy = support.appendingPathComponent("Therapie")
         for folder in ["Media", "Recordings"] { try fm.createDirectory(at: legacy.appendingPathComponent(folder), withIntermediateDirectories: true) }
         var data = AppData()
+        data.dashboard.cardOrder = ["routines", "appointment", "checkIns"]
+        data.dashboard.hiddenCards = ["welcome"]
+        data.dashboard.pinnedCards = ["routines"]
+        data.dashboard.pinnedRecordIDs = ["note-backup-test"]
+        data.dashboard.showWidgetTitles = true
+        data.archivePreferences = ArchivePreferences(grouping: .year, oldestFirst: true)
         data.profile = UserProfile(userName: "Robin", therapistName: "Therapeutin", onboardingCompleted: true)
         let routine = DailyRoutine(title: "Frühstück", symbol: "fork.knife", goalID: nil, times: [RoutineTime(title: "Vor der Arbeit", weekdays: [2, 3, 4, 5, 6], hour: 6, minute: 15, weekendHour: 9, weekendMinute: 0)], urgentAlarm: true)
         data.routines = [routine]
@@ -67,6 +73,8 @@ struct StorageReminderChecks {
         try expect(try AppFileStorage.root(applicationSupport: support, documents: documents, folder: "Therapie") == root, "Migration is idempotent")
         try ReadableBackup.writeEntries(data: data, root: root)
         try expect(try ReadableBackup.relativePath(root.appendingPathComponent("Media/p.jpg").resolvingSymlinksInPath(), in: root) == "Media/p.jpg", "Canonical and system-alias paths have the same relative path")
+        let dashboardText = try String(contentsOf: root.appendingPathComponent("Eintraege/Einstellungen/dashboard.txt"), encoding: .utf8)
+        try expect(dashboardText.contains("note-backup-test") && dashboardText.contains("routines"), "Readable mirror retains layout and pins")
         let noteFile = root.appendingPathComponent("Eintraege/notes/" + data.notes[0].id.uuidString + ".txt")
         try expect(try String(contentsOf: noteFile, encoding: .utf8).contains("zweite Zeile"), "Human-readable multiline note retained")
         try expect(try String(contentsOf: root.appendingPathComponent("UEBERSICHT.md"), encoding: .utf8).contains("Lesbare Notiz"), "Human-readable index contains titles")
@@ -85,6 +93,7 @@ struct StorageReminderChecks {
         try expect(try Data(contentsOf: prepared.directory.appendingPathComponent("Media/p.jpg")) == photo, "ZIP streams multiple attachment blocks")
         try expect(try Data(contentsOf: prepared.directory.appendingPathComponent("Recordings/empty.m4a")).isEmpty, "ZIP supports empty attachments")
         try expect(fm.fileExists(atPath: prepared.directory.appendingPathComponent("UEBERSICHT.md").path), "ZIP contains readable overview")
+        try expect(prepared.manifest.data.dashboard == data.dashboard && prepared.manifest.data.archivePreferences == data.archivePreferences, "Readable ZIP restores personalization and archive settings")
         let reminderText = try String(contentsOf: prepared.directory.appendingPathComponent("Eintraege/Einstellungen/companionSettings.txt"), encoding: .utf8)
         try expect(reminderText.contains("Check-in-Erinnerungen"), "Reminder settings appear in readable mirror")
         let logText = try String(contentsOf: prepared.directory.appendingPathComponent("Eintraege/routineCompletions/" + data.routineCompletions[0].id.uuidString + ".txt"), encoding: .utf8)

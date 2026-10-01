@@ -125,7 +125,7 @@ struct TherapySessionReflection: Identifiable, Codable, Equatable {
 }
 
 struct AppData: Codable, Equatable {
-    var schemaVersion = 8
+    var schemaVersion = 9
     var profile = UserProfile()
     var schedule = TherapySchedule()
     var preferences = AppPreferences()
@@ -154,9 +154,13 @@ struct AppData: Codable, Equatable {
     var routineSnoozes: [RoutineSnooze] = []
     var companionSettings = CompanionSettings()
 
+    var dashboard = DashboardPreferences()
+    var archivePreferences = ArchivePreferences()
+
     init() {}
 
     enum CodingKeys: String, CodingKey {
+        case dashboard, archivePreferences
         case schemaVersion, profile, schedule, preferences, weeklyTasks, notes, energyEntries, media, reflections
         case moodCheckIns, batteryPoints, weekReviews, wellnessSettings
         case therapyFolders, therapyTopics, therapyGoals, sessionTemplates, currentSession, sessionHistory, sessionPreferences
@@ -167,7 +171,7 @@ struct AppData: Codable, Equatable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let version = try c.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
-        guard (1...8).contains(version) else {
+        guard (1...9).contains(version) else {
             throw DecodingError.dataCorruptedError(forKey: .schemaVersion, in: c,
                                                    debugDescription: "Diese Daten benötigen eine neuere App-Version.")
         }
@@ -176,7 +180,9 @@ struct AppData: Codable, Equatable {
         routineCompletions = try c.decodeIfPresent([RoutineCompletion].self, forKey: .routineCompletions) ?? []
         routineSnoozes = try c.decodeIfPresent([RoutineSnooze].self, forKey: .routineSnoozes) ?? []
         companionSettings = try c.decodeIfPresent(CompanionSettings.self, forKey: .companionSettings) ?? CompanionSettings()
-        schemaVersion = 8
+        dashboard = try c.decodeIfPresent(DashboardPreferences.self, forKey: .dashboard) ?? DashboardPreferences()
+        archivePreferences = try c.decodeIfPresent(ArchivePreferences.self, forKey: .archivePreferences) ?? ArchivePreferences()
+        schemaVersion = 9
         profile = try c.decode(UserProfile.self, forKey: .profile)
         schedule = try c.decodeIfPresent(TherapySchedule.self, forKey: .schedule) ?? TherapySchedule()
         preferences = try c.decodeIfPresent(AppPreferences.self, forKey: .preferences) ?? AppPreferences()

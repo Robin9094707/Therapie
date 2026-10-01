@@ -11,7 +11,11 @@ with zipfile.ZipFile(sys.argv[1]) as archive:
     data = json.loads(archive.read("therapy-data.json"))
     manifest = json.loads(archive.read("manifest.json"))
     assert data == manifest["data"]
-    assert data["schemaVersion"] == 8
+    assert data["schemaVersion"] == 9
+    assert data["dashboard"]["pinnedRecordIDs"] == ["note-backup-test"]
+    assert data["dashboard"]["showWidgetTitles"] is True
+    assert data["archivePreferences"] == {"grouping": "Jahre", "oldestFirst": True}
+    assert "note-backup-test" in archive.read("Eintraege/Einstellungen/dashboard.txt").decode()
     assert data["weeklyEnergyReviews"][0]["gives"][0]["title"] == "Freunde"
     assert data["guidedCheckIns"][0]["batteryPercent"] == 0
     assert data["routines"][0]["title"] == "Frühstück"

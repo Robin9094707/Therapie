@@ -29,6 +29,7 @@ enum ReadableBackup {
         return String(path.dropFirst(prefix.count))
     }
     static let labels: [String: String] = [
+        "dashboard": "Heute-Einstellungen", "archivePreferences": "Archiv-Einstellungen", "cardOrder": "Kartenreihenfolge", "hiddenCards": "Ausgeblendete Karten", "pinnedCards": "Oben angepinnte Karten", "pinnedRecordIDs": "Angepinnte Archiveintraege", "compactCards": "Kompakte Abstaende", "showWidgetTitles": "Titel in Widgets anzeigen", "grouping": "Zeitliche Gruppierung", "oldestFirst": "Aelteste zuerst",
         "cancellations": "Therapie-Absagen", "therapyVacations": "Therapiepausen", "therapyAlarmsEnabled": "Therapie-Wecker aktiv", "restoredAt": "Wiederhergestellt am", "endedAt": "Beendet am", "sessionPhaseAlarmsEnabled": "Wecker nach jedem Abschnitt", "checkInReminders": "Check-in-Erinnerungen", "corrections": "Korrekturen", "routineTitle": "Routinenname", "timeTitle": "Terminname", "reason": "Grund", "previousOutcome": "Vorheriger-Status", "previousNote": "Vorherige-Notiz",
         "guidedCheckIns": "Gefuehrte-Check-ins", "routines": "Alltagsroutinen", "routineCompletions": "Routine-Protokoll", "routineSnoozes": "Verschobene-Routinen", "companionSettings": "Alltags-Einstellungen",
         "batteryPercent": "Akku in Prozent", "isDraft": "Entwurf", "scheduledAt": "Geplant fuer", "recordedAt": "Bestaetigt am", "outcome": "Ergebnis", "times": "Uhrzeiten", "pauseOnVacation": "Urlaubspause", "retryMinutes": "Erneut erinnern nach Minuten",

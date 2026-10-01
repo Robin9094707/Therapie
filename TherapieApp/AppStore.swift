@@ -33,6 +33,10 @@ final class AppStore: ObservableObject {
     @Published var notificationRoutineID: UUID?
     @Published var routineReminderStatus = ""
     @Published var checkInReminderStatus = ""
+    @Published var selectedTab = 0
+    @Published var notificationRoutines = false
+    @Published var notificationReminders = false
+    @Published var widgetStatus = ""
     @Published var routineAlarmStatus = ""
     private var writeBlocked = false
 
@@ -84,8 +88,8 @@ final class AppStore: ObservableObject {
                 decoder.dateDecodingStrategy = .iso8601
                 data = try decoder.decode(AppData.self, from: raw)
                 let version = (try JSONSerialization.jsonObject(with: raw) as? [String: Any])?["schemaVersion"] as? Int ?? 1
-                let snapshot = root.appendingPathComponent("therapy-data.pre-3006.json")
-                if version < 8 && !fm.fileExists(atPath: snapshot.path) {
+                let snapshot = root.appendingPathComponent("therapy-data.pre-3007.json")
+                if version < 9 && !fm.fileExists(atPath: snapshot.path) {
                     try raw.write(to: snapshot, options: [.atomic, .completeFileProtection])
                 }
             } catch {
@@ -104,6 +108,12 @@ final class AppStore: ObservableObject {
                 data.weeklyTasks = [WeeklyTask(weekOfYear: week.week, yearForWeekOfYear: week.year,
                                                title: "Einen ruhigen Moment festhalten", details: "Ein kleiner Schritt für diese Woche.")]
                 data.energyEntries = [EnergyEntry(level: 3, givesEnergy: "Musik und eine Pause", takesEnergy: "", note: "")]
+                if ProcessInfo.processInfo.arguments.contains("--personalization-fixture") {
+                    let past = Calendar.current.date(byAdding: .month, value: -1, to: Date())!
+                    data.notes = [TherapyNote(createdAt: Date(), title: "Heute festgehalten", text: "Ein kleiner guter Moment.", tags: ["Alltag"]), TherapyNote(createdAt: past, title: "Früherer Rückblick", text: "Mein Archiv bleibt erhalten.", tags: [])]
+                    let clock = Calendar.current.dateComponents([.hour, .minute], from: Date().addingTimeInterval(-300))
+                    data.routines = [DailyRoutine(title: "Mein kleiner Tages-Schritt", times: [RoutineTime(hour: clock.hour!, minute: clock.minute!)])]
+                }
                 if ProcessInfo.processInfo.arguments.contains("--show-checkin") { pendingGuidedCheckIn = GuidedCheckIn(kind: .morning, mood: 4, batteryPercent: 65, step: 2) }
                 if ProcessInfo.processInfo.arguments.contains("--show-checkin-tasks") { pendingGuidedCheckIn = GuidedCheckIn(kind: .morning, step: 5) }
                 if ProcessInfo.processInfo.arguments.contains("--show-saved-checkin") {
@@ -133,7 +143,7 @@ final class AppStore: ObservableObject {
         isLoading = false
         TaskNotificationCoordinator.shared.attach(self)
         if loadError == nil {
-            if !fm.fileExists(atPath: dataURL.path) { save() } else { refreshReadableFiles(); TaskNotificationCoordinator.shared.refresh(self) }
+            if !fm.fileExists(atPath: dataURL.path) { save() } else { refreshReadableFiles(); TaskNotificationCoordinator.shared.refresh(self); TherapyWidgetBridge.refresh(self) }
         }
 
     }
@@ -168,6 +178,7 @@ final class AppStore: ObservableObject {
                 ofItemAtPath: dataURL.path
             )
             lastSaveError = nil
+            TherapyWidgetBridge.refresh(self)
             scheduleAutomaticBackup(snapshot: data)
             refreshReadableFiles()
             TaskNotificationCoordinator.shared.refresh(self)

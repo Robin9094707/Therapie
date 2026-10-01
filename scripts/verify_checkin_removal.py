@@ -41,6 +41,7 @@ command = ['xcodebuild', '-project', 'Therapie.xcodeproj', '-scheme', 'TherapieA
            '-only-testing:TherapieUITests/TherapieUITests/testSavedCheckInOpensReadOnlyAndEditsExplicitly',
            '-only-testing:TherapieUITests/TherapieUITests/testNoteAttachmentsKeepParentOpenAndReopenReadOnly',
            '-only-testing:TherapieUITests/TherapieUITests/testTherapyCancellationAndRestore',
+           '-only-testing:TherapieUITests/TherapieUITests/testTodayCustomizationRoutineConfirmationAndArchiveFilters',
            'CODE_SIGNING_ALLOWED=NO', 'test']
 print('Testing saved overview and real task removal on', phone['name'], flush=True)
 with (output / 'test.log').open('w') as log:

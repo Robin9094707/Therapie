@@ -6,8 +6,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    CURRENT_PROJECT_VERSION: 13
-    MARKETING_VERSION: 3006.1.0
+    CURRENT_PROJECT_VERSION: 14
+    MARKETING_VERSION: 3007.0.0
 targets:
   TherapieApp:
     type: application
@@ -24,6 +24,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: eu.rjuhas.therapie
         PRODUCT_NAME: Therapie
         INFOPLIST_FILE: TherapieApp/Info.plist
+        CODE_SIGN_ENTITLEMENTS: TherapieApp/Therapie.entitlements
         GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "1"
         SUPPORTS_MACCATALYST: NO
@@ -43,6 +44,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: eu.rjuhas.therapie.liveactivity
         INFOPLIST_FILE: TherapieLiveActivity/Info.plist
+        CODE_SIGN_ENTITLEMENTS: TherapieLiveActivity/Therapie.entitlements
         GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "1"
         APPLICATION_EXTENSION_API_ONLY: YES

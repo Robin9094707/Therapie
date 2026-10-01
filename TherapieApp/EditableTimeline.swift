@@ -1,180 +1,129 @@
 import SwiftUI
 
-private enum ArchiveRecord: Identifiable {
-    case note(TherapyNote), media(MediaItem), energy(EnergyEntry), reflection(TherapySessionReflection)
-    case mood(MoodCheckIn), point(BatteryPoint), review(WeekReview), session(RunningTherapySession)
-    case task(WeeklyTask), topic(TherapyTopic), goal(TherapyGoal)
-    case weeklyEnergy(WeeklyEnergyReview)
-    case guided(GuidedCheckIn)
-    var id: String {
-        switch self {
-        case .note(let value): "note-\(value.id)"
-        case .media(let value): "media-\(value.id)"
-        case .energy(let value): "energy-\(value.id)"
-        case .reflection(let value): "reflection-\(value.id)"
-        case .mood(let value): "mood-\(value.id)"
-        case .point(let value): "point-\(value.id)"
-        case .review(let value): "review-\(value.id)"
-        case .session(let value): "session-\(value.id)"
-        case .task(let value): "task-\(value.id)"
-        case .topic(let value): "topic-\(value.id)"
-        case .goal(let value): "goal-\(value.id)"
-        case .weeklyEnergy(let value): "weekly-energy-\(value.id)"
-        case .guided(let value): "guided-\(value.id)"
-        }
-    }
-    var date: Date {
-        switch self {
-        case .note(let value): value.createdAt
-        case .media(let value): value.createdAt
-        case .energy(let value): value.createdAt
-        case .reflection(let value): value.date
-        case .mood(let value): value.date
-        case .point(let value): value.date
-        case .review(let value): value.weekStart
-        case .session(let value): value.startedAt
-        case .task(let value): value.createdAt
-        case .topic(let value): value.createdAt
-        case .goal(let value): value.createdAt
-        case .weeklyEnergy(let value): value.periodEnd
-        case .guided(let value): value.date
-        }
-    }
-    var title: String {
-        switch self {
-        case .note(let value): value.title
-        case .media(let value): value.title
-        case .energy(let value): "Energie-Check \(value.level)/5"
-        case .reflection: "Therapie-Rückblick"
-        case .mood(let value): "\(value.face) \(value.moodTitle) · Akku \(value.battery)/5"
-        case .point(let value): value.title
-        case .review(let value): "Wochenrückblick KW \(value.weekStart.therapyWeek.week)"
-        case .session(let value): value.title
-        case .task(let value): value.title
-        case .topic(let value): value.title
-        case .goal(let value): value.title
-        case .weeklyEnergy(let value): "Wochenenergie · Akku \(value.energy)/5"
-        case .guided(let value): value.displayTitle + (value.isDraft ? " · Entwurf" : "")
-        }
-    }
-    var subtitle: String {
-        switch self {
-        case .note(let value): ([value.text, value.author ?? ""] + value.tags).joined(separator: " · ")
-        case .media(let value): [value.kind.displayName, value.note, value.category ?? "", value.source ?? ""].joined(separator: " · ")
-        case .energy(let value): [value.givesEnergy, value.takesEnergy, value.note].joined(separator: " · ")
-        case .reflection(let value): [value.summary, value.whatHelped, value.nextFocus].joined(separator: " · ")
-        case .mood(let value): ([value.note, value.smallWin, value.nextNeed] + value.emotions).joined(separator: " · ")
-        case .point(let value): [value.direction.title, value.category.title, value.note].joined(separator: " · ")
-        case .review(let value): [value.summary, value.therapyQuestion, value.nextStep].joined(separator: " · ")
-        case .session(let value): [value.summary, value.nextStep].joined(separator: " · ")
-        case .task(let value): (value.completed ? "Erledigt · " : "Offen · ") + value.details
-        case .topic(let value): [value.status.rawValue, value.description, value.category.rawValue].joined(separator: " · ")
-        case .goal(let value): [value.status.rawValue, value.smallStep, value.measure].joined(separator: " · ")
-        case .weeklyEnergy(let value): (value.gives.map(\.title) + value.takes.map(\.title) + [value.note, value.therapyQuestion]).joined(separator: " · ")
-        case .guided(let value): [value.summary, value.smallWin, value.therapyQuestion].joined(separator: " · ")
-        }
-    }
-    var symbol: String {
-        switch self {
-        case .note(let value): value.isImportant == true ? "pin.fill" : "note.text"
-        case .media(let value): value.kind.symbol
-        case .energy: "bolt.heart"
-        case .reflection: "clock.arrow.circlepath"
-        case .mood: "face.smiling"
-        case .point(let value): value.direction.symbol
-        case .review: "calendar.badge.checkmark"
-        case .session: "timer"
-        case .task: "checklist"
-        case .topic(let value): value.category.symbol
-        case .goal: "scope"
-        case .weeklyEnergy: "battery.100percent"
-        case .guided(let value): value.kind.symbol
-        }
-    }
-    var isCheckIn: Bool { switch self { case .guided, .mood, .note, .media: true; default: false } }
-    var deletionMessage: String {
-        switch self {
-        case .guided: "Der Check-in wird gelöscht. Angelegte Aufgaben und Fotos bleiben erhalten."
-        case .mood: "Der Check-in und seine zugehörigen Akku-Punkte werden endgültig gelöscht."
-        case .media: "Der Eintrag und seine lokale Datei werden endgültig gelöscht."
-        case .topic: "Das Thema wird gelöscht. Verknüpfte Inhalte bleiben ohne Themenzuordnung erhalten."
-        case .session: "Die Sitzung wird gelöscht. Ihre Notizen bleiben ohne Sitzungszuordnung erhalten."
-        default: "Dieser Eintrag wird endgültig gelöscht."
-        }
-    }
-}
-
 struct TherapyEditableTimeline: View {
     @EnvironmentObject private var store: AppStore
     var searchText: String
     @State private var editing: ArchiveRecord?
     @State private var deleting: ArchiveRecord?
     @State private var confirmDelete = false
+    @State private var kind: ArchiveKind = .all
+    @State private var showCalendar = false
+    @State private var selectedDay = Date()
+    @State private var filterDay = false
+    @State private var useRange = false
+    @State private var rangeStart = Calendar.current.date(byAdding: .month, value: -1, to: Date()) ?? Date()
+    @State private var rangeEnd = Date()
+    @State private var topicID: UUID?
+    @State private var folderID: UUID?
+    @State private var onlyPinned = false
     private var records: [ArchiveRecord] {
-        var values = store.data.notes.map(ArchiveRecord.note)
-        values += store.data.media.map(ArchiveRecord.media)
-        values += store.data.energyEntries.map(ArchiveRecord.energy)
-        values += store.data.reflections.map(ArchiveRecord.reflection)
-        values += store.data.moodCheckIns.map(ArchiveRecord.mood)
-        values += store.data.batteryPoints.map(ArchiveRecord.point)
-        values += store.data.weekReviews.map(ArchiveRecord.review)
-        values += store.data.sessionHistory.map(ArchiveRecord.session)
-        values += store.data.weeklyTasks.map(ArchiveRecord.task)
-        values += store.data.therapyTopics.map(ArchiveRecord.topic)
-        values += store.data.therapyGoals.map(ArchiveRecord.goal)
-        values += store.data.weeklyEnergyReviews.map(ArchiveRecord.weeklyEnergy)
-        values += store.data.guidedCheckIns.map(ArchiveRecord.guided)
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        return values.filter { query.isEmpty || ($0.title + " " + $0.subtitle).localizedCaseInsensitiveContains(query) }.sorted { $0.date > $1.date }
+        return ArchiveRecord.all(in: store.data).filter { record in
+            (kind == .all || record.kind == kind) &&
+            (topicID == nil || record.topicID == topicID) &&
+            (folderID == nil || record.folderID == folderID) &&
+            (!onlyPinned || store.data.dashboard.pinnedRecordIDs.contains(record.id)) &&
+            ArchiveDateFilter.includes(record.date, day: filterDay ? selectedDay : nil, from: useRange ? rangeStart : nil, through: useRange ? rangeEnd : nil) &&
+            (query.isEmpty || (record.title + " " + record.subtitle + " " + record.date.formatted(date: .numeric, time: .omitted)).localizedStandardContains(query))
+        }.sorted {
+            if $0.date == $1.date { return $0.id < $1.id }
+            return store.data.archivePreferences.oldestFirst ? $0.date < $1.date : $0.date > $1.date
+        }
+    }
+    private var groups: [(date: Date, values: [ArchiveRecord])] {
+        let grouped = Dictionary(grouping: records) { store.data.archivePreferences.grouping.start(of: $0.date) }
+        return grouped.keys.sorted { store.data.archivePreferences.oldestFirst ? $0 < $1 : $0 > $1 }.map { ($0, grouped[$0] ?? []) }
     }
     var body: some View {
-        LazyVStack(spacing: 12) {
-            if records.isEmpty { GlassCard { ContentUnavailableView("Deine Timeline ist noch leer", systemImage: "clock.arrow.circlepath", description: Text("Alle Einträge erscheinen hier. Öffne einen Eintrag, um ihn anzusehen. Check-ins zeigen zuerst ihre Übersicht.")) } }
-            ForEach(records) { record in
-                GlassCard {
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack(alignment: .top, spacing: 12) {
-                            Image(systemName: record.symbol).font(.title3).foregroundStyle(.indigo).frame(width: 30).accessibilityHidden(true)
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text(record.title).font(.headline)
-                                Text(record.subtitle).font(.subheadline).foregroundStyle(.secondary).lineLimit(4)
-                                Text(record.date.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
-                            }
+        LazyVStack(alignment: .leading, spacing: 16) {
+            filterControls
+            Text("\(records.count) Einträge · \(groups.count) \(store.data.archivePreferences.grouping.rawValue)").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            if records.isEmpty {
+                GlassCard { ContentUnavailableView("Keine passenden Einträge", systemImage: "line.3.horizontal.decrease", description: Text("Wähle einen anderen Tag oder setze deine Filter zurück.")) }
+            }
+            ForEach(groups, id: \.date) { group in
+                Section {
+                    ForEach(group.values) { record in
+                        HStack(alignment: .top, spacing: 10) {
+                            VStack(spacing: 4) {
+                                Circle().fill(.indigo).frame(width: 8, height: 8)
+                                Rectangle().fill(.indigo.opacity(0.15)).frame(width: 2, height: 80)
+                            }.padding(.top, 20).accessibilityHidden(true)
+                            ArchiveTimelineCard(record: record, open: { editing = record }, delete: {
+                                deleting = record; confirmDelete = true
+                            })
                         }
-                        ResponsiveButtonRow {
-                            Button(record.isCheckIn ? "Übersicht öffnen" : "Öffnen & bearbeiten", systemImage: record.isCheckIn ? "doc.text.magnifyingglass" : "pencil") { editing = record }
-                            Button(role: .destructive) { deleting = record; confirmDelete = true } label: { Image(systemName: "trash").frame(width: 44, height: 44) }.accessibilityLabel("Eintrag löschen")
-                        }.font(.caption.bold())
                     }
+                } header: {
+                    HStack {
+                        Text(store.data.archivePreferences.grouping.title(for: group.date)).font(.headline)
+                        Spacer()
+                        Text("\(group.values.count)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                    }.padding(.top, 8)
                 }
             }
         }
-        .sheet(item: $editing) { editor($0) }
+        .sheet(item: $editing) { ArchiveRecordEditor(record: $0) }
         .alert("Eintrag löschen?", isPresented: $confirmDelete) {
             Button("Abbrechen", role: .cancel) {}
             Button("Löschen", role: .destructive) { if let deleting { remove(deleting) }; deleting = nil }
         } message: { Text(deleting?.deletionMessage ?? "") }
     }
-    @ViewBuilder private func editor(_ record: ArchiveRecord) -> some View {
-        switch record {
-        case .note(let value): TherapyNoteDetailView(noteID: value.id)
-        case .media(let value): TherapyMediaDetailView(itemID: value.id)
-        case .energy(let value): LegacyEnergyEditorView(entry: value)
-        case .reflection(let value): TherapyReflectionEditorView(entry: value)
-        case .mood(let value): MoodCheckInDetailView(entryID: value.id)
-        case .point(let value): BatteryPointEditorView(point: value) { store.saveBatteryPoint($0); return store.lastSaveError == nil }
-        case .review(let value): WeekReviewEditorView(review: value)
-        case .session(let value): SessionHistoryEditorView(session: value)
-        case .task(let value): WeeklyTaskEditorView(task: value)
-        case .topic(let value): TopicEditorView(topic: value)
-        case .goal(let value): GoalEditorView(goal: value)
-        case .weeklyEnergy(let value): WeeklyEnergyEditorView(review: value)
-        case .guided(let value): GuidedCheckInDestination(entry: value)
+    private var filterControls: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 12) {
+                SectionHeader(title: "Deine Zeitreise", icon: "calendar.day.timeline.left", subtitle: "Nach Datum, Inhalt und Thema entdecken.")
+                ViewThatFits(in: .horizontal) {
+                    HStack { groupingPicker; kindPicker }
+                    VStack(alignment: .leading) { groupingPicker; kindPicker }
+                }
+                HStack {
+                    Button(showCalendar ? "Kalender schließen" : "Kalender öffnen", systemImage: "calendar") { showCalendar.toggle() }
+                    Spacer()
+                    Menu {
+                        Toggle("Älteste zuerst", isOn: $store.data.archivePreferences.oldestFirst)
+                        Toggle("Nur angepinnte Einträge", isOn: $onlyPinned)
+                        Toggle("Zeitraum eingrenzen", isOn: $useRange)
+                        Picker("Thema", selection: $topicID) {
+                            Text("Alle Themen").tag(Optional<UUID>.none)
+                            ForEach(store.data.therapyTopics) { Text($0.title).tag(Optional($0.id)) }
+                        }
+                        Picker("Ordner", selection: $folderID) {
+                            Text("Alle Ordner").tag(Optional<UUID>.none)
+                            ForEach(store.data.therapyFolders) { Text($0.title).tag(Optional($0.id)) }
+                        }
+                        Button("Filter zurücksetzen") { kind = .all; filterDay = false; useRange = false; topicID = nil; folderID = nil; onlyPinned = false }
+                    } label: { Label("Filter", systemImage: "line.3.horizontal.decrease") }
+                }.font(.subheadline)
+                if showCalendar {
+                    DatePicker("Archivtag", selection: $selectedDay, displayedComponents: .date).datePickerStyle(.graphical)
+                        .onChange(of: selectedDay) { _, _ in filterDay = true }
+                    Toggle("Nur ausgewählten Tag anzeigen", isOn: $filterDay)
+                    Text("\(ArchiveRecord.all(in: store.data).filter { $0.date.isSameTherapyDay(as: selectedDay) }.count) Einträge an diesem Tag").font(.caption).foregroundStyle(.secondary)
+                }
+                if filterDay && !showCalendar {
+                    Button { filterDay = false } label: { Label(selectedDay.formatted(date: .abbreviated, time: .omitted) + " · Alle Tage anzeigen", systemImage: "xmark.circle") }.font(.caption)
+                }
+                if useRange {
+                    DatePicker("Von", selection: $rangeStart, in: ...rangeEnd, displayedComponents: .date)
+                    DatePicker("Bis einschließlich", selection: $rangeEnd, in: rangeStart..., displayedComponents: .date)
+                }
+                if let id = topicID, let topic = store.data.therapyTopics.first(where: { $0.id == id }) { Text("Thema: " + topic.title).font(.caption) }
+                if let id = folderID, let folder = store.data.therapyFolders.first(where: { $0.id == id }) { Text("Ordner: " + folder.title).font(.caption) }
+            }
         }
+    }
+    private var groupingPicker: some View {
+        Picker("Gruppierung", selection: $store.data.archivePreferences.grouping) { ForEach(ArchiveGrouping.allCases) { Text($0.rawValue).tag($0) } }.pickerStyle(.menu)
+    }
+    private var kindPicker: some View {
+        Picker("Inhalt", selection: $kind) { ForEach(ArchiveKind.allCases) { Text($0.rawValue).tag($0) } }.pickerStyle(.menu)
     }
     private func remove(_ record: ArchiveRecord) {
         var snapshot = store.data
+        snapshot.dashboard.pinnedRecordIDs.removeAll { $0 == record.id }
         switch record {
+        case .routineLog: return
         case .note(let value): snapshot.notes.removeAll { $0.id == value.id }
         case .media(let value): store.deleteMedia(value); return
         case .energy(let value): snapshot.energyEntries.removeAll { $0.id == value.id }
@@ -195,5 +144,73 @@ struct TherapyEditableTimeline: View {
             for i in snapshot.routines.indices where snapshot.routines[i].goalID == value.id { snapshot.routines[i].goalID = nil }
         }
         store.data = snapshot
+    }
+}
+
+struct ArchiveRecordEditor: View {
+    @EnvironmentObject private var store: AppStore
+    let record: ArchiveRecord
+    @ViewBuilder var body: some View {
+        switch record {
+        case .note(let value): TherapyNoteDetailView(noteID: value.id)
+        case .media(let value): TherapyMediaDetailView(itemID: value.id)
+        case .energy(let value): LegacyEnergyEditorView(entry: value)
+        case .reflection(let value): TherapyReflectionEditorView(entry: value)
+        case .mood(let value): MoodCheckInDetailView(entryID: value.id)
+        case .point(let value): BatteryPointEditorView(point: value) { store.saveBatteryPoint($0); return store.lastSaveError == nil }
+        case .review(let value): WeekReviewEditorView(review: value)
+        case .session(let value): SessionHistoryEditorView(session: value)
+        case .task(let value): WeeklyTaskEditorView(task: value)
+        case .topic(let value): TopicEditorView(topic: value)
+        case .goal(let value): GoalEditorView(goal: value)
+        case .weeklyEnergy(let value): WeeklyEnergyEditorView(review: value)
+        case .guided(let value): GuidedCheckInDestination(entry: value)
+        case .routineLog(let value): RoutineLogDestination(log: value)
+        }
+    }
+ }
+
+struct RoutineLogDestination: View {
+    @Environment(\.dismiss) private var dismiss
+    let log: RoutineCompletion
+    var body: some View {
+        NavigationStack {
+            TherapyScreen { RoutineHistoryCard(log: log, showTitle: true) }
+                .navigationTitle("Routinenprotokoll")
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { dismiss() } } }
+        }
+    }
+}
+struct ArchiveTimelineCard: View {
+    @EnvironmentObject private var store: AppStore
+    let record: ArchiveRecord
+    var open: () -> Void
+    var delete: (() -> Void)? = nil
+    private var pinned: Bool { store.data.dashboard.pinnedRecordIDs.contains(record.id) }
+    var body: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: record.symbol).font(.title3).foregroundStyle(.indigo).frame(width: 28).accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Button(action: open) { Text(record.title).font(.headline).multilineTextAlignment(.leading) }.buttonStyle(.plain)
+                        Text(record.subtitle).font(.subheadline).foregroundStyle(.secondary).lineLimit(3)
+                        Text(record.date.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                    Button {
+                        var preferences = store.data.dashboard
+                        if pinned { preferences.pinnedRecordIDs.removeAll { $0 == record.id } } else { preferences.pinnedRecordIDs.append(record.id) }
+                        store.data.dashboard = preferences
+                    } label: { Image(systemName: pinned ? "pin.fill" : "pin").frame(width: 32, height: 44) }
+                        .accessibilityLabel(pinned ? "Von Heute lösen" : "Auf Heute anpinnen")
+                }
+                HStack {
+                    Button("Übersicht öffnen", systemImage: "arrow.up.right.square", action: open)
+                    Spacer()
+                    if record.canDelete, let delete { Button(role: .destructive, action: delete) { Image(systemName: "trash").frame(width: 44, height: 44) }.accessibilityLabel("Eintrag löschen") }
+                }.font(.caption.bold())
+            }
+        }
     }
 }

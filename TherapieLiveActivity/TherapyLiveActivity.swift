@@ -4,7 +4,14 @@ import ActivityKit
 
 @main
 struct TherapyLiveActivityBundle: WidgetBundle {
-    var body: some Widget { TherapyLiveActivityWidget() }
+    var body: some Widget {
+        TherapyLiveActivityWidget()
+        TherapyHomeWidget(category: .overview)
+        TherapyHomeWidget(category: .appointment)
+        TherapyHomeWidget(category: .routines)
+        TherapyHomeWidget(category: .reminders)
+        TherapyHomeWidget(category: .session)
+    }
 }
 
 struct TherapyLiveActivityWidget: Widget {

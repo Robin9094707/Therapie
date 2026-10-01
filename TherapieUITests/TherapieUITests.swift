@@ -218,6 +218,43 @@ final class TherapieUITests: XCTestCase {
     }
 
     @MainActor
+    @MainActor
+    func testTodayCustomizationRoutineConfirmationAndArchiveFilters() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--show-dashboard", "--personalization-fixture"]
+        app.launch()
+        let customize = app.buttons["today.customize"]
+        XCTAssertTrue(customize.waitForExistence(timeout: 20))
+        customize.tap()
+        XCTAssertTrue(app.navigationBars["Heute gestalten"].waitForExistence(timeout: 10))
+        capture("Heute gestalten mit Kartenreihenfolge")
+        app.buttons["Speichern"].tap()
+        let complete = app.buttons["today.routine.complete"].firstMatch
+        for _ in 0..<5 where !complete.isHittable { app.swipeUp() }
+        XCTAssertTrue(complete.waitForExistence(timeout: 10))
+        complete.tap()
+        XCTAssertTrue(app.alerts["Routine wirklich erledigt?"].waitForExistence(timeout: 5))
+        app.alerts.buttons["Abbrechen"].tap()
+        XCTAssertTrue(complete.exists, "Cancel must not record a completion")
+        complete.tap()
+        app.alerts.buttons["Ja, ich habe sie erledigt"].tap()
+        XCTAssertFalse(complete.waitForExistence(timeout: 2), "Completed routine must leave the due list")
+        capture("Heute nach bestätigter Routine")
+        app.tabBars.buttons["Archiv"].tap()
+        XCTAssertTrue(app.staticTexts["Deine Zeitreise"].waitForExistence(timeout: 10))
+        capture("Archiv Timeline nach Tagen")
+        app.buttons["Kalender öffnen"].tap()
+        XCTAssertTrue(app.switches["Nur ausgewählten Tag anzeigen"].waitForExistence(timeout: 5))
+        capture("Archiv mit Datumsauswahl")
+        app.buttons["Kalender schließen"].tap()
+        let entry = app.buttons["Heute festgehalten"].firstMatch
+        for _ in 0..<4 where !entry.isHittable { app.swipeUp() }
+        XCTAssertTrue(entry.waitForExistence(timeout: 5))
+        entry.tap()
+        XCTAssertTrue(app.buttons["Bearbeiten"].waitForExistence(timeout: 10))
+        capture("Archiveintrag bleibt bearbeitbar")
+    }
+
     private func capture(_ name: String) {
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         attachment.name = name

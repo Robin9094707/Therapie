@@ -1,3 +1,22 @@
+## Update 3007.0.0 · Dein Heute, deine Timeline
+
+- **Archiv-Timeline:** alle Einträge einschließlich Routinenprotokollen, gruppiert nach Tag, ISO-Woche, Monat oder Jahr. Neueste/älteste zuerst, Kalender mit Tagesauswahl, inklusive Datumsbereich, Inhaltstyp, Themen-/Ordnerfilter und Suche einschließlich Medientags. Vorhandene Detailansichten und Bearbeitungen bleiben verfügbar.
+- **Heute gestalten:** 15 Karten in eigener Reihenfolge, ausblenden, oben anpinnen, kompakte Abstände; Termin und Check-ins stehen standardmäßig zuerst. Archiveinträge per Stecknadel auf Heute anpinnen. Routinen direkt nach ausdrücklicher Bestätigung erledigen; verschobene Erinnerungen werden angezeigt.
+- **Fünf WidgetKit-Widgets:** Heute, nächster Termin, Routinen, Aufgaben-Erinnerungen und laufende Therapiestunde, jeweils klein/mittel und rechteckig auf dem Sperrbildschirm. Die bestehende Live-Aktivität bleibt erhalten. Kalender-Absagen, Urlaub, erledigte Routinen, Ablaufzeiten und Timerabschnitte werden berücksichtigt. Widget-Tipps öffnen die passende App-Ansicht.
+- **Privatsphäre:** Widget-Cache enthält keine Notiztexte, Check-in-Antworten oder Dateipfade; neutrale Titel sind Standard. Titel sind in Profil → Heute & iPhone-Widgets separat aktivierbar. Sensible Widget-Ansichten sind mit `privacySensitive()` markiert.
+- **Eigene Themen:** bereits unter Therapie → Themen anlegbar; Themen können eigene Namen und Beschreibungen erhalten, eine Neuanlage bestehender Daten ist unnötig.
+- **Daten & Backups:** Schema 9 importiert alle bisherigen Schemas 1–8. Layout, Pins, Archivdarstellung und Widget-Einstellungen befinden sich im vollständigen Codable-Snapshot, in verschlüsselten `.therapiebackup`-Sicherungen, lesbarem ZIP und Dateien-Spiegel. Vor Migration wird `therapy-data.pre-3007.json` erhalten. App-ID und Speicherort bleiben erhalten.
+- **Rückkehr:** unveränderter Quellstand `a7d0e1be3ec9e53400f9e65905ba7297b0a8d616` im Branch `backup/v3006.1.0-before-timeline-2026-10-01`. Vor einer Rückkehr auch die aktuelle Datensicherung extern sichern: die frühere App unterstützt Schema 9 nicht.
+- **Prüfungen:** CI führt alte Modell-, Backup-, ZIP-, Termin-/Alarm- und Live-Activity-Prüfungen sowie neue Einstellungen-/Archiv-/DST-/Widget-Datenschutzprüfungen aus, baut das reale iPhone-Bundle und erstellt IPA + Quellcode-ZIP. Simulator-Tests prüfen Gestaltung, Routinebestätigung und Kalenderansicht; nicht verfügbare Simulatoren werden ausdrücklich dokumentiert.
+
+### Signierung der Widgets
+
+Die Actions-IPA ist wie bisher **unsigniert**. Für aktuelle Widgets müssen App und eingebettete Erweiterung mit der gemeinsamen App-Gruppe `group.eu.rjuhas.therapie` signiert werden. Beide Entitlements-Dateien und XcodeGen-Einstellungen sind enthalten. Das Apple-Provisioning muss diese App-Gruppe erlauben; ein Sideload-Signierer, der Erweiterungen entfernt oder App-Gruppen streicht, kann die Widgets nicht synchronisieren. Die App meldet den tatsächlichen Freigabestatus unter Profil. Ohne gemeinsame Gruppe zeigen Widgets „App einmal öffnen“, statt Zugriff auf Daten vorzutäuschen.
+
+Widgets werden von iOS nach Zeitplan/Budget aktualisiert. Änderungen lösen einen Reload aus; eine garantierte sofortige Hintergrund-Aktualisierung ist nicht möglich. Die bestehende Live-Aktivität ist für die sekundengenaue laufende Stunde weiterhin die primäre Anzeige. Gerätesignierung und tatsächliche Anzeige auf einem physischen iPhone müssen dort geprüft werden.
+
+Apple-Dokumentation: [Widget-Erweiterungen](https://developer.apple.com/documentation/widgetkit/creating-a-widget-extension), [TimelineProvider](https://developer.apple.com/documentation/widgetkit/timelineprovider).
+
 ## Update 3006.1.0
 
 - Notizanhänge öffnen über einen stabilen Editor statt über wiederverwendete Formularzeilen. Die neue Notiz behält ihre Identität bei Fensterwechseln. Audio, Archiv-Auswahl und Medienvorschau schließen jeweils nur ihr eigenes Fenster. Explizite Button-Stile verhindern, dass ein Formular beim Öffnen gleichzeitig den benachbarten Lösen-Button ausführt.

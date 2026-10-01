@@ -33,6 +33,12 @@ struct BackupChecks {
         let root = base.appendingPathComponent("Therapie")
         for directory in ["Media", "Recordings"] { try fm.createDirectory(at: root.appendingPathComponent(directory), withIntermediateDirectories: true) }
         var data = AppData()
+        data.dashboard.cardOrder = ["routines", "appointment", "checkIns"]
+        data.dashboard.hiddenCards = ["welcome"]
+        data.dashboard.pinnedCards = ["routines"]
+        data.dashboard.pinnedRecordIDs = ["note-backup-test"]
+        data.dashboard.showWidgetTitles = true
+        data.archivePreferences = ArchivePreferences(grouping: .year, oldestFirst: true)
         data.profile = UserProfile(userName: "Robin", therapistName: "Therapeutin", onboardingCompleted: true)
         let routine = DailyRoutine(title: "Frühstück", symbol: "fork.knife", goalID: nil, times: [RoutineTime(title: "Vor der Arbeit", weekdays: [2, 3, 4, 5, 6], hour: 6, minute: 15, weekendHour: 9, weekendMinute: 0)], urgentAlarm: true)
         data.routines = [routine]
@@ -179,11 +185,14 @@ struct BackupChecks {
         prefs.apply(defaults)
         try expect(PortablePreferences.capture(defaults) == prefs, "Appearance, calm, haptics and confetti restored")
         var oldJSON = try JSONSerialization.jsonObject(with: BackupArchive.encoder().encode(data)) as! [String: Any]
-        for version in 1...7 {
+        for version in 1...8 {
             oldJSON["schemaVersion"] = version
             let migrated = try BackupArchive.decoder().decode(AppData.self, from: JSONSerialization.data(withJSONObject: oldJSON))
-            try expect(migrated.schemaVersion == 8 && migrated.notes.count == 1 && migrated.media[0].attachmentOmitted == nil, "Schema \(version) migrates for backups")
+            try expect(migrated.schemaVersion == 9 && migrated.notes.count == 1 && migrated.media[0].attachmentOmitted == nil, "Schema \(version) migrates for backups")
         }
+        oldJSON["schemaVersion"] = 8; oldJSON.removeValue(forKey: "dashboard"); oldJSON.removeValue(forKey: "archivePreferences")
+        let oldWithoutSettings = try BackupArchive.decoder().decode(AppData.self, from: JSONSerialization.data(withJSONObject: oldJSON))
+        try expect(oldWithoutSettings.dashboard == DashboardPreferences() && oldWithoutSettings.archivePreferences == ArchivePreferences(), "Real pre-personalization backup migrates safely")
         print("Passed \(count) encrypted backup checks: complete model, streaming attachments, password authentication, tampering, paths, omissions, settings and recovery.")
     }
 }
