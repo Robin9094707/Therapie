@@ -31,7 +31,7 @@ final class RoutineAlarmCoordinator {
     static let shared = RoutineAlarmCoordinator()
     private let storageKey = "therapy.routine.alarms"
     private var revision = 0
-    private var refreshing = false
+    private var worker: Task<Void, Never>?
     private var refreshRequested = false
     func requestAccess(_ store: AppStore) async {
         do {
@@ -42,13 +42,19 @@ final class RoutineAlarmCoordinator {
     }
     func refresh(_ store: AppStore) async {
         refreshRequested = true
-        guard !refreshing else { return }
-        refreshing = true
-        defer { refreshing = false }
-        repeat {
-            refreshRequested = false
-            await reconcile(store)
-        } while refreshRequested && !Task.isCancelled
+        guard worker == nil else { return }
+        // This unstructured worker owns its lifetime. A canceled notification refresh
+        // cannot abort alarm reconciliation or discard a newer queued snapshot.
+        let task = Task { @MainActor [weak self, weak store] in
+            guard let self, let store else { return }
+            defer { self.worker = nil }
+            repeat {
+                self.refreshRequested = false
+                await self.reconcile(store)
+            } while self.refreshRequested
+        }
+        worker = task
+        await task.value
     }
     private func reconcile(_ store: AppStore) async {
         let generation = revision

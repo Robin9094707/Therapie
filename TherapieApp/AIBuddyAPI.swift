@@ -20,14 +20,19 @@ struct AIBuddyAPI {
     static var schema: [String: Any] {
         let nullableString: [String: Any] = ["type": ["string", "null"]]
         let nullableInt: [String: Any] = ["type": ["integer", "null"]]
-        return ["type": "object", "additionalProperties": false, "required": ["title", "message", "sections", "actions", "suggestedDays"], "properties": [
-            "title": ["type": "string"], "message": ["type": "string"], "suggestedDays": nullableInt,
-            "sections": ["type": "array", "items": ["type": "object", "additionalProperties": false, "required": ["heading", "text"], "properties": ["heading": ["type": "string"], "text": ["type": "string"]]]],
-            "actions": ["type": "array", "items": ["type": "object", "additionalProperties": false, "required": ["kind", "title", "text", "dateISO", "moodPercent", "targetID", "minutes", "weekdays"], "properties": [
-                "kind": ["type": "string", "enum": AIBuddyActionKind.allCases.map(\.rawValue)], "title": ["type": "string"], "text": ["type": "string"], "dateISO": nullableString, "moodPercent": nullableInt, "targetID": nullableString, "minutes": nullableInt, "weekdays": ["type": "array", "items": ["type": "integer"]]
-            ]]]
-        ]]
+        let string: [String: Any] = ["type": "string"]
+        var actionProperties: [String: Any] = [:]
+        actionProperties["kind"] = ["type": "string", "enum": AIBuddyActionKind.allCases.map(\.rawValue)]
+        actionProperties["title"] = string; actionProperties["text"] = string
+        actionProperties["dateISO"] = nullableString; actionProperties["moodPercent"] = nullableInt
+        actionProperties["targetID"] = nullableString; actionProperties["minutes"] = nullableInt
+        actionProperties["weekdays"] = ["type": "array", "items": ["type": "integer"]]
+        let action: [String: Any] = ["type": "object", "additionalProperties": false, "required": ["kind", "title", "text", "dateISO", "moodPercent", "targetID", "minutes", "weekdays"], "properties": actionProperties]
+        let section: [String: Any] = ["type": "object", "additionalProperties": false, "required": ["heading", "text"], "properties": ["heading": string, "text": string]]
+        let properties: [String: Any] = ["title": string, "message": string, "suggestedDays": nullableInt, "sections": ["type": "array", "items": section], "actions": ["type": "array", "items": action]]
+        return ["type": "object", "additionalProperties": false, "required": ["title", "message", "sections", "actions", "suggestedDays"], "properties": properties]
     }
+
     func answer(question: String, context: AIBuddyContext, history: [AIBuddyMessage], settings: AIBuddySettings, key: String, imageJPEG: Data? = nil, inSession: Bool = false) async throws -> AIBuddyResponse {
         guard settings.enabled, !key.isEmpty else { throw AIBuddyAPIError(message: "Aktiviere den KI-Begleiter und hinterlege deinen OpenAI-API-Schlüssel im Profil.") }
         guard imageJPEG == nil || settings.allowPhotoUploads else { throw AIBuddyAPIError(message: "Bilder werden nur nach deiner ausdrücklichen Freigabe gesendet.") }

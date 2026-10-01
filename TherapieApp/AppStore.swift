@@ -310,9 +310,13 @@ final class AppStore: ObservableObject {
     }
 
     func saveCheckIn(_ entry: MoodCheckIn, points: [BatteryPoint]) {
+        if !data.moodCheckIns.contains(where: { $0.id == entry.id }), MoodDailyPolicy.existing(for: entry, in: data) != nil {
+            lastSaveError = "Für dieses Zeitfenster gibt es heute bereits einen Stimmungs-Check-in. Öffne ihn zum Bearbeiten oder erlaube zusätzliche Einträge im Check-in-Rhythmus."; return
+        }
         var snapshot = data
         var clean = entry
         clean.date = min(clean.date, Date())
+        clean.daySlotID = clean.daySlotID ?? MoodDailyPolicy.slot(for: clean, data: data)?.id
         clean.mood = max(1, min(5, clean.mood))
         clean.moodPercent = clean.moodPercent.map { max(0, min(100, $0)) }
         clean.battery = max(1, min(5, clean.battery))

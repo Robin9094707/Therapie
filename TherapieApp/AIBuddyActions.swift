@@ -11,7 +11,10 @@ enum AIBuddyMutation {
             snapshot.notes.insert(TherapyNote(createdAt: min(date, now), title: title.isEmpty ? "Mein Therapietagebuch" : title, text: text, tags: ["Tagebuch", "KI-Begleiter"], sessionID: snapshot.currentSession?.id, category: "Therapietagebuch"), at: 0)
         case .mood:
             guard let percent = action.moodPercent else { throw AIBuddyAPIError(message: "Bitte wähle deine Stimmung selbst, bevor du speicherst.") }
-            snapshot.moodCheckIns.insert(MoodCheckIn(date: min(date, now), mood: MoodBarometer.score(percent), note: text, moodPercent: percent), at: 0)
+            var entry = MoodCheckIn(date: min(date, now), mood: MoodBarometer.score(percent), note: text, moodPercent: percent)
+            entry.daySlotID = MoodDailyPolicy.slot(for: entry, data: snapshot)?.id
+            guard MoodDailyPolicy.existing(for: entry, in: snapshot) == nil else { throw AIBuddyAPIError(message: "In diesem Zeitfenster gibt es bereits einen Stimmungs-Check-in. Bearbeite ihn im Insights-Bereich oder erlaube zusätzliche Einträge im Check-in-Rhythmus.") }
+            snapshot.moodCheckIns.insert(entry, at: 0)
         case .topic:
             snapshot.therapyTopics.insert(TherapyTopic(title: title, isCurrent: true, description: text), at: 0)
         case .task:
@@ -34,7 +37,7 @@ enum AIBuddyMutation {
         case .reflection:
             snapshot.reflections.insert(TherapySessionReflection(date: min(date, now), summary: text, whatHelped: "", nextFocus: title), at: 0)
         case .completeTask:
-            guard let id = action.targetID.flatMap(UUID.init(uuidString:)), let index = snapshot.weeklyTasks.firstIndex(where: { $0.id == id && !$0.completed }) else { throw AIBuddyAPIError(message: "Die Aufgabe ist nicht mehr offen. Aktualisiere die Übersicht.") }
+            guard let id = action.targetID.flatMap({ UUID(uuidString: $0.hasPrefix("task-") ? String($0.dropFirst(5)) : $0) }), let index = snapshot.weeklyTasks.firstIndex(where: { $0.id == id && !$0.completed }) else { throw AIBuddyAPIError(message: "Die Aufgabe ist nicht mehr offen. Aktualisiere die Übersicht.") }
             snapshot.weeklyTasks[index].toggleCompletion(at: now); snapshot.weeklyTasks[index].reminderShiftedAt = nil
         case .completeRoutine:
             guard let occurrence = RoutinePlanner.due(data: snapshot, now: now).first(where: { $0.id == action.targetID }), let routine = snapshot.routines.first(where: { $0.id == occurrence.routineID }) else { throw AIBuddyAPIError(message: "Die Routine ist nicht mehr fällig. Aktualisiere die Übersicht.") }

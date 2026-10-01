@@ -69,12 +69,15 @@ extension AppStore {
         if RoutineHistoryMutation.correct(id: id, outcome: outcome, note: note, reason: reason, in: &snapshot) { data = snapshot }
     }
     func openDailyCheckIn(_ kind: GuidedCheckInKind, slotID: UUID? = nil) {
-        guard DayCheckInPolicy.allows(kind: kind, id: slotID, settings: data.companionSettings),
-              let slot = DayCheckInPolicy.slot(kind: kind, id: slotID, settings: data.companionSettings) else {
+        guard let slot = DayCheckInPolicy.slot(kind: kind, id: slotID, settings: data.companionSettings) else {
+            checkInReminderStatus = "Dieser Check-in ist nicht mehr eingerichtet."; return
+        }
+        let now = Date(), proposed = DayCheckInPolicy.entry(slot)
+        if let existing = DayCheckInPolicy.existing(for: proposed, in: data) { pendingGuidedCheckIn = existing; return }
+        guard DayCheckInPolicy.allows(kind: kind, id: slotID, settings: data.companionSettings, at: now) else {
             checkInReminderStatus = "Dieser Check-in liegt außerhalb seines Zeitfensters oder ist deaktiviert."; return
         }
-        let now = Date()
-        pendingGuidedCheckIn = DayCheckInPolicy.reopen(DayCheckInPolicy.entry(slot, at: now), in: data)
+        pendingGuidedCheckIn = proposed
     }
     func deleteGuided(_ id: UUID) {
         var snapshot = data

@@ -431,10 +431,12 @@ struct MoodEditorView: View {
     @State private var deletePoint: UUID?
     @State private var showDelete = false
     @State private var discard = false
-    private let initial: MoodCheckIn
-    private let initialPoints: [BatteryPoint]
+    @State private var prepared = false
+    @State private var reopened = false
+    @State private var initial: MoodCheckIn
+    @State private var initialPoints: [BatteryPoint]
     init(entry: MoodCheckIn = MoodCheckIn(), points: [BatteryPoint] = []) {
-        initial = entry; initialPoints = points
+        _initial = State(initialValue: entry); _initialPoints = State(initialValue: points)
         _entry = State(initialValue: entry); _points = State(initialValue: points)
         _detailed = State(initialValue: entry.stress != nil || entry.sensoryLoad != nil || entry.sleepHours != nil || !entry.note.isEmpty)
     }
@@ -443,6 +445,7 @@ struct MoodEditorView: View {
         NavigationStack {
             Form {
                 Section {
+                    if reopened { Label("Vorhandener Check-in · du bearbeitest deinen heutigen Eintrag", systemImage: "checkmark.circle").font(.caption).foregroundStyle(.secondary) }
                     DatePicker("Wann?", selection: $entry.date, in: ...Date(), displayedComponents: [.date, .hourAndMinute])
                     MoodBarometerControl(percent: Binding(get: { entry.moodPercent ?? (entry.mood - 1) * 25 }, set: { entry.moodPercent = $0; entry.mood = MoodBarometer.score($0) }))
                     Stepper("Akku: \(entry.battery)/5", value: $entry.battery, in: 1...5)
@@ -492,6 +495,14 @@ struct MoodEditorView: View {
                     }
                     Toggle("Als Favorit merken", isOn: $entry.favorite)
                 } header: { Text("Mehr Raum für dich") } footer: { Text("Stress und Reizbelastung: 1 = gering, 5 = sehr hoch. Nicht ausgefüllte Werte bleiben leer.") }
+            }
+            .onAppear {
+                guard !prepared else { return }; prepared = true
+                if !store.data.moodCheckIns.contains(where: { $0.id == entry.id }), let saved = MoodDailyPolicy.existing(for: entry, in: store.data) {
+                    entry = saved; points = store.data.batteryPoints.filter { $0.checkInID == saved.id }
+                    initial = entry; initialPoints = points; reopened = true
+                    detailed = entry.stress != nil || entry.sensoryLoad != nil || entry.sleepHours != nil || !entry.note.isEmpty
+                }
             }
             .navigationTitle("Stimmungs-Check-in").navigationBarTitleDisplayMode(.inline)
             .toolbar {

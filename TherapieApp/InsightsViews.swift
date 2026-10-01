@@ -90,11 +90,12 @@ struct DayCheckInSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State var slots: [DailyCheckInSlot]
     @State private var error: String?
+    @State private var allowMultiple = false
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    Toggle("Mehrere Check-ins je Zeitfenster erlauben", isOn: Binding(get: { store.data.companionSettings.allowMultipleCheckInsPerSlot ?? false }, set: { store.data.companionSettings.allowMultipleCheckInsPerSlot = $0 }))
+                    Toggle("Mehrere Check-ins je Zeitfenster erlauben", isOn: $allowMultiple)
                     Text("Standardmäßig wird derselbe Check-in pro Tag wieder geöffnet. Eigene Zeitfenster zählen separat. Neue Tages-Check-ins sind nur innerhalb ihres Zeitfensters verfügbar. Begonnene Entwürfe und ältere Einträge kannst du weiterhin bearbeiten. Therapie- und freie Check-ins sind jederzeit möglich.") }
                 ForEach(slots) { initial in
                     let slot = identifiedEditorBinding($slots, to: initial)
@@ -109,10 +110,10 @@ struct DayCheckInSettingsView: View {
                 }
                 Button("Eigenen Check-in ergänzen", systemImage: "plus.circle") { slots.append(DailyCheckInSlot(kind: .free, name: "Mein Check-in", startHour: 12, endHour: 14)) }
                 if let error { Text(error).foregroundStyle(.red) }
-            }.navigationTitle("Dein Check-in-Rhythmus").navigationBarTitleDisplayMode(.inline)
+            }.onAppear { allowMultiple = store.data.companionSettings.allowMultipleCheckInsPerSlot ?? false }.navigationTitle("Dein Check-in-Rhythmus").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { dismiss() } }
-                    ToolbarItem(placement: .confirmationAction) { Button("Speichern") { store.data.companionSettings.dayCheckInSlots = slots; if store.lastSaveError == nil { dismiss() } else { error = store.lastSaveError } }.disabled(slots.contains { $0.kind == .free && $0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) }
+                    ToolbarItem(placement: .confirmationAction) { Button("Speichern") { var snapshot = store.data; snapshot.companionSettings.dayCheckInSlots = slots; snapshot.companionSettings.allowMultipleCheckInsPerSlot = allowMultiple; store.data = snapshot; if store.lastSaveError == nil { dismiss() } else { error = store.lastSaveError } }.disabled(slots.contains { $0.kind == .free && $0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) }
                 }
         }
     }

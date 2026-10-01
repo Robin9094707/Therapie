@@ -120,7 +120,15 @@ struct AIBuddyContext {
         for record in records.prefix(100) {
             var details = record.subtitle
             if case .guided(let checkIn) = record {
-                details = [checkIn.summary, checkIn.givesEnergy, checkIn.takesEnergy, checkIn.smallWin, checkIn.nextNeed, checkIn.therapyQuestion, "Stimmung \(checkIn.moodPercent.map(String.init) ?? checkIn.mood.map { String(($0 - 1) * 25) } ?? "unbekannt")/100", "Akku \(checkIn.batteryPercent.map(String.init) ?? "unbekannt")/100"].joined(separator: " · ")
+                let moodText: String
+                if let percent = checkIn.moodPercent { moodText = String(percent) }
+                else if let mood = checkIn.mood { moodText = String((mood - 1) * 25) }
+                else { moodText = "unbekannt" }
+                let batteryText = checkIn.batteryPercent.map { String($0) } ?? "unbekannt"
+                var parts: [String] = [checkIn.summary, checkIn.givesEnergy, checkIn.takesEnergy, checkIn.smallWin, checkIn.nextNeed, checkIn.therapyQuestion]
+                parts.append("Stimmung " + moodText + "/100")
+                parts.append("Akku " + batteryText + "/100")
+                details = parts.joined(separator: " · ")
             }
             let line = formatter.string(from: record.date) + " | " + record.id + " | " + record.title + " | " + String(details.prefix(900))
             guard characters + line.count <= 18000 else { break }
@@ -136,7 +144,14 @@ struct AIBuddyContext {
         let openTasks = data.weeklyTasks.filter { !$0.completed }.prefix(15).map { "\($0.id) | \($0.title)" }.joined(separator: "\n")
         let topics = TherapyDiscussionPlanner.points(in: data).prefix(15).map { formatter.string(from: $0.date) + " | " + String($0.text.prefix(350)) }.joined(separator: "\n")
         let session = data.currentSession.map { "Laufende Stunde: " + $0.title + ", Phasen: " + $0.phases.map(\.title).joined(separator: ", ") + ", begonnen " + formatter.string(from: $0.startedAt) } ?? "Keine Stunde aktiv"
-        let text = session + "\nZeitraum \(formatter.string(from: start)) bis \(formatter.string(from: end)), \(days) Kalendertage. \(lines.count) Einträge, \(records.count - lines.count) aus Platzgründen nicht enthalten. Selbstberichtete Tagesmittel: \(average) bei \(moods.count) Tagen mit Stimmung; Trend \(trend) auf Skala 1–5, keine Diagnose. Nächste Therapie: \(next).\nEINTRÄGE:\n" + lines.joined(separator: "\n") + "\nFÄLLIGE ROUTINEN (IDs):\n" + due + "\nOFFENE AUFGABEN (IDs):\n" + openTasks + "\nGESPRÄCHSLISTE (auch ältere offene Punkte):\n" + topics
+        var text = session + "\nZeitraum " + formatter.string(from: start) + " bis " + formatter.string(from: end)
+        text += ", \(days) Kalendertage. \(lines.count) Einträge, \(records.count - lines.count) aus Platzgründen nicht enthalten."
+        text += " Selbstberichtete Tagesmittel: \(average) bei \(moods.count) Tagen mit Stimmung; Trend \(trend) auf Skala 1–5, keine Diagnose."
+        text += " Nächste Therapie: " + next
+        text += "\nEINTRÄGE:\n" + lines.joined(separator: "\n")
+        text += "\nFÄLLIGE ROUTINEN (IDs):\n" + due
+        text += "\nOFFENE AUFGABEN (IDs):\n" + openTasks
+        text += "\nGESPRÄCHSLISTE (auch ältere offene Punkte):\n" + topics
         return .init(start: start, end: end, days: days, recordCount: lines.count, omittedCount: records.count - lines.count, text: text)
     }
 }

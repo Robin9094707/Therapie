@@ -651,7 +651,7 @@ struct TherapyCalendarView: View {
     @State private var syncing = false
 
     private var therapyWeekdayMatch: Bool {
-        !TherapyDateHelper.appointments(on: selectedDate, schedule: store.data.schedule).isEmpty
+        !TherapyDateHelper.appointments(on: selectedDate, schedule: store.data.schedule, includeExcluded: true).isEmpty
     }
 
     private var dayNotes: [TherapyNote] {
@@ -786,10 +786,14 @@ struct TherapyCalendarView: View {
     }
 
     private var therapyDayLabel: String {
-        if let cancellation = TherapyDateHelper.cancellation(schedule: store.data.schedule, on: selectedDate) { return "Abgesagt · " + cancellation.reason.title }
-        let clock = Calendar.current.date(bySettingHour: store.data.schedule.hour, minute: store.data.schedule.minute, second: 0, of: selectedDate) ?? selectedDate
-        if TherapyDateHelper.vacation(schedule: store.data.schedule, at: clock) != nil { return "Therapiepause · Urlaub" }
-        return "Therapietag · " + String(format: "%02d:%02d", store.data.schedule.hour, store.data.schedule.minute) + " Uhr"
+        let dates = TherapyDateHelper.appointments(on: selectedDate, schedule: store.data.schedule, includeExcluded: true)
+        let labels = dates.map { date -> String in
+            let time = date.formatted(date: .omitted, time: .shortened)
+            if TherapyDateHelper.cancellation(schedule: store.data.schedule, on: date) != nil { return time + " · abgesagt" }
+            if TherapyDateHelper.vacation(schedule: store.data.schedule, at: date) != nil { return time + " · Pause" }
+            return time
+        }
+        return "Therapietag · " + labels.joined(separator: ", ")
     }
     private func syncEverything() {
         syncing = true; statusMessage = nil

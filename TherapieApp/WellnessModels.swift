@@ -52,6 +52,7 @@ struct MoodCheckIn: Identifiable, Codable, Equatable {
     var nextNeed = ""
     var favorite = false
     var moodPercent: Int?
+    var daySlotID: UUID?
 
     static let emotionOptions = ["Ruhig", "Glücklich", "Zufrieden", "Stolz", "Dankbar", "Unsicher",
                                  "Traurig", "Ängstlich", "Gereizt", "Überfordert", "Müde", "Motiviert"]

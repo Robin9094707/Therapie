@@ -41,7 +41,7 @@ extension AppStore {
         undoSteps.removeAll { Date().timeIntervalSince($0.date) > 600 }
         let retained = Set(data.media.map(\.relativePath) + undoSteps.flatMap { $0.snapshot.media.map(\.relativePath) })
         for (path, expiry) in deferredMediaDeletion where expiry <= Date() && !retained.contains(path) {
-            if (try? BackupArchive.validatePath(path)) != nil { try? FileManager.default.removeItem(at: rootURL.appendingPathComponent(path)) }
+            do { try BackupArchive.validatePath(path); try FileManager.default.removeItem(at: rootURL.appendingPathComponent(path)) } catch { /* Retain current data even if cleanup cannot finish. */ }
             deferredMediaDeletion.removeValue(forKey: path)
         }
         undoAvailable = !undoSteps.isEmpty

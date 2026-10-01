@@ -307,10 +307,10 @@ struct TherapyDateHelper {
         }
         return candidates.min()
     }
-    static func appointments(on day: Date, schedule: TherapySchedule, calendar: Calendar = .current) -> [Date] {
+    static func appointments(on day: Date, schedule: TherapySchedule, includeExcluded: Bool = false, calendar: Calendar = .current) -> [Date] {
         let start = calendar.startOfDay(for: day)
         let end = calendar.date(byAdding: .day, value: 1, to: start)!
-        return occurrences(schedule: schedule, after: start, count: 8, calendar: calendar).filter { $0 < end }
+        return occurrences(schedule: schedule, after: start, count: 8, includeExcluded: includeExcluded, calendar: calendar).filter { $0 < end }
     }
 
     static func cancellation(schedule: TherapySchedule, on date: Date, calendar: Calendar = .current) -> TherapyCancellation? {

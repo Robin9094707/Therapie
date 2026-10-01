@@ -49,6 +49,11 @@ final class BuddyMockProtocol: URLProtocol {
         data.companionSettings.allowMultipleCheckInsPerSlot = true
         try expect(GuidedCheckInMutation.apply(DayCheckInPolicy.entry(customA, at: now), complete: true, to: &data), "Explicit multiple-entry preference respected")
         data = AppData()
+        let rawMood = MoodCheckIn(date: date("2026-10-01T05:00:00Z"), mood: 4)
+        data.moodCheckIns = [rawMood]
+        try expect(MoodDailyPolicy.existing(for: MoodCheckIn(date: date("2026-10-01T06:00:00Z")), in: data)?.id == rawMood.id, "Standalone mood check-in reopens its daily slot")
+        try expect(MoodDailyPolicy.existing(for: MoodCheckIn(date: date("2026-10-01T12:00:00Z")), in: data) == nil, "Another daily mood slot is available")
+        data = AppData()
         data.schedule.recurrence = TherapyRecurrence(interval: 2, anchor: date("2026-09-29T08:00:00Z"), additionalWeeklySlots: [TherapyWeeklySlot(weekday: 5, hour: 10)])
         let dates = TherapyDateHelper.occurrences(schedule: data.schedule, after: now, count: 4, calendar: cal)
         try expect(dates == [date("2026-10-13T13:00:00Z"), date("2026-10-15T08:00:00Z"), date("2026-10-27T14:00:00Z"), date("2026-10-29T09:00:00Z")], "Twice per active fortnight, local clocks survive DST")

@@ -56,6 +56,24 @@ enum DayCheckInPolicy {
         GuidedCheckIn(date: date, kind: slot.kind, daySlotID: slot.id, customTitle: slot.kind == .free ? slot.title : nil)
     }
 }
+enum MoodDailyPolicy {
+    static func slot(for entry: MoodCheckIn, data: AppData) -> DailyCheckInSlot? {
+        let slots = DayCheckInPolicy.slots(data.companionSettings)
+        if let id = entry.daySlotID { return slots.first { $0.id == id } }
+        return slots.first { $0.enabled && $0.contains(entry.date) }
+    }
+    static func existing(for entry: MoodCheckIn, in data: AppData) -> MoodCheckIn? {
+        guard data.companionSettings.allowMultipleCheckInsPerSlot != true else { return nil }
+        let chosen = slot(for: entry, data: data)
+        let anchor = chosen?.anchor(for: entry.date) ?? Calendar.current.startOfDay(for: entry.date)
+        return data.moodCheckIns.filter { saved in
+            let savedSlot = slot(for: saved, data: data)
+            let day = savedSlot?.anchor(for: saved.date) ?? Calendar.current.startOfDay(for: saved.date)
+            return savedSlot?.id == chosen?.id && day == anchor
+        }.sorted { $0.date > $1.date }.first
+    }
+}
+
 enum MoodBarometer {
     static func score(_ percent: Int) -> Int { max(1, min(5, 1 + Int((Double(max(0, min(100, percent))) / 25).rounded()))) }
     static func title(_ percent: Int) -> String { MoodCheckIn.moodTitles[score(percent) - 1] }
@@ -203,7 +221,7 @@ enum AlarmOwnershipPolicy {
             return !data.routineCompletions.contains { key.hasPrefix("therapy.routine.\($0.routineID).\($0.timeID).\(Int($0.scheduledAt.timeIntervalSince1970)).") }
         }
         if key.hasPrefix("therapy.task.") { return data.weeklyTasks.contains { !$0.completed && key.hasPrefix("therapy.task.\($0.id).") } }
-        if key.hasPrefix("session.") { return data.currentSession.map { $0.pausedAt == nil && $0.endedAt == nil } ?? false }
+        if key.hasPrefix("session.") { return data.currentSession.map { key.contains($0.id.uuidString) && $0.pausedAt == nil && $0.endedAt == nil } ?? false }
         if key.hasPrefix("therapy.") { return data.schedule.therapyAlarmsEnabled ?? false }
         return true
     }
