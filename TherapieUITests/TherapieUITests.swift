@@ -77,10 +77,18 @@ final class TherapieUITests: XCTestCase {
         XCTAssertTrue(first.waitForExistence(timeout: 5)); tapVisible(first); first.typeText("Aus Versehen")
         tapVisible(removeButtons.firstMatch)
         XCTAssertTrue(count.waitForExistence(timeout: 5)); XCTAssertEqual(count.label, "0 Aufgaben")
-        for _ in 0..<2 { tapVisible(add) }
-        XCTAssertEqual(fields.count, 2)
-        let remainingID = fields.element(boundBy: 1).identifier
-        tapVisible(removeButtons.firstMatch)
+        tapVisible(add)
+        let firstID = fields.firstMatch.identifier
+        tapVisible(add)
+        let twoTasks = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "2 Aufgaben"), object: count)
+        XCTAssertEqual(XCTWaiter.wait(for: [twoTasks], timeout: 5), .completed)
+        // Scroll views can omit off-screen accessibility fields; locate rows by identity.
+        let second = fields.matching(NSPredicate(format: "identifier != %@", firstID)).firstMatch
+        for _ in 0..<8 where !second.exists { app.swipeUp() }
+        XCTAssertTrue(second.waitForExistence(timeout: 5))
+        let remainingID = second.identifier
+        let firstRemovalID = firstID.replacingOccurrences(of: "checkin.task.title.", with: "checkin.task.remove.")
+        tapVisible(app.buttons[firstRemovalID])
         XCTAssertEqual(fields.count, 1)
         XCTAssertEqual(fields.firstMatch.identifier, remainingID)
         tapVisible(fields.firstMatch); fields.firstMatch.typeText("Bleibt erhalten")
@@ -111,7 +119,14 @@ final class TherapieUITests: XCTestCase {
         let text = app.textFields["Ein Gedanke zum Einstieg"]
         XCTAssertTrue(text.waitForExistence(timeout: 5))
         text.tap(); text.typeText(" Ergänzt")
-        for _ in 0..<7 { app.buttons["Weiter"].tap() }
+        app.buttons["checkin.keyboard.done"].tap()
+        let progress = app.staticTexts["checkin.step"]
+        for next in 2...8 {
+            app.buttons["Weiter"].tap()
+            let changed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "\(next) / 8"), object: progress)
+            XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 5), .completed)
+        }
+        XCTAssertTrue(app.buttons["Check-in speichern"].waitForExistence(timeout: 5))
         app.buttons["Check-in speichern"].tap()
         XCTAssertTrue(edit.waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Mein gespeicherter Rückblick Ergänzt"].exists, "Saved changes must appear immediately in the overview.")

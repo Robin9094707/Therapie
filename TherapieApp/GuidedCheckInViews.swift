@@ -51,7 +51,7 @@ struct GuidedCheckInView: View {
         NavigationStack {
             TherapyScreen {
                 VStack(alignment: .leading, spacing: 20) {
-                    HStack { Label(entry.displayTitle, systemImage: entry.kind.symbol).font(.headline); Spacer(); Text("\(step + 1) / 8").font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
+                    HStack { Label(entry.displayTitle, systemImage: entry.kind.symbol).font(.headline); Spacer(); Text("\(step + 1) / 8").font(.caption.monospacedDigit()).foregroundStyle(.secondary).accessibilityIdentifier("checkin.step") }
                     ProgressView(value: Double(step + 1), total: 8).tint(.indigo)
                     GlassCard(emphasized: true) {
                         VStack(alignment: .leading, spacing: 20) {
@@ -63,7 +63,10 @@ struct GuidedCheckInView: View {
                 }
             }
             .navigationTitle("Check-in").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Schließen") { if entry.isDraft { persistDraft(); if store.lastSaveError == nil { dismiss() } } else { showExit = true } } } }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Schließen") { if entry.isDraft { persistDraft(); if store.lastSaveError == nil { dismiss() } } else { showExit = true } } }
+                ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Tastatur schließen") { dismissKeyboard() }.accessibilityIdentifier("checkin.keyboard.done") }
+            }
             .safeAreaInset(edge: .bottom) { footer.padding(16).background(.regularMaterial) }
             .alert("Bearbeitung beenden?", isPresented: $showExit) { Button("Weiter bearbeiten", role: .cancel) {}; Button("Änderungen verwerfen", role: .destructive) { dismiss() } } message: { Text("Änderungen am abgeschlossenen Check-in werden erst beim abschließenden Speichern übernommen. Neu importierte Fotos bleiben als Materialien im Archiv.") }
             .onAppear { battery = entry.batteryPercent ?? 50; moodDial = entry.moodPercent ?? ((entry.mood ?? 3) - 1) * 25 }
@@ -109,13 +112,14 @@ struct GuidedCheckInView: View {
                 CheckInTaskEditor(task: identifiedEditorBinding($entry.tasks, to: task)) {
                     // Capture the value ID, never read a collection binding inside removeAll.
                     let id = task.id
+                    dismissKeyboard()
                     entry.tasks.removeAll { $0.id == id }
                 }
             }
             if entry.tasks.isEmpty {
                 Label("Noch keine Aufgabe – du kannst diesen Schritt auch überspringen.", systemImage: "leaf").font(.subheadline).foregroundStyle(.secondary)
             }
-            Button("Aufgabe hinzufügen", systemImage: "plus.circle.fill") { entry.tasks.append(CheckInTaskDraft()) }.buttonStyle(.bordered).accessibilityIdentifier("checkin.task.add")
+            Button("Aufgabe hinzufügen", systemImage: "plus.circle.fill") { dismissKeyboard(); entry.tasks.append(CheckInTaskDraft()) }.buttonStyle(.bordered).accessibilityIdentifier("checkin.task.add")
             if !entry.isDraft { Text("Dieser Check-in ist bereits abgeschlossen. Änderungen werden erst mit Speichern übernommen; erledigte Aufgaben bleiben erledigt.").font(.caption).foregroundStyle(.secondary) }
         case 6:
             field("Was möchtest du beim nächsten Termin besprechen?", text: $entry.therapyQuestion)
@@ -145,7 +149,7 @@ struct GuidedCheckInView: View {
             HStack(spacing: 12) {
                 if step > 0 { Button("Zurück") { advance(-1) }.buttonStyle(.bordered) }
                 Button(step == 7 ? "Check-in speichern" : "Weiter", systemImage: step == 7 ? "checkmark" : "arrow.right") {
-                    if step == 7 { store.saveGuided(entry, complete: true); if store.lastSaveError == nil { dismiss() } else { error = store.lastSaveError } }
+                    if step == 7 { dismissKeyboard(); store.saveGuided(entry, complete: true); if store.lastSaveError == nil { dismiss() } else { error = store.lastSaveError } }
                     else { advance(1) }
                 }.buttonStyle(.borderedProminent).frame(maxWidth: .infinity).disabled(importing)
             }
@@ -164,7 +168,8 @@ struct GuidedCheckInView: View {
             Text("1 = wenig · 5 = sehr stark").font(.caption).foregroundStyle(.secondary)
         }
     }
-    private func advance(_ amount: Int) { withAnimation(reduceMotion ? nil : .smooth) { entry.step = max(0, min(7, step + amount)) }; persistDraft() }
+    private func dismissKeyboard() { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
+    private func advance(_ amount: Int) { dismissKeyboard(); withAnimation(reduceMotion ? nil : .smooth) { entry.step = max(0, min(7, step + amount)) }; persistDraft() }
     private func persistDraft() { guard entry.isDraft else { return }; store.saveGuided(entry, complete: false); error = store.lastSaveError }
     private func clearStep() {
         switch step { case 1: entry.mood = nil; entry.moodPercent = nil; case 2: entry.batteryPercent = nil; entry.energyPoints = []; entry.givesEnergy = ""; entry.takesEnergy = ""; case 3: entry.stress = nil; entry.sensoryLoad = nil; entry.sleepHours = nil; case 4: entry.summary = ""; entry.smallWin = ""; entry.nextNeed = ""; case 5: if entry.isDraft { entry.tasks = [] }; case 6: entry.therapyQuestion = ""; default: break }
