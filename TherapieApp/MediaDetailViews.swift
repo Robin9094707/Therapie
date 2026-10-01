@@ -85,7 +85,7 @@ struct TherapyMediaDetailView: View {
                                 ShareLink(item: url) { Label("Teilen", systemImage: "square.and.arrow.up") }.buttonStyle(.bordered)
                             }
                         } else { ContentUnavailableView("Datei nicht verfügbar", systemImage: "doc.badge.ellipsis", description: Text("Die Informationen bleiben erhalten. Die Datei fehlt oder wurde beim Backup ausgelassen.")) }
-                    }.accessibilityIdentifier("media.detail")
+                    }
                 } else { ContentUnavailableView("Material nicht mehr vorhanden", systemImage: "doc.badge.ellipsis") }
             }.navigationTitle("Dein Material").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -132,7 +132,7 @@ struct TherapyNoteDetailView: View {
                                 }
                             }
                         }
-                    }.accessibilityIdentifier("note.detail")
+                    }
                 } else { ContentUnavailableView("Notiz nicht mehr vorhanden", systemImage: "note.text") }
             }.navigationTitle("Deine Notiz").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Schließen") { dismiss() } }; ToolbarItem(placement: .confirmationAction) { if let note { Button("Bearbeiten", systemImage: "pencil") { editing = note } } } }
