@@ -65,7 +65,7 @@ struct SessionActivityPhaseHeading: View {
                 SessionActivityPhaseClock(state: state, phase: phase).font(.subheadline.monospacedDigit().bold()).frame(width: 54, alignment: .trailing).accessibilityLabel("Restzeit dieses Abschnitts")
             }
         } else if !state.phases.isEmpty {
-            Text("Dein Zeitplan · Abschnitt an den Zeitfenstern ablesen").font(.caption2).foregroundStyle(.secondary)
+            Text("Dein Zeitplan · Restzeit / Ende je Abschnitt").font(.caption2).foregroundStyle(.secondary)
         }
     }
 }
@@ -86,7 +86,7 @@ struct SessionActivityPhasePlan: View {
                                     let clock = state.referenceDate ?? state.end.addingTimeInterval(-Double(state.remaining))
                                     ProgressView(value: max(0, min(1, clock.timeIntervalSince(phase.start) / max(1, phase.end.timeIntervalSince(phase.start))))).tint(.teal).labelsHidden()
                                 } else { ProgressView(timerInterval: phase.start...phase.end, countsDown: false).tint(.teal).labelsHidden() }
-                                HStack(spacing: 1) { Text(phase.start, style: .time); Text("–"); Text(phase.end, style: .time) }.font(.system(size: 9)).monospacedDigit().foregroundStyle(.secondary).lineLimit(1)
+                                HStack(spacing: 2) { SessionActivityPhaseClock(state: state, phase: phase).frame(width: 36, alignment: .leading); Text("/"); Text(phase.end, style: .time) }.font(.system(size: 9)).monospacedDigit().foregroundStyle(.secondary).lineLimit(1).accessibilityLabel("Restzeit und geplantes Ende von " + phase.title)
                             }.frame(maxWidth: .infinity, alignment: .leading)
                         } else { Color.clear.frame(maxWidth: .infinity, maxHeight: 0) }
                     }

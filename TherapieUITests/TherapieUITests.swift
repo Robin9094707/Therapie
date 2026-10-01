@@ -169,6 +169,8 @@ final class TherapieUITests: XCTestCase {
             XCTAssertTrue(app.buttons["Speichern"].waitForExistence(timeout: 5))
         }
         app.buttons["Speichern"].tap()
+        XCTAssertTrue(app.staticTexts["therapy.countdown"].waitForExistence(timeout: 10))
+        capture("Updated home with therapy countdown")
         XCTAssertTrue(app.tabBars.buttons["Archiv"].waitForExistence(timeout: 10)); app.tabBars.buttons["Archiv"].tap()
         let overview = app.buttons["Übersicht öffnen"].firstMatch
         XCTAssertTrue(overview.waitForExistence(timeout: 5)); overview.tap()
@@ -197,7 +199,7 @@ final class TherapieUITests: XCTestCase {
         capture("Canceled weekly appointment")
         restore.tap()
         XCTAssertTrue(cancel.waitForExistence(timeout: 5))
-        XCTAssertEqual(app.buttons["therapy.restore"].count, 0)
+        XCTAssertEqual(app.buttons.matching(identifier: "therapy.restore").count, 0)
         capture("Restored weekly appointment")
     }
 
