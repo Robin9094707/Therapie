@@ -30,8 +30,8 @@ struct NoteAttachmentsSection: View {
                             Button("Öffnen / anhören") { open(item) }.font(.caption).accessibilityIdentifier("note.attachment.open." + id.uuidString)
                         }
                         Spacer(minLength: 4)
-                        Button(role: .destructive) { note.mediaIDs?.removeAll { $0 == id } } label: { Image(systemName: "minus.circle").frame(width: 44, height: 44) }.accessibilityLabel(item.title + " von der Notiz lösen")
-                    }
+                        Button(role: .destructive) { note.mediaIDs?.removeAll { $0 == id } } label: { Image(systemName: "minus.circle").frame(width: 44, height: 44) }.accessibilityLabel(item.title + " von der Notiz lösen").accessibilityIdentifier("note.attachment.detach." + id.uuidString)
+                    }.buttonStyle(.borderless)
                 } else {
                     HStack { Label("Anhang nicht verfügbar", systemImage: "paperclip"); Spacer(); Button("Lösen") { note.mediaIDs?.removeAll { $0 == id } } }
                 }

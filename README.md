@@ -1,6 +1,6 @@
 ## Update 3006.1.0
 
-- Notizanhänge öffnen über einen stabilen Editor statt über wiederverwendete Formularzeilen. Die neue Notiz behält ihre Identität bei Fensterwechseln. Audio, Archiv-Auswahl und Medienvorschau schließen jeweils nur ihr eigenes Fenster.
+- Notizanhänge öffnen über einen stabilen Editor statt über wiederverwendete Formularzeilen. Die neue Notiz behält ihre Identität bei Fensterwechseln. Audio, Archiv-Auswahl und Medienvorschau schließen jeweils nur ihr eigenes Fenster. Explizite Button-Stile verhindern, dass ein Formular beim Öffnen gleichzeitig den benachbarten Lösen-Button ausführt.
 - Gespeicherte Notizen öffnen als Übersicht mit ausdrücklichem Bearbeiten. Fotos, Dokumente und Sprachnachrichten öffnen aus Notizen, Materialien und Archiv; Audio hat einen Player mit Pause und Positionsregler. Fehlende Dateien behalten ihre Informationen.
 - Live-Aktivitäten zeigen neben der gesamten Restzeit auch die Restzeit des aktuellen benannten Abschnitts. Der benannte Zeitplan zeigt für jeden Abschnitt einen eigenen System-Countdown und das geplante Ende, sodass die Zeiten auch bei veraltetem App-Zustand ablesbar bleiben. Abschnittswecker und Endwecker sind separat optional; Pausieren, Fortsetzen und Beenden aktualisieren ihre AlarmKit-Planung unabhängig von Mitteilungen.
 - Die Startseite bündelt den Termin-Countdown in Tagen, Stunden und Minuten, Aufgaben, Check-ins, Routinen, Entwürfe, Notizen und Medien.

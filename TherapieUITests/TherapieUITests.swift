@@ -163,10 +163,12 @@ final class TherapieUITests: XCTestCase {
             reveal(open, in: app); open.tap()
             let close = app.buttons["media.detail.close"]
             XCTAssertTrue(close.waitForExistence(timeout: 5))
-            if id.hasPrefix("333") { XCTAssertTrue(app.buttons["media.audio.play"].exists) }
+            if id.hasPrefix("333") { XCTAssertTrue(app.buttons["media.audio.play"].waitForExistence(timeout: 5)) }
             capture("Note attachment " + id)
             close.tap()
             XCTAssertTrue(app.buttons["Speichern"].waitForExistence(timeout: 5))
+            reveal(open, in: app)
+            XCTAssertTrue(app.buttons["note.attachment.detach." + id].exists, "Opening must never activate the sibling detach action.")
         }
         app.buttons["Speichern"].tap()
         XCTAssertTrue(app.staticTexts["therapy.countdown"].waitForExistence(timeout: 10))
