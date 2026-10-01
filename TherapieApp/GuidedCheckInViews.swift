@@ -107,7 +107,6 @@ struct GuidedCheckInView: View {
             field("Was brauchst du jetzt?", text: $entry.nextNeed)
         case 5:
             Text("Aufgaben von dir, aus der Therapie oder gemeinsam. Du kannst beliebig viele Schritte sammeln.").font(.subheadline).foregroundStyle(.secondary)
-            Text("\(entry.tasks.count) Aufgabe\(entry.tasks.count == 1 ? "" : "n")").font(.caption.weight(.semibold)).foregroundStyle(.secondary).accessibilityIdentifier("checkin.tasks.count")
             ForEach(entry.tasks) { task in
                 CheckInTaskEditor(task: identifiedEditorBinding($entry.tasks, to: task)) {
                     // Capture the value ID, never read a collection binding inside removeAll.
@@ -119,7 +118,6 @@ struct GuidedCheckInView: View {
             if entry.tasks.isEmpty {
                 Label("Noch keine Aufgabe – du kannst diesen Schritt auch überspringen.", systemImage: "leaf").font(.subheadline).foregroundStyle(.secondary)
             }
-            Button("Aufgabe hinzufügen", systemImage: "plus.circle.fill") { dismissKeyboard(); entry.tasks.append(CheckInTaskDraft()) }.buttonStyle(.bordered).accessibilityIdentifier("checkin.task.add")
             if !entry.isDraft { Text("Dieser Check-in ist bereits abgeschlossen. Änderungen werden erst mit Speichern übernommen; erledigte Aufgaben bleiben erledigt.").font(.caption).foregroundStyle(.secondary) }
         case 6:
             field("Was möchtest du beim nächsten Termin besprechen?", text: $entry.therapyQuestion)
@@ -146,6 +144,13 @@ struct GuidedCheckInView: View {
     }
     private var footer: some View {
         VStack(spacing: 10) {
+            if step == 5 {
+                HStack {
+                    Text("\(entry.tasks.count) Aufgabe\(entry.tasks.count == 1 ? "" : "n")").font(.caption.weight(.semibold)).foregroundStyle(.secondary).accessibilityIdentifier("checkin.tasks.count")
+                    Spacer()
+                    Button("Aufgabe hinzufügen", systemImage: "plus.circle.fill") { dismissKeyboard(); entry.tasks.append(CheckInTaskDraft()) }.buttonStyle(.bordered).accessibilityIdentifier("checkin.task.add")
+                }
+            }
             HStack(spacing: 12) {
                 if step > 0 { Button("Zurück") { advance(-1) }.buttonStyle(.bordered) }
                 Button(step == 7 ? "Check-in speichern" : "Weiter", systemImage: step == 7 ? "checkmark" : "arrow.right") {

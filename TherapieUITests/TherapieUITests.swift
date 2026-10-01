@@ -119,6 +119,9 @@ final class TherapieUITests: XCTestCase {
         let text = app.textFields["Ein Gedanke zum Einstieg"]
         XCTAssertTrue(text.waitForExistence(timeout: 5))
         text.tap(); text.typeText(" Ergänzt")
+        let editedText = try XCTUnwrap(text.value as? String)
+        XCTAssertNotEqual(editedText, "Mein gespeicherter Rückblick")
+        XCTAssertTrue(editedText.contains("Ergänzt"))
         app.buttons["checkin.keyboard.done"].tap()
         let progress = app.staticTexts["checkin.step"]
         for next in 2...8 {
@@ -129,7 +132,7 @@ final class TherapieUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Check-in speichern"].waitForExistence(timeout: 5))
         app.buttons["Check-in speichern"].tap()
         XCTAssertTrue(edit.waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["Mein gespeicherter Rückblick Ergänzt"].exists, "Saved changes must appear immediately in the overview.")
+        XCTAssertTrue(app.staticTexts[editedText].waitForExistence(timeout: 5), "The exact edited text must appear in the overview, regardless of caret position.")
         XCTAssertEqual(app.textFields.count, 0)
         capture("Updated saved check-in overview")
     }
