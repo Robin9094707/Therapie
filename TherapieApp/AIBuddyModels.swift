@@ -362,8 +362,19 @@ enum AICheckInGuide {
     static func alignedReply(_ reply: AIBuddyReply, entry: GuidedCheckIn) -> AIBuddyReply {
         var result = reply
         // The locally persisted module owns the next question, including side conversations.
-        let acknowledgment = reply.message.replacingOccurrences(of: "[^.!?\\n]*\\?", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
-        let prompts = ["Welchen Gedanken möchtest du zum Ankommen festhalten?", "Welcher Stimmungswert passt gerade zu dir (0–100)?", "Was lädt deinen Gefühlsakku auf und was kostet dich Energie?", "Möchtest du Stress, Reizbelastung oder Schlaf für heute festhalten?", "Welcher kleine Erfolg oder welches Bedürfnis ist dir heute wichtig?", "Welche nächsten Schritte sollen in die Übersicht – oder möchtest du keine Aufgabe?", "Welches Thema soll für deine nächste Therapie stehen – oder gibt es heute keines?", "Deine Übersicht ist bereit. Prüfe sie und bestätige dort das Speichern."]
+        func withoutQuestions(_ text: String) -> String {
+            text.replacingOccurrences(of: "[^.!?\\n]*\\?", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let acknowledgment = withoutQuestions(reply.message)
+        result.title = withoutQuestions(reply.title)
+        if result.title.isEmpty { result.title = "Dein Check-in" }
+        result.sections = reply.sections.compactMap { section in
+            let text = withoutQuestions(section.text)
+            guard !text.isEmpty else { return nil }
+            let heading = withoutQuestions(section.heading)
+            return AIBuddySection(heading: heading.isEmpty ? "Zum Gespräch" : heading, text: text)
+        }
+        let prompts = ["Welchen Gedanken möchtest du zum Ankommen festhalten?", "Welcher Stimmungswert passt gerade zu dir (0–100)?", "Was lädt deinen Gefühlsakku auf und was kostet dich Energie?", "Möchtest du Stress, Reizbelastung oder Schlaf für heute festhalten?", questions[4], "Welche nächsten Schritte sollen in die Übersicht – oder möchtest du keine Aufgabe?", "Welches Thema soll für deine nächste Therapie stehen – oder gibt es heute keines?", "Deine Übersicht ist bereit. Prüfe sie und bestätige dort das Speichern."]
         var question = prompts[max(0, min(7, entry.step))]
         if entry.step == 2, let point = (entry.energyPoints ?? []).first(where: { !$0.hasConfirmedImpact }) {
             question = "Wie stark \(point.direction == .takes ? "kostet" : "gibt") dir „\(point.title)“ Akku: 1 = wenig bis 5 = sehr stark?"

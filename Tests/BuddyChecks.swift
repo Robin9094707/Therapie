@@ -253,6 +253,9 @@ final class BuddyMockProtocol: URLProtocol {
         try expect(AIEnergyKeywords.title("Mila zieht mir Akku") == "Mila", "Accidental model sentences cannot become keyword titles")
         let unresolved = AICheckInGuide.alignedReply(reply, entry: batteryDraft)
         try expect(unresolved.message.contains("„Geld“") && unresolved.message.contains("1 = wenig"), "Missing strength asks about the specific unresolved keyword")
+        let competing = AIBuddyReply(title: "Welche Aufgabe möchtest du?", message: "Eine Pause kann helfen. Wie hast du geschlafen?", sections: [AIBuddySection(heading: "Was kommt als Nächstes?", text: "Du darfst dir Zeit lassen. Welche Aufgabe möchtest du?"), AIBuddySection(heading: "Schlaf", text: "Wie war dein Schlaf?")], actions: [])
+        let ownedQuestion = AICheckInGuide.alignedReply(competing, entry: batteryDraft)
+        try expect(ownedQuestion.title == "Dein Check-in" && ownedQuestion.sections == [AIBuddySection(heading: "Zum Gespräch", text: "Du darfst dir Zeit lassen.")] && ownedQuestion.message.contains("„Geld“") && !ownedQuestion.message.contains("geschlafen"), "Model questions in title and extra sections cannot compete with the unfinished local module")
         let geldID = batteryDraft.energyPoints![1].id
         _ = AICheckInGuide.apply(AIBuddyCheckInProposal(advance: true, answeredStep: 2, energyPoints: [AIBuddyEnergyFactor(title: "Geld", direction: .takes, impact: 4)]), to: &batteryDraft, known: [], userText: "Geld kostet mich 4 von 5")
         try expect(batteryDraft.step == 3 && batteryDraft.energyPoints?.count == 2 && batteryDraft.energyPoints?[1].id == geldID && batteryDraft.energyPoints?[1].signedImpact == -4, "Strength reply updates the existing point once and resumes the module sequence")

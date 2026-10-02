@@ -7,6 +7,7 @@
 - AlarmKit-Start: Geschützter Dateizugriff wird vor Migration, Laden und Schreiben geprüft. Vorübergehende Zugriffssperren warten auf Entsperrung und werden erneut versucht. Alarmrouten bleiben bis zum erfolgreichen Laden erhalten. Bereits geladene, noch nicht gespeicherte Eingaben werden erneut gespeichert, ohne sie durch einen alten Dateistand zu ersetzen. Echte beschädigte oder nicht unterstützte Daten bleiben schreibgeschützt.
 - Bestehende Daten, App-ID und vollständige Backups bleiben erhalten. Der neue optionale Bestätigungsstatus für Akku-Wirkungen wird in verschlüsselten und lesbaren Backups gesichert; alte Punkte behalten ihre bisherige Stärke.
 - Erster Speicherzugriff: Auch ein nach dem Entsperren nachgeholtes erstes Schreiben legt die benötigten geschützten Ordner an. Ein neues KI-Gespräch bleibt dadurch nicht beim Vorbereiten hängen.
+- Check-in-Antworten: Auch Zusatzabschnitte enthalten keine konkurrierenden KI-Fragen; die lokale Modulfrage bleibt maßgeblich. Das Modul Erfolg/Bedürfnis fragt ausdrücklich auch nach Zufriedenheit.
 
 ## Prüfung
 
