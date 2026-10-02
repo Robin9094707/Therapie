@@ -408,13 +408,13 @@ struct AIBuddyChatContent: View {
     private func guideHeader(_ entry: GuidedCheckIn) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack { Label("Check-in · \(min(8, entry.step + 1)) / 8", systemImage: "sparkles").font(.caption.bold()); Spacer(); Button("Übersicht") { showOverview() }.font(.caption.bold()).disabled(voiceActive).accessibilityIdentifier("ai.checkin.pinned.overview") }
-            ProgressView(value: Double(min(8, entry.step + 1)), total: 8).tint(Color.accentColor)
+            ProgressView(value: Double(min(8, entry.step + 1)), total: 8).tint(Color.accentColor).accessibilityIdentifier("ai.checkin.pinned.progress")
             Text(AICheckInGuide.questions[max(0, min(7, entry.step))]).font(.subheadline).fixedSize(horizontal: false, vertical: true)
             HStack {
                 Button(entry.step == 7 ? "Übersicht prüfen & abschließen" : "Normal fortsetzen", systemImage: "slider.horizontal.3") { controller.cancel(); inputHandle.finishEditing(); route = .manual(entry) }.accessibilityIdentifier("ai.checkin.manual")
                 if entry.step < 7 { Button("Überspringen") { controller.cancel(); var snapshot = store.data; var next = entry; next.step += 1; _ = GuidedCheckInMutation.apply(next, complete: false, to: &snapshot); store.data = snapshot } }
             }.font(.caption).buttonStyle(.bordered).disabled(voiceActive)
-        }.accessibilityIdentifier("ai.checkin.pinned.progress")
+        }
     }
     private func preparePhoto() async {
         do {
