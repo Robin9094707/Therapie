@@ -127,21 +127,12 @@ struct AIBuddyChatContent: View {
                 ToolbarItem(placement: .topBarTrailing) { if store.undoAvailable { Button("Letzte Eingabe rückgängig", systemImage: "arrow.uturn.backward") { inputHandle.finishEditing(); store.undoLastChange() }.accessibilityIdentifier("ai.undo") } }
                 ToolbarItem(placement: .topBarTrailing) { if let draft { Button(draft.step == 7 ? "Übersicht" : "Normal", systemImage: "slider.horizontal.3") { controller.cancel(); inputHandle.finishEditing(); route = .manual(draft) }.accessibilityIdentifier("ai.checkin.toolbar.manual") } }
                 ToolbarItem(placement: .topBarTrailing) { Menu { Button("KI-Einstellungen", systemImage: "slider.horizontal.3") { inputHandle.finishEditing(); route = .settings }; Button("Gespräch im Tagebuch speichern", systemImage: "book.closed") { confirmSaveChat = true }; Button("Gespräch löschen", systemImage: "trash", role: .destructive) { clearChat = true } } label: { Image(systemName: "ellipsis.circle") }.accessibilityIdentifier("ai.chat.menu") } }
-            .sheet(item: $route) { destination in
-                switch destination {
-                case .settings: AIBuddySettingsView()
-                case .guided(let entry): GuidedCheckInDestination(entry: entry)
-                case .manual(let entry): GuidedCheckInView(entry: entry)
-                case .review(let review): AIBuddyActionReviewView(action: review.action, messageID: review.messageID)
-                case .voice: AIBuddyVoiceView { transcript in text = transcript }
-                case .screen(let name): NavigationStack { self.destination(name).toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { route = nil } } } }
-                }
-            }
+            .sheet(item: $route) { sheetContent($0) }
             .alert("Eingabe behalten?", isPresented: $confirmExit) {
                 Button("Weiter schreiben", role: .cancel) {}
                 Button("Als Entwurf speichern") { finishClose(saveDraft: true) }
                 Button("Verwerfen", role: .destructive) { finishClose(saveDraft: false) }
-            } message: { Text("Deine bereits gesendeten Nachrichten bleiben erhalten. Du entscheidest über den noch nicht gesendeten Text.") }
+            } message: { Text(draft == nil ? "Deine bereits gesendeten Nachrichten bleiben erhalten. Du entscheidest über den noch nicht gesendeten Text." : "Deine gesendeten Nachrichten bleiben erhalten. Du entscheidest, ob der noch nicht abgeschlossene Check-in und ungesendete Text als Entwurf bleiben.") }
             .onChange(of: photo) { _, value in if value != nil { confirmPhoto = true } }
             .alert("Ausgewähltes Foto an OpenAI senden?", isPresented: $confirmPhoto) {
                 Button("Abbrechen", role: .cancel) { photo = nil; image = nil }
@@ -156,6 +147,16 @@ struct AIBuddyChatContent: View {
             .onChange(of: text) { _, _ in updateContext(onlyIfRangeChanged: true) }
             .onDisappear { store.visibleAIComposerIDs.remove(visibilityID); if route == nil { inputHandle.finishEditing(); controller.cancel(); cleanupEmptyChat() } }
             .onChange(of: store.data.aiSettings.enabled) { _, enabled in if !enabled { controller.cancel(); image = nil; photo = nil } }
+    }
+    private func sheetContent(_ sheet: BuddySheet) -> AnyView {
+        switch sheet {
+        case .settings: return AnyView(AIBuddySettingsView())
+        case .guided(let entry): return AnyView(GuidedCheckInDestination(entry: entry))
+        case .manual(let entry): return AnyView(GuidedCheckInView(entry: entry))
+        case .review(let review): return AnyView(AIBuddyActionReviewView(action: review.action, messageID: review.messageID))
+        case .voice: return AnyView(AIBuddyVoiceView { transcript in text = transcript })
+        case .screen(let name): return AnyView(NavigationStack { destination(name).toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { route = nil } } } })
+        }
     }
     private var introduction: some View {
         GlassCard(emphasized: true) {
@@ -264,7 +265,7 @@ struct AIBuddyChatContent: View {
     private func requestClose() {
         inputHandle.finishEditing()
         text = inputHandle.currentText ?? text
-        if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { confirmExit = true }
+        if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draft?.hasUserContent == true { confirmExit = true }
         else { finishClose(saveDraft: false) }
     }
     private func finishClose(saveDraft: Bool) {
@@ -273,7 +274,13 @@ struct AIBuddyChatContent: View {
         if let index = snapshot.aiConversations.firstIndex(where: { $0.id == conversationID }) {
             snapshot.aiConversations[index].draftText = saveDraft ? text : nil
         }
-        if !saveDraft { AIConversationMutation.removeIfEmpty(conversationID, in: &snapshot) }
+        if !saveDraft {
+            if let draft, draft.hasUserContent {
+                snapshot.guidedCheckIns.removeAll { $0.id == draft.id && $0.isDraft }
+                if let index = snapshot.aiConversations.firstIndex(where: { $0.id == conversationID }) { snapshot.aiConversations[index].checkInID = nil }
+            }
+            AIConversationMutation.removeIfEmpty(conversationID, in: &snapshot)
+        }
         store.data = snapshot
         guard store.lastSaveError == nil else { return }
         text = ""; close?(); if close == nil { dismiss() }
@@ -297,8 +304,8 @@ struct AIBuddyChatContent: View {
     }
     private func startCheckIn(target: String? = nil) {
         let slots = DayCheckInPolicy.slots(store.data.companionSettings).filter { $0.enabled }
-        if let target, UUID(uuidString: target) != nil, !slots.contains(where: { $0.id.uuidString == target }) { controller.error = "Dieses Check-in-Fenster ist nicht mehr eingerichtet."; return }
-        let selected = slots.first { $0.id.uuidString == target } ?? slots.first { $0.contains(Date()) }
+        if let targetID = target.flatMap(UUID.init(uuidString:)), !slots.contains(where: { $0.id == targetID }) { controller.error = "Dieses Check-in-Fenster ist nicht mehr eingerichtet."; return }
+        let selected = slots.first { $0.id == target.flatMap(UUID.init(uuidString:)) } ?? slots.first { $0.contains(Date()) }
         let proposed = target == "free" ? GuidedCheckIn(kind: .free) : selected.map { DayCheckInPolicy.entry($0) } ?? GuidedCheckIn(kind: .free)
         let entry = DayCheckInPolicy.reopen(proposed, in: store.data)
         if entry.id == proposed.id, let selected, target != "free", !selected.contains(Date()) { controller.error = "Dieser Check-in liegt außerhalb seines Zeitfensters."; return }
@@ -402,7 +409,7 @@ struct AIBuddyActionReviewView: View {
                 }
                 if settingsAction {
                     Section("Änderung prüfen") {
-                        Text(action.targetID ?? "")
+                        Text(action.title.isEmpty ? "App-Einstellung" : action.title)
                         if action.targetID == "ai.contextDays" { Stepper("Neu: \(action.options?.valueInt ?? 7) Tage", value: Binding(get: { action.options?.valueInt ?? 7 }, set: { options.wrappedValue.valueInt = $0 }), in: 1...90) }
                         else { Toggle("Neuer Wert", isOn: Binding(get: { action.options?.valueBool ?? false }, set: { options.wrappedValue.valueBool = $0 })) }
                     }

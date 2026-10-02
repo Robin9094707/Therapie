@@ -110,25 +110,24 @@ struct RootView: View {
         }
     }
 
-    @ViewBuilder private func modalContent(_ route: RootModal) -> some View {
-            switch route {
-            case .ai: NavigationStack { AIBuddyView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Schließen") { modal = nil } } } }
-            case .permissions: PermissionSetupView()
-            case .session:
-                NavigationStack {
-                    SessionConductorView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fertig") { modal = nil } } }
-                        .sheet(item: $store.pendingGuidedCheckIn) { GuidedCheckInDestination(entry: $0) }
-                }
-            case .checkIn(let entry): GuidedCheckInDestination(entry: entry)
-            case .task(let task): WeeklyTaskEditorView(task: task)
-            case .routine(let id): RoutineDetailView(routineID: id)
-            case .widgetSetup: WidgetSetupHelpView()
-            case .routines: NavigationStack { RoutineHubView() }
-            case .reminders: NavigationStack { ReminderCenterView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { modal = nil } } } }
-            case .therapy: TherapyAppointmentsView()
-            case .mood: MoodEditorView()
-            case .energy: WeeklyEnergyEditorView()
-            }
+    private func modalContent(_ route: RootModal) -> AnyView {
+        switch route {
+        case .ai: return AnyView(NavigationStack { AIBuddyView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Schließen") { modal = nil } } } })
+        case .permissions: return AnyView(PermissionSetupView())
+        case .session: return AnyView(NavigationStack {
+            SessionConductorView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fertig") { modal = nil } } }
+                .sheet(item: $store.pendingGuidedCheckIn) { GuidedCheckInDestination(entry: $0) }
+        })
+        case .checkIn(let entry): return AnyView(GuidedCheckInDestination(entry: entry))
+        case .task(let task): return AnyView(WeeklyTaskEditorView(task: task))
+        case .routine(let id): return AnyView(RoutineDetailView(routineID: id))
+        case .widgetSetup: return AnyView(WidgetSetupHelpView())
+        case .routines: return AnyView(NavigationStack { RoutineHubView() })
+        case .reminders: return AnyView(NavigationStack { ReminderCenterView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { modal = nil } } } })
+        case .therapy: return AnyView(TherapyAppointmentsView())
+        case .mood: return AnyView(MoodEditorView())
+        case .energy: return AnyView(WeeklyEnergyEditorView())
+        }
     }
     private var presentationRequestKey: String {
         let flags = [showPermissions, store.notificationSession, store.notificationAIHub, store.notificationWidgetSetup, store.notificationRoutines, store.notificationReminders, store.notificationTherapy, store.notificationMood, store.openEnergyReview]

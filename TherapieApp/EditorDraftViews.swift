@@ -50,7 +50,9 @@ private struct EditorDraftDestination: View {
             case "weekReview": if let value = draft.decode(WeekReview.self) { WeekReviewEditorView(review: value) }
             case "sessionTemplate": if let value = draft.decode(TherapySessionTemplate.self) { SessionTemplateEditorView(template: value) }
             case "appointment": if let value = draft.decode(TherapyExtraAppointment.self) { TherapyExtraAppointmentEditor(appointment: value) }
-            case "recurrence": if let value = draft.decode(TherapyRecurrence.self) { TherapyRecurrenceEditor(rule: value) }
+            case "dashboard": if let value = draft.decode(DashboardPreferences.self) { DashboardCustomizationView(preferences: value) }
+            case "weeklyEnergy": if let value = draft.decode(WeeklyEnergyReview.self) { WeeklyEnergyEditorView(review: value) }
+            case "recurrence": if let value = draft.decode(TherapyRecurrence.self) { TherapyRecurrenceEditor(rule: value, draftID: draft.id) }
             default: ContentUnavailableView("Entwurf nicht verfügbar", systemImage: "doc.badge.ellipsis")
             }
         }

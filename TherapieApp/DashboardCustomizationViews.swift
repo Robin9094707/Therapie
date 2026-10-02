@@ -4,8 +4,11 @@ struct DashboardCustomizationView: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
     @State private var draft: DashboardPreferences
+    @State private var confirmExit = false
+    private let initial: DashboardPreferences
+    private let draftID = UUID(uuidString: "40000000-0000-0000-0000-000000000001")!
     @State private var reset = false
-    init(preferences: DashboardPreferences) { _draft = State(initialValue: preferences) }
+    init(preferences: DashboardPreferences) { initial = preferences; _draft = State(initialValue: preferences) }
     var body: some View {
         NavigationStack {
             List {
@@ -40,17 +43,22 @@ struct DashboardCustomizationView: View {
             .navigationTitle("Heute gestalten").navigationBarTitleDisplayMode(.inline)
             .environment(\.editMode, .constant(.active))
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { if draft != initial { confirmExit = true } else { dismiss() } } }
                 ToolbarItem(placement: .confirmationAction) { Button("Speichern") {
                     store.data.dashboard = draft
-                    if store.lastSaveError == nil { dismiss() }
+                    if store.lastSaveError == nil { store.removeEditorDraft(draftID); if store.lastSaveError == nil { dismiss() } }
                 }.bold() }
             }
             .alert("Standardlayout verwenden?", isPresented: $reset) {
                 Button("Abbrechen", role: .cancel) {}
                 Button("Zurücksetzen") { let records = draft.pinnedRecordIDs; draft = DashboardPreferences(); draft.pinnedRecordIDs = records }
             } message: { Text("Angepinnte Archiveinträge bleiben erhalten.") }
-        }
+        }.interactiveDismissDisabled(draft != initial)
+            .alert("Einstellungen behalten?", isPresented: $confirmExit) {
+                Button("Weiter bearbeiten", role: .cancel) {}
+                Button("Als Entwurf speichern") { store.saveEditorDraft(draft, id: draftID, kind: "dashboard", title: "Meine Heute-Seite"); if store.lastSaveError == nil { dismiss() } }
+                Button("Verwerfen", role: .destructive) { store.removeEditorDraft(draftID); if store.lastSaveError == nil { dismiss() } }
+            }
     }
     private func toggle(_ value: String, in values: inout [String]) {
         if values.contains(value) { values.removeAll { $0 == value } } else { values.append(value) }

@@ -27,7 +27,8 @@ struct TherapyRecurrenceEditor: View {
     @Environment(\.dismiss) private var dismiss
     @State var rule: TherapyRecurrence
     @State private var initial: TherapyRecurrence?
-    @State private var draftID = UUID()
+    @State private var draftID: UUID
+    init(rule: TherapyRecurrence, draftID: UUID? = nil) { _rule = State(initialValue: rule); _draftID = State(initialValue: draftID ?? UUID()) }
     var body: some View {
         TherapyEditorSheet(title: "Therapie-Rhythmus", dirty: initial != nil && rule != initial, draftID: draftID, saveDraft: { store.saveEditorDraft(rule, id: draftID, kind: "recurrence", title: "Therapie-Rhythmus") }, save: { store.data.schedule.recurrence = rule }) {
             Section("Ab jetzt planen") {
@@ -66,6 +67,6 @@ struct TherapyExtraAppointmentEditor: View {
         }) {
             Section { TextField("Bezeichnung", text: $appointment.title); DatePicker("Datum & Beginn", selection: $appointment.date) }
             Section { Text("Dieser Termin ergänzt deinen Rhythmus. Er wird ebenfalls in Kalender, Widgets und Therapie-Erinnerungen berücksichtigt.").font(.caption).foregroundStyle(.secondary) }
-        }
+        }.onAppear { if initial == nil { initial = appointment } }
     }
 }

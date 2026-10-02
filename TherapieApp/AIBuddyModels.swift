@@ -83,7 +83,7 @@ struct AIBuddyReply: Codable, Equatable {
     var actions: [AIBuddyAction]
     var suggestedDays: Int?
     var checkIn: AIBuddyCheckInProposal?
-    var valid: Bool { (checkIn?.valid ?? true) && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && message.count <= 12000 && title.count <= 160 && sections.count <= 8 && actions.count <= 6 && actions.allSatisfy(\.valid) && sections.allSatisfy { $0.heading.count <= 160 && $0.text.count <= 6000 } && (suggestedDays == nil || (1...90).contains(suggestedDays!)) }
+    var valid: Bool { (checkIn?.valid ?? true) && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && message.count <= 12000 && title.count <= 160 && sections.count <= 8 && actions.count <= 6 && Set(actions.map(\.id)).count == actions.count && actions.allSatisfy(\.valid) && sections.allSatisfy { $0.heading.count <= 160 && $0.text.count <= 6000 } && (suggestedDays == nil || (1...90).contains(suggestedDays!)) }
     var journalText: String {
         ([AIBuddyText.plain(message)] + sections.map { AIBuddyText.plain($0.heading) + "\n" + AIBuddyText.plain($0.text) }).joined(separator: "\n\n")
     }
@@ -332,7 +332,8 @@ enum AIConversationMutation {
     static func create(in data: inout AppData, checkIn: GuidedCheckIn? = nil, note: TherapyNote? = nil) -> UUID {
         let checkIn = checkIn.map { DayCheckInPolicy.reopen($0, in: data) }
         if let checkIn, let existing = data.aiConversations.first(where: { $0.checkInID == checkIn.id }) { return existing.id }
-        let conversation = AIBuddyConversation(title: checkIn?.displayTitle ?? note?.title ?? "Neues Gespräch", checkInID: checkIn?.id, noteContext: note)
+        let candidateTitle = checkIn?.displayTitle ?? note?.title ?? "Neues Gespräch"
+        let conversation = AIBuddyConversation(title: candidateTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Neues Gespräch" : candidateTitle, checkInID: checkIn?.id, noteContext: note)
         if let checkIn, checkIn.isDraft { _ = GuidedCheckInMutation.apply(checkIn, complete: false, to: &data) }
         data.aiConversations.insert(conversation, at: 0)
         if let checkIn, checkIn.isDraft { data.aiMessages.append(AIBuddyMessage(role: "assistant", text: AICheckInGuide.questions[max(0, min(7, checkIn.step))], conversationID: conversation.id)) }

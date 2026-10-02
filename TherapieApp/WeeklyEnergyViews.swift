@@ -121,7 +121,8 @@ struct WeeklyEnergyEditorView: View {
             } message: { Text("Dieser Punkt wird aus dem Wochenrückblick entfernt. Gespeichert wird die Änderung erst mit Speichern.") }
             .alert("Änderungen verwerfen?", isPresented: $discard) {
                 Button("Weiter bearbeiten", role: .cancel) {}
-                Button("Verwerfen", role: .destructive) { dismiss() }
+                Button("Als Entwurf speichern") { store.saveEditorDraft(review, id: review.id, kind: "weeklyEnergy", title: "Wochenenergie"); if store.lastSaveError == nil { dismiss() } }
+                Button("Verwerfen", role: .destructive) { store.removeEditorDraft(review.id); if store.lastSaveError == nil { dismiss() } }
             }
             .alert("Vorhandenen Rückblick ersetzen?", isPresented: $replace) {
                 Button("Abbrechen", role: .cancel) {}
@@ -163,7 +164,7 @@ struct WeeklyEnergyEditorView: View {
         }
         TherapyEffects.shared.light()
     }
-    private func save() { store.saveEnergyReview(review); if store.lastSaveError == nil { dismiss() } }
+    private func save() { store.saveEnergyReview(review); if store.lastSaveError == nil { store.removeEditorDraft(review.id); if store.lastSaveError == nil { dismiss() } } }
 }
 
 private struct WeeklyEnergyFactorEditor: View {

@@ -9,7 +9,7 @@ struct RoutineEditorView: View {
     @State private var confirmExit = false
     private let symbols = ["checkmark.circle", "pills.fill", "shower.fill", "fork.knife", "drop.fill", "figure.walk", "bed.double.fill", "book.fill", "heart.fill", "sun.max.fill", "briefcase.fill", "leaf.fill"]
     private let symbolTitles = ["Allgemein", "Medikament", "Duschen", "Essen", "Trinken", "Bewegung", "Schlafen", "Lesen", "Wohlbefinden", "Morgen", "Arbeit", "Pause"]
-    private var valid: Bool { !routine.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !routine.times.isEmpty && routine.times.allSatisfy { !$0.weekdays.isEmpty } }
+    private var valid: Bool { !routine.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !routine.times.isEmpty && routine.times.allSatisfy { !$0.weekdays.isEmpty } && (routine.endsAt == nil || routine.endsAt! >= (routine.recurrenceAnchor ?? routine.createdAt)) }
     var body: some View {
         NavigationStack {
             Form {
