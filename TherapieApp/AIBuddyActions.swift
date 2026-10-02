@@ -80,7 +80,7 @@ enum AIBuddyMutation {
         case .updateRoutine, .deleteRoutine:
             guard let id = action.targetID.flatMap(UUID.init(uuidString:)), let index = snapshot.routines.firstIndex(where: { $0.id == id }) else { throw AIBuddyAPIError(message: "Diese Routine ist nicht mehr vorhanden.") }
             let previous = snapshot.routines[index]
-            if action.kind == .updateRoutine && previous.times.count > 1 && (action.date != nil || !action.weekdays.isEmpty) { throw AIBuddyAPIError(message: "Diese Routine hat mehrere Uhrzeiten. Bitte wähle den einzelnen Termin im Routine-Editor, damit die anderen unverändert bleiben.") }
+            if action.kind == .updateRoutine && previous.times.count > 1 && action.options?.times == nil && (action.date != nil || !action.weekdays.isEmpty) { throw AIBuddyAPIError(message: "Diese Routine hat mehrere Uhrzeiten. Bitte wähle den einzelnen Termin im Routine-Editor, damit die anderen unverändert bleiben.") }
             RoutineHistoryMutation.preserveTitles(in: &snapshot, routine: previous)
             if action.kind == .deleteRoutine {
                 snapshot.routines.remove(at: index); snapshot.routineSnoozes.removeAll { $0.id.hasPrefix(id.uuidString + ".") }
@@ -91,6 +91,7 @@ enum AIBuddyMutation {
                     for t in snapshot.routines[index].times.indices { snapshot.routines[index].times[t].hour = c.hour ?? 9; snapshot.routines[index].times[t].minute = c.minute ?? 0 }
                 }
                 if !action.weekdays.isEmpty { for t in snapshot.routines[index].times.indices { snapshot.routines[index].times[t].weekdays = Array(Set(action.weekdays)).sorted() } }
+                if let times = action.options?.times { snapshot.routines[index].times = times.sorted().map { minute in let existing = previous.times.first { $0.hour * 60 + $0.minute == minute }; return RoutineTime(id: existing?.id ?? UUID(), weekdays: action.weekdays.isEmpty ? existing?.weekdays ?? previous.times.first?.weekdays ?? Array(1...7) : Array(Set(action.weekdays)).sorted(), hour: minute / 60, minute: minute % 60) } }
                 configure(&snapshot.routines[index], action: action, start: action.date ?? previous.recurrenceAnchor ?? now)
             }
         case .setting:

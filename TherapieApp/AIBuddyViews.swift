@@ -242,6 +242,7 @@ struct AIBuddyChatContent: View {
                             else { inputHandle.finishEditing(); route = .review(.init(messageID: message.id, action: action)) }
                         } label: { Label(applied ? "Gespeichert · " + action.kind.label : action.kind.label + (action.title.isEmpty ? "" : ": " + AIBuddyText.plain(action.title)), systemImage: applied ? "checkmark.circle.fill" : action.kind.symbol).frame(maxWidth: .infinity, alignment: .leading) }.buttonStyle(.bordered).disabled(applied).accessibilityIdentifier("ai.action." + action.kind.rawValue)
                     }
+                    if reply.actions.contains(where: { $0.kind == .startSession && message.appliedActionIDs.contains($0.id) }) { Button("Laufende Therapierunde öffnen", systemImage: "timer") { open("session") }.buttonStyle(.borderedProminent) }
                     if let days = reply.suggestedDays { Button("Mehr Kontext? \(days) Tage für die nächste Nachricht") { setDays(days); persistDays(); updateContext() }.font(.caption) }
                     if message.id == messages.last?.id {
                         if draft?.step == 7 { Button("Check-in-Übersicht prüfen", systemImage: "checkmark.rectangle") { showOverview() }.buttonStyle(.borderedProminent).accessibilityIdentifier("ai.checkin.overview") }

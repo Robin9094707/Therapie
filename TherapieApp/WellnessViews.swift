@@ -415,7 +415,7 @@ struct WellnessChartsView: View {
     private var batteryChart: some View {
         Chart(WellnessAnalytics.categoryTotals(points)) { total in
             BarMark(x: .value("Wirkung", total.impact), y: .value("Bereich", total.category.title))
-                .foregroundStyle(total.direction == .gives ? Color.teal : Color.orange)
+                .foregroundStyle(total.direction == .gives ? Color.green : Color.red)
                 .cornerRadius(4)
                 .accessibilityLabel("\(total.category.title): \(total.direction.title), \(total.count) Punkte, Wirkung \(abs(total.impact))")
         }.frame(height: CGFloat(max(180, Set(points.map(\.category)).count * 36)))

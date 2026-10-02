@@ -52,7 +52,7 @@ enum AIBuddyActionKind: String, Codable, CaseIterable {
 }
 struct AIBuddyAction: Codable, Equatable, Identifiable {
     // Stable content identity prevents double execution after a repeated tap/re-render.
-    var id: String { kind.rawValue + "|" + title + "|" + text + "|" + (targetID ?? "") + "|" + (dateISO ?? "") + (options.map { "|" + String(describing: $0) } ?? "") }
+    var id: String { kind.rawValue + "|" + title + "|" + text + "|" + (targetID ?? "") + "|" + (dateISO ?? "") + (options.map { "|" +  $0.stableIdentity } ?? "") }
     var kind: AIBuddyActionKind
     var title: String
     var text: String
@@ -67,6 +67,8 @@ struct AIBuddyAction: Codable, Equatable, Identifiable {
     var valid: Bool {
         guard (options?.valid ?? true), (tags ?? []).count <= 15, (tags ?? []).allSatisfy({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.count <= 60 }), title.count <= 160, text.count <= 6000, (dateISO == nil || date != nil), (moodPercent == nil || (0...100).contains(moodPercent!)), weekdays.allSatisfy({ (1...7).contains($0) }) else { return false }
         if ![AIBuddyActionKind.note, .checkIn].contains(kind), !(tags ?? []).isEmpty { return false }
+        if options?.times != nil && ![AIBuddyActionKind.routine, .updateRoutine].contains(kind) { return false }
+        if options?.priority != nil && kind != .goal { return false }
         if kind == .startSession { return targetID.flatMap(UUID.init(uuidString:)) != nil }
         if kind == .battery { return moodPercent != nil }
         if kind == .setting { return AIBuddySettingsChange.valid(action: self) }
@@ -435,6 +437,12 @@ struct AIBuddyActionOptions: Codable, Equatable {
     var valueString: String?
     var priority: String?
     var times: [Int]?
+    // Keep identities of pre-3011 proposals intact after Codable adds optional fields.
+    var stableIdentity: String {
+        let legacy = "AIBuddyActionOptions(remindersEnabled: \(String(describing: remindersEnabled)), alarmEnabled: \(String(describing: alarmEnabled)), retryMinutes: \(String(describing: retryMinutes)), repeatEveryWeeks: \(String(describing: repeatEveryWeeks)), repeatCount: \(String(describing: repeatCount)), enabled: \(String(describing: enabled)), valueBool: \(String(describing: valueBool)), valueInt: \(String(describing: valueInt)))"
+        guard valueString != nil || priority != nil || times != nil else { return legacy }
+        return legacy + "|string=" + (valueString ?? "") + "|priority=" + (priority ?? "") + "|times=" + (times ?? []).map(String.init).joined(separator: ",")
+    }
     var valid: Bool {
         (priority == nil || ["low", "normal", "high"].contains(priority!)) &&
         (valueString == nil || valueString!.count <= 60) && (times == nil || (!times!.isEmpty && times!.count <= 8 && Set(times!).count == times!.count && times!.allSatisfy { (0...1439).contains($0) })) &&

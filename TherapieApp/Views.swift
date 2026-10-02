@@ -1215,7 +1215,7 @@ struct LibraryView: View {
                 GlassCard {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
-                            Label("Energie \(entry.level)/5", systemImage: "bolt.heart.fill")
+                            Label(entry.percent.map { "Akku \($0) %" } ?? "Energie \(entry.level)/5", systemImage: "bolt.heart.fill")
                                 .font(.headline)
                             Spacer()
                             Text(entry.createdAt.formatted(date: .abbreviated, time: .omitted))

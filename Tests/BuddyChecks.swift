@@ -191,7 +191,7 @@ final class BuddyMockProtocol: URLProtocol {
         try expect(AIBuddyContext.requestDays(question: "Heute", settings: manualScope, chosenDays: 30) == 30, "Automatic text inference can be disabled")
         let strict = AIBuddyAPI.schema["properties"] as! [String: Any]
         let guideSchema = strict["checkIn"] as! [String: Any]
-        try expect(guideSchema["additionalProperties"] as? Bool == false && (guideSchema["required"] as! [String]).count == 14, "Structured check-in schema requires every nullable field")
+        try expect(guideSchema["additionalProperties"] as? Bool == false && (guideSchema["required"] as! [String]).count == 16, "Structured check-in schema requires every nullable field")
         var interactive = AppData()
         let msg = AIBuddyMessage(role: "assistant", text: "Vorschau"); interactive.aiMessages = [msg]
         AIConversationMutation.migrate(&interactive)
@@ -266,6 +266,7 @@ final class BuddyMockProtocol: URLProtocol {
         let multiTime = AIBuddyAction(kind: .routine, title: "Meine Erinnerung", text: "", dateISO: ISO8601DateFormatter().string(from: now), weekdays: [], options: AIBuddyActionOptions(times: [480, 1200]))
         try AIBuddyMutation.apply(multiTime, originalID: multiTime.id, messageID: instruction.id, to: &actionData, now: now)
         try expect(actionData.routines[0].times.map(\.hour) == [8, 20] && actionData.routines[0].times.allSatisfy { $0.weekdays.count == 7 }, "Confirmed twice-daily routine keeps both real clocks")
+        try expect(AIBuddyActionOptions(remindersEnabled: true).stableIdentity == "AIBuddyActionOptions(remindersEnabled: Optional(true), alarmEnabled: nil, retryMinutes: nil, repeatEveryWeeks: nil, repeatCount: nil, enabled: nil, valueBool: nil, valueInt: nil)", "Pre-3011 confirmed proposal identities stay stable after migration")
         let startRound = AIBuddyAction(kind: .startSession, title: "Runde", text: "", targetID: actionData.sessionTemplates[0].id.uuidString, weekdays: [])
         try AIBuddyMutation.apply(startRound, originalID: startRound.id, messageID: instruction.id, to: &actionData, now: now)
         try expect(actionData.currentSession?.title == actionData.sessionTemplates[0].title, "Only actual reviewed therapy template can start")
