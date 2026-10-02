@@ -24,13 +24,14 @@ import UIKit
         guard let key = storedKey ?? (draftForCommand != nil && BuddyInteraction.wantsOverview(clean) ? "local-overview" : nil) else { error = "Bitte hinterlege zuerst deinen OpenAI-API-Schlüssel im Profil."; return false }
         let settings = store.data.aiSettings
         let days = AIBuddyContext.requestDays(question: clean, settings: settings, chosenDays: daysOverride ?? chat.contextDays)
-        var context = AIBuddyContext.make(data: store.data, days: days, end: BuddyInteraction.window(question: clean, days: days), question: clean, clock: Date())
         let history = store.data.aiMessages.filter { $0.conversationID == chatID }
+        let intent = String(history.last(where: { $0.role == "user" })?.text.prefix(800) ?? "") + " " + clean
+        var context = AIBuddyContext.make(data: store.data, days: days, end: BuddyInteraction.window(question: clean, days: days), question: intent, clock: Date())
         let draft = chat.checkInID.flatMap { id in store.data.guidedCheckIns.first { $0.id == id && $0.isDraft } }
         var guide = draft.map(AICheckInGuide.instructions) ?? ""
         if let memory = chat.memory { guide += "\nKURZE GESPRÄCHSNOTIZ (kann unvollständig sein): " + String(memory.prefix(1800)) }
         if let note = chat.noteContext, settings.includeJournal { context.text += "\nDIE NOTIZ ZUM GESPRÄCH: " + note.title + "\n" + String(note.text.prefix(2000)) }
-        if let sessionID = chat.sessionID {
+        if settings.includeJournal, let sessionID = chat.sessionID {
             let notes = store.data.notes.filter { $0.sessionID == sessionID }
             context.text += "\nNOTIZEN DIESER STUNDE:\n" + String(notes.map { $0.title + ": " + $0.text }.joined(separator: "\n").prefix(3000))
         }

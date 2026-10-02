@@ -21,6 +21,7 @@ struct SessionConductorContent: View {
     @State private var finish = false
     @State private var showPreferences = false
     @State private var showAI = false
+    @State private var voiceActive = false
 
     var body: some View {
         TherapyScreen {
@@ -36,7 +37,7 @@ struct SessionConductorContent: View {
                                 let phase = session.phaseIndex().map { session.phases[$0].title } ?? "Rückblick"
                                 noteDraft = TherapyNote(title: phase, text: "", tags: ["Therapiestunde"], topicID: store.data.therapyTopics.first(where: \.isCurrent)?.id, sessionID: session.id)
                             }
-                            if store.data.aiSettings.enabled { HStack { BuddyInlineMicrophone { transcript in var snapshot = store.data; snapshot.notes.insert(TherapyNote(title: "Gedanke aus der Stunde", text: transcript, tags: ["Therapiestunde", "Sprachnotiz"], sessionID: session.id), at: 0); store.data = snapshot }; Text("Gedanken einsprechen · direkt als Notiz speichern").font(.caption).foregroundStyle(.secondary) } }
+                            if store.data.aiSettings.enabled { HStack { BuddyInlineMicrophone(onStateChange: { voiceActive = $0 }) { transcript in var snapshot = store.data; snapshot.notes.insert(TherapyNote(title: "Gedanke aus der Stunde", text: transcript, tags: ["Therapiestunde", "Sprachnotiz"], sessionID: session.id), at: 0); store.data = snapshot }; Text("Gedanken einsprechen · direkt als Notiz speichern").font(.caption).foregroundStyle(.secondary) } }
                             ForEach(store.data.therapyTopics.filter(\.isCurrent)) { topic in
                                 Label(topic.title, systemImage: topic.category.symbol).font(.subheadline)
                             }
@@ -116,7 +117,7 @@ struct SessionConductorContent: View {
                 }
                 ResponsiveButtonRow {
                     Button(session.pausedAt == nil ? "Pausieren" : "Fortsetzen", systemImage: session.pausedAt == nil ? "pause.fill" : "play.fill") { controller.pauseOrResume() }.buttonStyle(.borderedProminent)
-                    Button("Beenden", systemImage: "stop") { finish = true }.buttonStyle(.bordered)
+                    Button("Beenden", systemImage: "stop") { finish = true }.buttonStyle(.bordered).disabled(voiceActive)
                 }.disabled(controller.busy)
                 if !controller.liveStatus.isEmpty { Text(controller.liveStatus).font(.caption).foregroundStyle(.secondary) }
                 Text(store.data.sessionPreferences.usesPrivateLiveActivity ? "Die Live-Aktivität zeigt neutrale Abschnittsnamen. Echte Namen kannst du in den Timer-Einstellungen einschalten." : "Die Live-Aktivität zeigt deine Abschnittsnamen. Notizen bleiben in der App; neutrale Namen sind in den Timer-Einstellungen wählbar.").font(.caption2).foregroundStyle(.secondary)

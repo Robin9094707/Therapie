@@ -234,6 +234,7 @@ final class BuddyMockProtocol: URLProtocol {
         try expect(!RoutineRecurrence.includes(recurringRoutine, date: nextWeek) && RoutineRecurrence.includes(recurringRoutine, date: secondWeek), "Routine interval skips inactive weeks")
         recurringRoutine.endsAt = nextWeek
         try expect(!RoutineRecurrence.includes(recurringRoutine, date: secondWeek), "Finite routine stops after its end date")
+        try expect(!BuddyInteraction.withoutPinnedQuestion(AICheckInGuide.questions[1], step: 1).contains(AICheckInGuide.questions[1]), "A repeated model standard question is shown only once in the pinned bar")
         try expect(BuddyInteraction.wantsOverview("Bitte den Check-in speichern") && !BuddyInteraction.wantsOverview("Check-in noch nicht speichern"), "Explicit finish intent and negative intent are distinct")
         var early = GuidedCheckIn()
         try expect(AICheckInGuide.apply(AIBuddyCheckInProposal(advance: false, finish: true, batteryPercent: 0), to: &early, known: []) && early.step == 7 && early.batteryPercent == 0 && early.isDraft, "Early finish preserves values and never bypasses confirmation")

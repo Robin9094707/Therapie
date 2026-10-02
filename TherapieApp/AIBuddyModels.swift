@@ -497,6 +497,10 @@ struct BuddyQuickReply: Codable, Equatable, Identifiable {
     var valid: Bool { !title.isEmpty && title.count <= 40 && !text.isEmpty && text.count <= 600 }
 }
 enum BuddyInteraction {
+    static func withoutPinnedQuestion(_ text: String, step: Int) -> String {
+        let result = text.replacingOccurrences(of: AICheckInGuide.questions[max(0, min(7, step))], with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return result.isEmpty ? "Deine Angaben sind angekommen. Die nächste Frage findest du oben; zur Übersicht kannst du jederzeit wechseln." : result
+    }
     static func wantsOverview(_ text: String) -> Bool {
         let t = text.lowercased()
         guard !t.contains("nicht speichern"), !t.contains("noch nicht"), !t.contains("nicht abschließen") else { return false }

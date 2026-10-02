@@ -37,6 +37,7 @@ struct BuddyInlineMicrophone: View {
     @State private var operation: Task<Void, Never>?
     var disabled = false
     var beforeRecording: () -> Void = {}
+    var onStateChange: (Bool) -> Void = { _ in }
     var receive: (String) -> Void
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -63,8 +64,13 @@ struct BuddyInlineMicrophone: View {
         .onChange(of: scenePhase) { _, phase in if phase != .active && recorder.isRecording { stop(upload: false) } }
         .onChange(of: store.data.aiSettings.enabled) { _, enabled in if !enabled { operation?.cancel(); _ = recorder.stop(); reset() } }
         .onChange(of: store.data.aiSettings.allowVoiceUploads) { _, allowed in if !allowed { operation?.cancel(); _ = recorder.stop(); reset() } }
-        .onDisappear { operation?.cancel(); _ = recorder.stop(); reset() }
+        .onChange(of: recorder.isRecording) { _, _ in updateState() }
+        .onChange(of: busy) { _, _ in updateState() }
+        .onChange(of: starting) { _, _ in updateState() }
+        .onChange(of: pending) { _, _ in updateState() }
+        .onDisappear { operation?.cancel(); _ = recorder.stop(); reset(); onStateChange(false) }
     }
+    private func updateState() { onStateChange(recorder.isRecording || starting || busy || pending) }
     private func start() {
         guard !busy, !starting, AIBuddyKeychain.read() != nil else { error = "Bitte zuerst den API-Schlüssel hinterlegen."; return }
         beforeRecording(); starting = true; error = nil

@@ -93,6 +93,7 @@ private enum BuddySheet: Identifiable {
         switch self { case .summary(let id): "summary-" + id.uuidString; case .settings: "settings"; case .guided(let c): "guided-" + c.id.uuidString; case .manual(let c): "manual-" + c.id.uuidString; case .review(let r): "review-" + r.id; case .voice: "voice"; case .screen(let name): "screen-" + name }
     }
 }
+private struct BuddyMessageRow: Identifiable { var message: AIBuddyMessage; var startsDay: Bool; var id: UUID { message.id } }
 struct AIBuddyChatContent: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var store: AppStore
@@ -114,15 +115,18 @@ struct AIBuddyChatContent: View {
     @State private var image: Data?
     @State private var confirmPhoto = false
     @State private var clearChat = false
-    @State private var confirmSaveChat = false
     @State private var showChatMenu = false
     @State private var messageLimit = 40
     @State private var search = ""
+    @State private var voiceActive = false
+    @State private var confirmVoiceClose = false
     @StateObject private var speech = BuddySpeech()
     @State private var explicitDays: Int?
     private var chat: AIBuddyConversation? { store.data.aiConversations.first { $0.id == conversationID } }
     private var messages: [AIBuddyMessage] { store.data.aiMessages.filter { $0.conversationID == conversationID } }
-    private var visibleMessages: [AIBuddyMessage] { Array(messages.filter { search.isEmpty || $0.text.localizedStandardContains(search) }.suffix(messageLimit)) }
+    private var matchingMessages: [AIBuddyMessage] { let query = search.trimmingCharacters(in: .whitespacesAndNewlines); return messages.filter { query.isEmpty || $0.text.localizedStandardContains(query) } }
+    private var visibleMessages: [AIBuddyMessage] { Array(matchingMessages.suffix(messageLimit)) }
+    private var messageRows: [BuddyMessageRow] { let values = visibleMessages; return values.enumerated().map { index, message in BuddyMessageRow(message: message, startsDay: index == 0 || !Calendar.current.isDate(message.date, inSameDayAs: values[index - 1].date)) } }
     private var draft: GuidedCheckIn? { chat?.checkInID.flatMap { id in store.data.guidedCheckIns.first { $0.id == id && $0.isDraft } } }
     private var context: AIBuddyContext { previewContext ?? AIBuddyContext(start: Date(), end: Date(), days: 7, recordCount: 0, omittedCount: 0, text: "") }
     var body: some View {
@@ -132,15 +136,11 @@ struct AIBuddyChatContent: View {
                 if chat == nil { ContentUnavailableView("Gespräch gelöscht", systemImage: "bubble.left.and.bubble.right") }
                 else if messages.isEmpty { introduction }
                 if store.data.aiSettings.enabled { DisclosureGroup("Kontext für deine nächste Nachricht") { contextCard } }
-                    if messages.filter({ search.isEmpty || $0.text.localizedStandardContains(search) }).count > messageLimit { Button("40 frühere Nachrichten laden") { messageLimit += 40 } }
-                    ForEach(Array(visibleMessages.enumerated()), id: \.element.id) { index, message in
-                        if index == 0 || !Calendar.current.isDate(message.date, inSameDayAs: visibleMessages[index - 1].date) { Text(message.date.formatted(date: .complete, time: .omitted)).font(.caption.bold()).foregroundStyle(.secondary).frame(maxWidth: .infinity) }
-                        messageCard(message).id(message.id)
-                    }
+                messageList
                     if controller.busy {
                         HStack { BuddyTypingBubble(); Button("Anfrage abbrechen", systemImage: "xmark.circle") { controller.cancel() }.labelStyle(.iconOnly).foregroundStyle(.secondary); Spacer() }.id("buddy.typing")
                     }
-                    if let error = controller.error { GlassCard { VStack(alignment: .leading, spacing: 8) { Text(error).font(.subheadline).foregroundStyle(.orange).textSelection(.enabled); if let last = messages.last, last.role == "user" { Button("Antwort erneut versuchen", systemImage: "arrow.clockwise") { send(questionOverride: last.text, pictureOverride: retryImage) }.disabled(controller.busy || sending) } } } }
+                errorCard
             }
         }.onAppear {
             if let id = messages.last?.id { DispatchQueue.main.async { proxy.scrollTo(id, anchor: .bottom) } }
@@ -152,14 +152,14 @@ struct AIBuddyChatContent: View {
             .searchable(text: $search, prompt: "Dieses Gespräch durchsuchen")
             .onChange(of: search) { _, _ in messageLimit = 40 }
             .navigationBarBackButtonHidden(true)
-            .interactiveDismissDisabled(!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .interactiveDismissDisabled(voiceActive || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             .safeAreaInset(edge: .top, spacing: 0) { if let draft { guideHeader(draft).padding(.horizontal, 12).padding(.vertical, 8).background(.regularMaterial) } }
             .safeAreaInset(edge: .bottom) { if store.data.aiSettings.enabled && chat != nil { composer.padding(.horizontal, 12).padding(.vertical, 8).background(.regularMaterial) } }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(close == nil ? "Zurück" : "Schließen", systemImage: "chevron.left") { requestClose() }.accessibilityIdentifier("ai.chat.close") }
                 ToolbarItem(placement: .topBarTrailing) { if store.undoAvailable { Button("Letzte Eingabe rückgängig", systemImage: "arrow.uturn.backward") { inputHandle.finishEditing(); store.undoLastChange() }.accessibilityIdentifier("ai.undo") } }
-                ToolbarItem(placement: .topBarTrailing) { if let draft { Button(draft.step == 7 ? "Übersicht" : "Normal", systemImage: "slider.horizontal.3") { controller.cancel(); inputHandle.finishEditing(); route = .manual(draft) }.accessibilityIdentifier("ai.checkin.toolbar.manual") } }
-                ToolbarItem(placement: .topBarTrailing) { Button("Gesprächsaktionen", systemImage: "ellipsis.circle") { inputHandle.finishEditing(); showChatMenu = true }.accessibilityIdentifier("ai.chat.menu") } }
+                ToolbarItem(placement: .topBarTrailing) { if let draft { Button(draft.step == 7 ? "Übersicht" : "Normal", systemImage: "slider.horizontal.3") { controller.cancel(); inputHandle.finishEditing(); route = .manual(draft) }.disabled(voiceActive).accessibilityIdentifier("ai.checkin.toolbar.manual") } }
+                ToolbarItem(placement: .topBarTrailing) { Button("Gesprächsaktionen", systemImage: "ellipsis.circle") { inputHandle.finishEditing(); showChatMenu = true }.disabled(voiceActive || controller.busy || sending).accessibilityIdentifier("ai.chat.menu") } }
             .confirmationDialog("Gesprächsaktionen", isPresented: $showChatMenu, titleVisibility: .visible) {
                 Button("KI-Einstellungen") { route = .settings }.accessibilityIdentifier("ai.chat.settings")
                 Button("Gespräch im Tagebuch speichern") { route = .summary(conversationID) }.accessibilityIdentifier("ai.chat.journal")
@@ -167,6 +167,7 @@ struct AIBuddyChatContent: View {
                 Button("Abbrechen", role: .cancel) {}
             }
             .sheet(item: $route) { sheetContent($0) }
+            .alert("Sprachnachricht noch in Arbeit", isPresented: $confirmVoiceClose) { Button("Zur Aufnahme zurück", role: .cancel) {}; Button("Aufnahme verwerfen und schließen", role: .destructive) { finishClose(saveDraft: true) } } message: { Text("Deine Aufnahme oder Transkription läuft noch. Beim Schließen wird sie verworfen; vorhandene Texte bleiben als Entwurf erhalten.") }
             .alert("Eingabe behalten?", isPresented: $confirmExit) {
                 Button("Weiter schreiben", role: .cancel) {}
                 Button("Als Entwurf speichern") { finishClose(saveDraft: true) }
@@ -182,6 +183,26 @@ struct AIBuddyChatContent: View {
             .onChange(of: text) { _, _ in updateContext(onlyIfRangeChanged: true) }
             .onDisappear { speech.stop(); store.visibleAIComposerIDs.remove(visibilityID); if route == nil { inputHandle.finishEditing(); controller.cancel(); cleanupEmptyChat() } }
             .onChange(of: store.data.aiSettings.enabled) { _, enabled in if !enabled { controller.cancel(); image = nil; photo = nil } }
+    }
+    private var messageList: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if matchingMessages.count > messageLimit { Button("40 frühere Nachrichten laden") { messageLimit += 40 } }
+            ForEach(messageRows) { row in messageRow(row) }
+        }
+    }
+    @ViewBuilder private func messageRow(_ row: BuddyMessageRow) -> some View {
+        if row.startsDay { Text(row.message.date.formatted(date: .complete, time: .omitted)).font(.caption.bold()).foregroundStyle(.secondary).frame(maxWidth: .infinity) }
+        messageCard(row.message).id(row.message.id)
+    }
+    @ViewBuilder private var errorCard: some View {
+        if let error = controller.error {
+            GlassCard {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(error).font(.subheadline).foregroundStyle(.orange).textSelection(.enabled)
+                    if let last = messages.last, last.role == "user" { Button("Antwort erneut versuchen", systemImage: "arrow.clockwise") { send(questionOverride: last.text, pictureOverride: retryImage) }.disabled(controller.busy || sending) }
+                }
+            }
+        }
     }
     private func sheetContent(_ sheet: BuddySheet) -> AnyView {
         switch sheet {
@@ -232,7 +253,7 @@ struct AIBuddyChatContent: View {
                 Label(message.role == "user" ? "Du" : "Dein Begleiter", systemImage: message.role == "user" ? "person.crop.circle" : "sparkles").font(.caption.bold()).foregroundStyle(.secondary)
                 if let reply = message.reply {
                     if !reply.title.isEmpty { Text(AIBuddyText.plain(reply.title)).font(.headline) }
-                    formatted(reply.message)
+                    formatted(message.id == messages.last?.id && draft != nil ? BuddyInteraction.withoutPinnedQuestion(reply.message, step: draft?.step ?? 0) : reply.message)
                     ForEach(Array(reply.sections.enumerated()), id: \.offset) { _, section in VStack(alignment: .leading, spacing: 5) { Text(AIBuddyText.plain(section.heading)).font(.subheadline.bold()); formatted(section.text) } }
                     ForEach(reply.actions) { action in
                         let applied = message.appliedActionIDs.contains(action.id)
@@ -271,7 +292,7 @@ struct AIBuddyChatContent: View {
         VStack(alignment: .leading, spacing: 6) {
             if image != nil { HStack { Label("Foto vorbereitet", systemImage: "photo"); Spacer(); Button("Entfernen") { image = nil; photo = nil } }.font(.caption) }
             HStack(alignment: .bottom, spacing: 10) {
-                BuddyInlineMicrophone(disabled: controller.busy || sending, beforeRecording: { inputHandle.finishEditing(); speech.stop() }) { transcript in text = text.isEmpty ? transcript : text + "\n" + transcript }
+                BuddyInlineMicrophone(disabled: controller.busy || sending, beforeRecording: { inputHandle.finishEditing(); speech.stop() }, onStateChange: { voiceActive = $0 }) { transcript in text = text.isEmpty ? transcript : text + "\n" + transcript }
                 if store.data.aiSettings.allowPhotoUploads { PhotosPicker(selection: $photo, matching: .images) { Image(systemName: "photo") }.accessibilityLabel("Foto auswählen").frame(minWidth: 44, minHeight: 44) }
                 ChatComposerInput(text: $text, handle: inputHandle)
                     .overlay(alignment: .topLeading) { if text.isEmpty { Text("Nachricht …").foregroundStyle(.secondary).padding(.leading, 10).padding(.top, 11).allowsHitTesting(false).accessibilityHidden(true) } }
@@ -300,6 +321,7 @@ struct AIBuddyChatContent: View {
         }
     }
     private func requestClose() {
+        if voiceActive { confirmVoiceClose = true; return }
         inputHandle.finishEditing()
         text = inputHandle.currentText ?? text
         if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draft?.hasUserContent == true { confirmExit = true }
@@ -373,13 +395,13 @@ struct AIBuddyChatContent: View {
     }
     private func guideHeader(_ entry: GuidedCheckIn) -> some View {
         VStack(alignment: .leading, spacing: 7) {
-            HStack { Label("Check-in · \(min(8, entry.step + 1)) / 8", systemImage: "sparkles").font(.caption.bold()); Spacer(); Button("Übersicht") { showOverview() }.font(.caption.bold()).accessibilityIdentifier("ai.checkin.pinned.overview") }
+            HStack { Label("Check-in · \(min(8, entry.step + 1)) / 8", systemImage: "sparkles").font(.caption.bold()); Spacer(); Button("Übersicht") { showOverview() }.font(.caption.bold()).disabled(voiceActive).accessibilityIdentifier("ai.checkin.pinned.overview") }
             ProgressView(value: Double(min(8, entry.step + 1)), total: 8).tint(Color.accentColor)
             Text(AICheckInGuide.questions[max(0, min(7, entry.step))]).font(.subheadline).fixedSize(horizontal: false, vertical: true)
             HStack {
                 Button(entry.step == 7 ? "Übersicht prüfen & abschließen" : "Normal fortsetzen", systemImage: "slider.horizontal.3") { controller.cancel(); inputHandle.finishEditing(); route = .manual(entry) }.accessibilityIdentifier("ai.checkin.manual")
                 if entry.step < 7 { Button("Überspringen") { controller.cancel(); var snapshot = store.data; var next = entry; next.step += 1; _ = GuidedCheckInMutation.apply(next, complete: false, to: &snapshot); store.data = snapshot } }
-            }.font(.caption).buttonStyle(.bordered)
+            }.font(.caption).buttonStyle(.bordered).disabled(voiceActive)
         }.accessibilityIdentifier("ai.checkin.pinned.progress")
     }
     private func preparePhoto() async {
@@ -401,7 +423,7 @@ struct AIBuddyChatContent: View {
         switch name {
         case "profile": BuddyWellbeingProfileView()
         case "appearance": TherapyScreen { AppearanceCard() }.navigationTitle("Design")
-        case "dashboard": DashboardCustomizationView()
+        case "dashboard": DashboardCustomizationView(preferences: store.data.dashboard)
         case "wellness": WellnessSettingsView()
         case "backup": BackupCenterView()
         case "ai": AIBuddySettingsView()
