@@ -1,0 +1,48 @@
+name: Deliver verified Therapie 3010
+on:
+  push:
+    branches: [ delivery/v3010-2026-10-02 ]
+permissions:
+  contents: write
+  actions: read
+jobs:
+  deliver:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download the exact successful build
+        run: |
+          mkdir delivery ui
+          gh api repos/Robin9094707/Therapie/actions/runs/37015364683 > verified-run.json
+          gh run download 37015364683 --name Therapie-v3010.0.0-IPA --dir delivery
+          gh run download 37015364683 --name Therapie-v3010.0.0-source --dir delivery
+          gh run download 37015364683 --name Therapie-UI-Previews --dir ui
+          git archive --format=zip --output=delivery/Therapie-v3009.0.0-vor-interaktivem-Begleiter-source.zip ba7ca0a798f7b27c159eb6846e091f3eaaafc02c
+      - name: Verify all delivered files and real UI results
+        run: python3 scripts/verify_delivery_3010.py
+      - name: Publish the verified download files
+        run: |
+          cat > release-notes.md <<'NOTES'
+          Therapie 3010.0.0 (Build 17): stabile verschachtelte Dialoge, unmittelbar geleerte Chat-Eingabe, doppelte Sende-Taps verhindert und native Tipp-Punkte.
+          
+          Erweiterte KI-Aktionen mit bearbeitbarer Vorschau: Aufgabenserien, Erinnerungen, Routinen, Akku-Punkte, konkrete Änderungen und ausgewählte Einstellungen. Passende vorhandene Check-ins und schrittweise Rückfragen; das Modell bleibt unverändert.
+          
+          Leere Chats werden entfernt; bearbeitete Eingaben lassen sich bewusst als Entwurf speichern. Entwürfe, Chats und neue Einstellungen sind in verschlüsselten und lesbaren Backups enthalten. Rückgängig blendet sich nach zehn Sekunden aus. Optionaler Wochenrückblick beim Öffnen der App.
+          
+          Geprüft: 259 kurze Kernprüfungen, unabhängiger ZIP-Reader, nativer iPhone-Build, tatsächliche Bundle-Identität und zwei bestandene iPhone-Simulator-Bedienungstests. Beide Quellcode-Commits, ZIP-CRC und die ausgelieferte IPA wurden erneut kontrolliert.
+          
+          Build: https://github.com/Robin9094707/Therapie/actions/runs/37015364683
+          Quellcode: 18c47210d698e8247551b8718a9d203d6517807c
+          Vorheriger Stand: ba7ca0a798f7b27c159eb6846e091f3eaaafc02c / backup/v3009.0.0-before-interactive-buddy-2026-10-02
+          
+          Die IPA ist unsigniert. KI-Verträge wurden offline getestet; echte API-Aufrufe und gerätegebundene Funktionen benötigen das installierte iPhone. Für ein späteres Code-Rollback bitte zusätzlich ein persönliches Datenbackup von vor dem Update behalten.
+          NOTES
+          gh release create v3010.0.0 --target 18c47210d698e8247551b8718a9d203d6517807c --draft --title "Therapie 3010.0.0 · Interaktiver Begleiter" --notes-file release-notes.md
+          gh release upload v3010.0.0 delivery/Therapie-v3010.0.0.ipa delivery/Therapie-v3010.0.0-source.zip delivery/Therapie-v3009.0.0-vor-interaktivem-Begleiter-source.zip
+          gh release edit v3010.0.0 --draft=false
