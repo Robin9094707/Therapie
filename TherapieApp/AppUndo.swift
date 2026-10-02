@@ -53,7 +53,7 @@ extension AppStore {
 struct UndoChangesButton: View {
     @EnvironmentObject private var store: AppStore
     var body: some View {
-        if store.undoAvailable {
+        if store.undoAvailable && store.visibleAIComposerIDs.isEmpty {
             Button { store.undoLastChange() } label: { Label("Letzte Eingabe rückgängig", systemImage: "arrow.uturn.backward").font(.subheadline.bold()).padding(.horizontal, 16).padding(.vertical, 10) }
                 .buttonStyle(.plain).background(.regularMaterial, in: Capsule()).shadow(color: .black.opacity(0.08), radius: 6).padding(8)
                 .accessibilityIdentifier("input.undo").accessibilityHint("Bis zu 20 gespeicherte Änderungen, zehn Minuten lang während die App geöffnet ist")

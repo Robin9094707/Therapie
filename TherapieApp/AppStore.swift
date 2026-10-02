@@ -32,6 +32,8 @@ final class AppStore: ObservableObject {
     private var lastCalendarRefresh = Date.distantPast
     @Published var notificationMood = false
     @Published var pendingGuidedCheckIn: GuidedCheckIn?
+    @Published var notificationAIHub = false
+    @Published var visibleAIComposerIDs: Set<UUID> = []
     @Published var notificationRoutineID: UUID?
     @Published var routineReminderStatus = ""
     @Published var checkInReminderStatus = ""
@@ -128,9 +130,9 @@ final class AppStore: ObservableObject {
                     let reply = AIBuddyReply(title: "Mein kleiner Rückblick", message: "Du hast dir heute Raum für eine Pause gegeben.", sections: [AIBuddySection(heading: "Für die nächste Stunde", text: "Welche Pause möchtest du beibehalten?")], actions: [action], suggestedDays: 7)
                     data.aiMessages = [AIBuddyMessage(role: "assistant", text: reply.journalText, reply: reply, contextStart: Date().addingTimeInterval(-6 * 86400), contextEnd: Date(), model: "Lokale Testdaten")]
                     AIConversationMutation.migrate(&data)
-                    selectedTab = 5
+                    selectedTab = 0; notificationAIHub = true
                 }
-                if ProcessInfo.processInfo.arguments.contains("--buddy-network-fixture") { data.aiSettings.enabled = true; selectedTab = 5 }
+                if ProcessInfo.processInfo.arguments.contains("--buddy-network-fixture") { data.aiSettings.enabled = true; selectedTab = 0; notificationAIHub = !ProcessInfo.processInfo.arguments.contains("--buddy-guided-fixture") }
                 if ProcessInfo.processInfo.arguments.contains("--buddy-guided-fixture") { data.aiSettings.enabled = true; pendingGuidedCheckIn = GuidedCheckIn(kind: .morning) }
                 if ProcessInfo.processInfo.arguments.contains("--show-checkin") { pendingGuidedCheckIn = GuidedCheckIn(kind: .morning, mood: 4, batteryPercent: 65, step: 2) }
                 if ProcessInfo.processInfo.arguments.contains("--show-checkin-tasks") { pendingGuidedCheckIn = GuidedCheckIn(kind: .morning, step: 5) }

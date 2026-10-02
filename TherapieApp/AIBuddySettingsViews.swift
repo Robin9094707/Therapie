@@ -8,6 +8,7 @@ struct AIBuddySettingsCard: View {
             VStack(alignment: .leading, spacing: 12) {
                 SectionHeader(title: "Dein optionaler KI-Begleiter", icon: "sparkles", subtitle: store.data.aiSettings.enabled ? "Gespräche, Rückblicke und bearbeitbare App-Vorschläge" : "Die App funktioniert vollständig ohne KI.")
                 Button("KI & OpenAI-Schlüssel einrichten", systemImage: "key") { show = true }.buttonStyle(.bordered)
+                if store.data.aiSettings.enabled || !store.data.aiConversations.isEmpty { NavigationLink { AIBuddyView() } label: { Label("Meine KI-Gespräche", systemImage: "bubble.left.and.bubble.right") } }
                 NavigationLink { TherapyJournalView() } label: { Label("Mein Therapietagebuch", systemImage: "book.closed") }
                 Text("Gespeicherte Eingaben lassen sich zehn Minuten lang rückgängig machen, solange die App geöffnet bleibt. Auch gelöschte lokale Anhänge bleiben in diesem Zeitraum verfügbar.").font(.caption).foregroundStyle(.secondary)
             }

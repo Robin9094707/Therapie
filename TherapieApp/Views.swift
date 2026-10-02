@@ -29,6 +29,7 @@ struct RootView: View {
         .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
         .tint(.indigo)
         .accessibilityIdentifier("therapy.root")
+        .sheet(isPresented: $store.notificationAIHub) { NavigationStack { AIBuddyView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Schließen") { store.notificationAIHub = false } } } } }
         .sheet(isPresented: $showPermissions) { PermissionSetupView() }
         .sheet(isPresented: $openSession) {
             NavigationStack {
@@ -407,11 +408,6 @@ struct MainTabView: View {
                 .tabItem { Label("Archiv", systemImage: "square.stack.3d.up.fill") }
                 .tag(3)
 
-            if store.data.aiSettings.enabled {
-                NavigationStack { AIBuddyView() }
-                    .safeAreaInset(edge: .bottom) { UndoChangesButton() }
-                    .tabItem { Label("KI", systemImage: "bubble.left.and.text.bubble.right") }.tag(5)
-            }
             SettingsView()
                 .safeAreaInset(edge: .bottom) { UndoChangesButton() }
                 .tabItem { Label("Profil", systemImage: "person.crop.circle.fill") }

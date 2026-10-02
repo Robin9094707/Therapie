@@ -290,23 +290,25 @@ final class TherapieUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["ai.new.chat"].waitForExistence(timeout: 25))
         app.buttons["ai.new.chat"].tap()
-        let input = app.textFields["ai.composer"].firstMatch
+        let input = app.textViews["ai.composer"].firstMatch
         XCTAssertTrue(input.waitForExistence(timeout: 10))
         input.tap(); input.typeText("Meine Schwester hilft mir heute.")
         XCTAssertTrue(app.keyboards.firstMatch.exists)
+        XCTAssertEqual(input.value as? String, "Meine Schwester hilft mir heute.")
         capture("Chat-Nachricht mit geöffneter Tastatur")
         app.buttons["ai.send"].tap()
         XCTAssertTrue(app.staticTexts["Deine Nachricht ist angekommen. Möchtest du sie im Tagebuch festhalten?"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["ai.send"].exists, "Fixed composer survives response")
         input.tap(); input.typeText("Ein zweiter Gedanke.")
+        XCTAssertEqual(input.value as? String, "Ein zweiter Gedanke.")
         app.buttons["ai.send"].tap()
         XCTAssertTrue(app.staticTexts["Ein zweiter Gedanke."].waitForExistence(timeout: 10))
         capture("Chatblasen nach zwei echten Sendevorgängen")
-        app.navigationBars.buttons.firstMatch.tap()
+        app.navigationBars.buttons["KI-Begleiter"].firstMatch.tap()
         XCTAssertTrue(app.buttons["ai.new.chat"].waitForExistence(timeout: 10))
         app.buttons["ai.new.chat"].tap()
         XCTAssertFalse(app.staticTexts["Ein zweiter Gedanke."].exists, "New chat does not leak previous history")
-        app.navigationBars.buttons.firstMatch.tap()
+        app.navigationBars.buttons["KI-Begleiter"].firstMatch.tap()
         let saved = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'ai.chat.'")).allElementsBoundByIndex
         XCTAssertEqual(saved.count, 2)
         saved.last!.tap()
@@ -315,7 +317,7 @@ final class TherapieUITests: XCTestCase {
         app.buttons["Gespräch im Tagebuch speichern"].tap()
         XCTAssertTrue(app.alerts["Gespräch im Tagebuch speichern?"].waitForExistence(timeout: 10))
         app.alerts.buttons["Speichern"].tap()
-        XCTAssertTrue(app.textFields["ai.composer"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.textViews["ai.composer"].waitForExistence(timeout: 10))
         capture("Wieder geöffnetes Gespräch im Tagebuch gespeichert")
     }
 
@@ -324,7 +326,7 @@ final class TherapieUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing", "--show-dashboard", "--buddy-network-fixture", "--buddy-guided-fixture"]
         app.launch()
-        let input = app.textFields["ai.composer"].firstMatch
+        let input = app.textViews["ai.composer"].firstMatch
         XCTAssertTrue(input.waitForExistence(timeout: 25))
         input.tap(); input.typeText("Meine Schwester gibt mir Sicherheit.")
         app.buttons["ai.send"].tap()
