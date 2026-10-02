@@ -53,7 +53,7 @@ if os.environ.get('BUDDY_SMOKE') == '1':
     command[command.index('CODE_SIGNING_ALLOWED=NO'):command.index('CODE_SIGNING_ALLOWED=NO')] = [
         '-only-testing:TherapieUITests/TherapieUITests/testChatSendWithKeyboardNewChatAndReopen',
         '-only-testing:TherapieUITests/TherapieUITests/testGuidedAIKeepsDraftWhenSwitchingToNormal']
-print('Testing saved overview and real task removal on', phone['name'], flush=True)
+print('Testing chat send and nested menus' if os.environ.get('BUDDY_SMOKE') == '1' else 'Testing the full native UI regressions', 'on', phone['name'], flush=True)
 with (output / 'test.log').open('w') as log:
     process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
     try:
@@ -82,4 +82,4 @@ except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
 if code:
     print((output / 'test.log').read_text()[-16000:], flush=True)
     raise SystemExit(1)
-print('Check-in UI regressions passed: read-only overview, explicit edit/save, focused keyboard, first/last/all rows, repeat add/remove, saved draft resume, nested audio/archive/media windows, saved-note attachments and therapy cancellation/restore.', flush=True)
+print('Focused chat Send and parent-preserving nested-menu tests passed.' if os.environ.get('BUDDY_SMOKE') == '1' else 'Full native UI regressions passed.', flush=True)
