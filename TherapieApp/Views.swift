@@ -42,26 +42,7 @@ struct RootView: View {
         .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
         .tint(.indigo)
         .accessibilityIdentifier("therapy.root")
-        .sheet(item: $modal, onDismiss: presentRequested) { route in
-            switch route {
-            case .ai: NavigationStack { AIBuddyView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Schließen") { modal = nil } } } }
-            case .permissions: PermissionSetupView()
-            case .session:
-                NavigationStack {
-                    SessionConductorView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fertig") { modal = nil } } }
-                        .sheet(item: $store.pendingGuidedCheckIn) { GuidedCheckInDestination(entry: $0) }
-                }
-            case .checkIn(let entry): GuidedCheckInDestination(entry: entry)
-            case .task(let task): WeeklyTaskEditorView(task: task)
-            case .routine(let id): RoutineDetailView(routineID: id)
-            case .widgetSetup: WidgetSetupHelpView()
-            case .routines: NavigationStack { RoutineHubView() }
-            case .reminders: NavigationStack { ReminderCenterView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { modal = nil } } } }
-            case .therapy: TherapyAppointmentsView()
-            case .mood: MoodEditorView()
-            case .energy: WeeklyEnergyEditorView()
-            }
-        }
+        .sheet(item: $modal, onDismiss: presentRequested) { modalContent($0) }
         .onOpenURL { url in
             guard url.scheme == "therapie" else { return }
             switch url.host {
@@ -78,18 +59,7 @@ struct RootView: View {
             }
         }
         .onChange(of: scenePhase) { _, phase in if phase == .active { store.sessionController.synchronize(); store.consumeRoutineAlarmRoute(); store.refreshTherapyCalendar(force: false); TaskNotificationCoordinator.shared.refresh(store); TherapyWidgetBridge.refresh(store) } }
-        .onChange(of: store.notificationAIHub) { _, _ in presentRequested() }
-        .onChange(of: showPermissions) { _, _ in presentRequested() }
-        .onChange(of: store.notificationSession) { _, _ in presentRequested() }
-        .onChange(of: store.pendingGuidedCheckIn) { _, _ in presentRequested() }
-        .onChange(of: store.notificationTaskID) { _, _ in presentRequested() }
-        .onChange(of: store.notificationRoutineID) { _, _ in presentRequested() }
-        .onChange(of: store.notificationWidgetSetup) { _, _ in presentRequested() }
-        .onChange(of: store.notificationRoutines) { _, _ in presentRequested() }
-        .onChange(of: store.notificationReminders) { _, _ in presentRequested() }
-        .onChange(of: store.notificationTherapy) { _, _ in presentRequested() }
-        .onChange(of: store.notificationMood) { _, _ in presentRequested() }
-        .onChange(of: store.openEnergyReview) { _, _ in presentRequested() }
+        .onChange(of: presentationRequestKey) { _, _ in presentRequested() }
         .onAppear { presentRequested() }
         .task {
             store.sessionController.synchronize()
@@ -138,6 +108,31 @@ struct RootView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder private func modalContent(_ route: RootModal) -> some View {
+            switch route {
+            case .ai: NavigationStack { AIBuddyView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Schließen") { modal = nil } } } }
+            case .permissions: PermissionSetupView()
+            case .session:
+                NavigationStack {
+                    SessionConductorView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fertig") { modal = nil } } }
+                        .sheet(item: $store.pendingGuidedCheckIn) { GuidedCheckInDestination(entry: $0) }
+                }
+            case .checkIn(let entry): GuidedCheckInDestination(entry: entry)
+            case .task(let task): WeeklyTaskEditorView(task: task)
+            case .routine(let id): RoutineDetailView(routineID: id)
+            case .widgetSetup: WidgetSetupHelpView()
+            case .routines: NavigationStack { RoutineHubView() }
+            case .reminders: NavigationStack { ReminderCenterView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { modal = nil } } } }
+            case .therapy: TherapyAppointmentsView()
+            case .mood: MoodEditorView()
+            case .energy: WeeklyEnergyEditorView()
+            }
+    }
+    private var presentationRequestKey: String {
+        let flags = [showPermissions, store.notificationSession, store.notificationAIHub, store.notificationWidgetSetup, store.notificationRoutines, store.notificationReminders, store.notificationTherapy, store.notificationMood, store.openEnergyReview]
+        return flags.map { $0 ? "1" : "0" }.joined() + (store.pendingGuidedCheckIn?.id.uuidString ?? "") + (store.notificationTaskID?.uuidString ?? "") + (store.notificationRoutineID?.uuidString ?? "")
     }
 
     private func presentRequested() {

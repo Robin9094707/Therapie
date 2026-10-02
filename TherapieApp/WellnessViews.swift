@@ -541,6 +541,7 @@ struct MoodEditorView: View {
 }
 
 struct BatteryPointEditorView: View {
+    @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
     @State private var point: BatteryPoint
     @State private var discard = false

@@ -476,7 +476,7 @@ struct AIBuddyActionReviewView: View {
 private struct BuddyTypingBubble: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var body: some View {
-        TimelineView(.animation(minimumInterval: 0.25, paused: reduceMotion)) { timeline in
+        SwiftUI.TimelineView(.animation(minimumInterval: 0.25, paused: reduceMotion)) { timeline in
             HStack(spacing: 6) {
                 ForEach(0..<3) { index in
                     let active = Int(timeline.date.timeIntervalSinceReferenceDate * 3) % 3 == index
