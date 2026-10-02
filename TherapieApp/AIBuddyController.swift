@@ -59,7 +59,7 @@ import UIKit
             }
             if fixture {
                 try await Task.sleep(for: .milliseconds(150))
-                let proposal = draft == nil ? nil : AIBuddyCheckInProposal(summary: clean, tags: ["Familie"])
+                let proposal = draft == nil ? nil : AIBuddyCheckInProposal(advance: true, answeredStep: draft?.step, summary: clean, tags: ["Familie"])
                 let message = draft.map { AICheckInGuide.questions[min(7, $0.step + 1)] } ?? "Deine Nachricht ist angekommen. Möchtest du sie im Tagebuch festhalten?"
                 let reply = AIBuddyReply(title: "Dein Gedanke", message: message, sections: [], actions: [], checkIn: proposal)
                 return AIBuddyResponse(reply: reply)
@@ -73,25 +73,28 @@ import UIKit
             try Task.checkCancellation()
             guard !task.isCancelled, activeID == identifier, store.data.aiSettings.enabled, store.data.aiConversations.contains(where: { $0.id == chatID }), store.data.aiMessages.contains(where: { $0.id == userID }) else { return false }
             var snapshot = store.data
-            snapshot.aiMessages.append(AIBuddyMessage(role: "assistant", text: result.reply.journalText, reply: result.reply, contextStart: context.start, contextEnd: context.end, model: settings.model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, conversationID: chatID))
+            var reply = result.reply
             if let index = snapshot.aiConversations.firstIndex(where: { $0.id == chatID }) {
                 snapshot.aiConversations[index].updatedAt = Date()
-                if let memory = result.reply.memory { snapshot.aiConversations[index].memory = String(AIBuddyText.plain(memory).prefix(1800)) }
+                if let memory = reply.memory { snapshot.aiConversations[index].memory = String(AIBuddyText.plain(memory).prefix(1800)) }
                 let userText = snapshot.aiMessages.filter { $0.conversationID == chatID && $0.role == "user" }.map(\.text).joined(separator: "\n")
                 snapshot.aiConversations[index].tags = BuddyInteraction.hashtags(result.reply.tags ?? [], text: userText, known: AppHashtags.catalog(snapshot))
                 if snapshot.aiConversations[index].title == "Neues Gespräch" { snapshot.aiConversations[index].title = String(clean.prefix(60)) }
             }
-            if let id = chat.checkInID, let index = snapshot.guidedCheckIns.firstIndex(where: { $0.id == id && $0.isDraft }), let proposal = result.reply.checkIn {
+            if let id = chat.checkInID, let index = snapshot.guidedCheckIns.firstIndex(where: { $0.id == id && $0.isDraft }) {
                 var entry = snapshot.guidedCheckIns[index]
-                if AICheckInGuide.apply(proposal, to: &entry, known: AppHashtags.catalog(snapshot)) {
+                let proposal = reply.checkIn ?? AIBuddyCheckInProposal(advance: false)
+                if AICheckInGuide.apply(proposal, to: &entry, known: AppHashtags.catalog(snapshot), userText: clean) {
                     let userText = snapshot.aiMessages.filter { $0.conversationID == chatID && $0.role == "user" }.map(\.text).joined(separator: "\n")
-                    entry.tags = BuddyInteraction.hashtags((entry.tags ?? []) + (result.reply.tags ?? []), text: userText, known: AppHashtags.catalog(snapshot))
+                    let keywords = (entry.energyPoints ?? []).map(\.title)
+                    entry.tags = BuddyInteraction.hashtags(keywords + (entry.tags ?? []) + (reply.tags ?? []), text: userText, known: AppHashtags.catalog(snapshot))
                     _ = GuidedCheckInMutation.apply(entry, complete: false, to: &snapshot)
+                    reply = AICheckInGuide.alignedReply(reply, entry: entry)
                 }
             }
+            snapshot.aiMessages.append(AIBuddyMessage(role: "assistant", text: reply.journalText, reply: reply, contextStart: context.start, contextEnd: context.end, model: settings.model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, conversationID: chatID))
             store.data = snapshot
             if let failure = store.lastSaveError { error = failure; return false }
-            if draft != nil && result.reply.checkIn == nil { error = "Die Antwort enthielt keine auswertbaren Check-in-Angaben. Deine Frage bleibt offen. Versuche es erneut oder setze normal fort."; return false }
             return true
         } catch is CancellationError { return false }
         catch { self.error = error.localizedDescription; return false }

@@ -298,7 +298,7 @@ struct BatteryPointCard: View {
                 Image(systemName: point.direction.symbol).font(.title2).foregroundStyle(point.direction == .gives ? .teal : .orange).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 5) {
                     Text(point.title).font(.headline)
-                    Text("\(point.direction.title) · Wirkung \(point.impact)/5").font(.subheadline).foregroundStyle(point.direction == .gives ? .teal : .orange)
+                    Text("\(point.direction.title) · Wirkung \(point.impactDescription)").font(.subheadline).foregroundStyle(point.direction == .gives ? .teal : .orange)
                     Label(point.category.title, systemImage: point.category.symbol).font(.caption).foregroundStyle(.secondary)
                     Text(point.date.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
                     if !point.note.isEmpty { Text(point.note).font(.subheadline).lineLimit(4) }
@@ -384,7 +384,7 @@ struct WellnessChartsView: View {
                         }.font(.caption.bold())
                         Text("\(points.filter { $0.direction == .gives }.count) Geber · \(points.filter { $0.direction == .takes }.count) Nehmer").font(.subheadline)
                         ForEach(Array(points.sorted { $0.impact > $1.impact }.prefix(3))) { point in
-                            Label("\(point.title) · \(point.impact)/5", systemImage: point.direction.symbol)
+                            Label("\(point.title) · \(point.impactDescription)", systemImage: point.direction.symbol)
                                 .font(.subheadline).foregroundStyle(point.direction == .gives ? .teal : .orange)
                         }
                     }
@@ -471,7 +471,7 @@ struct MoodEditorView: View {
                             Button { pointDraft = point } label: {
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(point.title).font(.headline)
-                                    Text("\(point.direction.title) · \(point.impact)/5").font(.caption).foregroundStyle(.secondary)
+                                    Text("\(point.direction.title) · \(point.impactDescription)").font(.caption).foregroundStyle(.secondary)
                                 }
                             }.buttonStyle(.plain)
                             Spacer()
@@ -570,7 +570,7 @@ struct BatteryPointEditorView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { if point != initial { discard = true } else { dismiss() } } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Speichern") { if onSave(point) { store.removeEditorDraft(point.id); if store.lastSaveError == nil { dismiss() } } }.disabled(point.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Button("Speichern") { var rated = point; rated.impactConfirmed = true; if onSave(rated) { store.removeEditorDraft(point.id); if store.lastSaveError == nil { dismiss() } } }.disabled(point.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
             .interactiveDismissDisabled(point != initial)

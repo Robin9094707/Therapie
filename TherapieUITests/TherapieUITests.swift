@@ -218,6 +218,26 @@ final class TherapieUITests: XCTestCase {
     }
 
     @MainActor
+    func testTodayRoutineCompletionCancelAndConfirm() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--show-dashboard", "--personalization-fixture"]
+        app.launch()
+        let complete = app.buttons["today.routine.complete"].firstMatch
+        XCTAssertTrue(app.buttons["today.customize"].waitForExistence(timeout: 20))
+        for _ in 0..<8 where !complete.isHittable { app.swipeUp() }
+        XCTAssertTrue(complete.isHittable)
+        complete.tap()
+        XCTAssertTrue(app.alerts["Routine wirklich erledigt?"].waitForExistence(timeout: 5))
+        app.alerts.buttons["Abbrechen"].tap()
+        XCTAssertTrue(complete.isHittable, "Cancel leaves the same occurrence open")
+        complete.tap()
+        XCTAssertTrue(app.alerts["Routine wirklich erledigt?"].waitForExistence(timeout: 5))
+        app.alerts.buttons["Ja, ich habe sie erledigt"].tap()
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: complete)], timeout: 10), .completed)
+        capture("Routine direkt von Heute bestätigt")
+    }
+
+    @MainActor
     func testTodayCustomizationRoutineConfirmationAndArchiveFilters() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing", "--show-dashboard", "--personalization-fixture"]

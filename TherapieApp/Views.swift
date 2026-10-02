@@ -30,7 +30,12 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if store.loadError != nil {
+            if store.waitingForProtectedData {
+                VStack(spacing: 16) {
+                    ProgressView("Deine Daten werden geöffnet …")
+                    Text("Nach dem Entsperren geht es automatisch weiter.").font(.subheadline).foregroundStyle(.secondary)
+                }.padding()
+            } else if store.loadError != nil {
                 SettingsView()
             } else if store.data.profile.onboardingCompleted {
                 if ProcessInfo.processInfo.arguments.contains("--show-routines") { NavigationStack { RoutineHubView() }.safeAreaInset(edge: .bottom) { UndoChangesButton() } } else { MainTabView() }
@@ -58,18 +63,19 @@ struct RootView: View {
             default: break
             }
         }
-        .onChange(of: scenePhase) { _, phase in if phase == .active { store.sessionController.synchronize(); store.consumeRoutineAlarmRoute(); store.refreshTherapyCalendar(force: false); TaskNotificationCoordinator.shared.refresh(store); TherapyWidgetBridge.refresh(store) } }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { store.resumeProtectedStorage(); if store.storageReady { store.sessionController.synchronize(); store.consumeRoutineAlarmRoute(); store.refreshTherapyCalendar(force: false); TaskNotificationCoordinator.shared.refresh(store); TherapyWidgetBridge.refresh(store); presentRequested() } } }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in store.resumeProtectedStorage(); presentRequested() }
+        .onChange(of: store.waitingForProtectedData) { _, waiting in if !waiting { presentRequested() } }
         .onChange(of: presentationRequestKey) { _, _ in presentRequested() }
         .onAppear { presentRequested() }
         .task {
-            store.sessionController.synchronize()
-            store.refreshTherapyCalendar(force: false)
-            store.consumeRoutineAlarmRoute()
-            if modal == nil { await store.aiController.refreshWeeklyReview() }
+            store.resumeProtectedStorage()
+            if store.storageReady { store.sessionController.synchronize(); store.refreshTherapyCalendar(force: false); store.consumeRoutineAlarmRoute() }
+            if store.storageReady && modal == nil { await store.aiController.refreshWeeklyReview() }
             while !Task.isCancelled {
-                store.sessionController.reconcile()
-                store.consumeRoutineAlarmRoute()
-                if Date().timeIntervalSince(lastReminderRefresh) >= 300 && store.loadError == nil && store.lastSaveError == nil {
+                store.resumeProtectedStorage()
+                if store.storageReady && scenePhase == .active { store.sessionController.reconcile(); store.consumeRoutineAlarmRoute(); presentRequested() }
+                if Date().timeIntervalSince(lastReminderRefresh) >= 300 && store.storageReady && store.lastSaveError == nil {
                     lastReminderRefresh = Date()
                     store.pruneUndo()
                     TaskNotificationCoordinator.shared.refresh(store)
@@ -136,7 +142,7 @@ struct RootView: View {
 
     private func presentRequested() {
         // One stable presentation owner. Other requests wait for this sheet to close.
-        guard modal == nil else { return }
+        guard modal == nil, store.storageReady, scenePhase == .active else { return }
         if showPermissions { showPermissions = false; modal = .permissions }
         else if store.notificationSession { store.notificationSession = false; modal = .session }
         else if let entry = store.pendingGuidedCheckIn { store.pendingGuidedCheckIn = nil; modal = .checkIn(entry) }
@@ -463,6 +469,8 @@ struct DashboardView: View {
     @State private var showEnergy = false
     @State private var showReflection = false
     @State private var customize = false
+    @State private var routineToComplete: RoutineOccurrence?
+    @State private var confirmRoutineCompletion = false
 
     private var currentTask: WeeklyTask? {
         let week = Date().therapyWeek
@@ -521,6 +529,12 @@ struct DashboardView: View {
                 AddReflectionView()
                     .presentationDetents([.medium, .large])
             }
+            .alert("Routine wirklich erledigt?", isPresented: $confirmRoutineCompletion, presenting: routineToComplete) { occurrence in
+                Button("Abbrechen", role: .cancel) { routineToComplete = nil }
+                Button("Ja, ich habe sie erledigt") { store.resolveRoutine(occurrence, outcome: .done); routineToComplete = nil }
+            } message: { occurrence in
+                Text("Bestätige nur, wenn du „\(store.data.routines.first { $0.id == occurrence.routineID }?.title ?? "diese Routine")“ wirklich abgeschlossen hast.")
+            }
         }
     }
 
@@ -529,7 +543,7 @@ struct DashboardView: View {
         case .appointment: TherapyAppointmentCard()
         case .discussion: TherapyDiscussionCard()
         case .checkIns: CompanionTodayCard()
-        case .routines: TodayRoutinesCard()
+        case .routines: TodayRoutinesCard { occurrence in routineToComplete = occurrence; confirmRoutineCompletion = true }
         case .overview: TodayOverviewCard()
         case .quickActions: quickActions
         case .session: TodaySessionCard()

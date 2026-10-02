@@ -93,6 +93,7 @@ extension AppStore {
         data = snapshot
     }
     func consumeRoutineAlarmRoute() {
+        guard storageReady else { return }
         if let route = UserDefaults.standard.string(forKey: "therapy.companion.open") {
             UserDefaults.standard.removeObject(forKey: "therapy.companion.open")
             let parts = route.split(separator: "|", omittingEmptySubsequences: false).map(String.init)

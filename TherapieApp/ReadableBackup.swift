@@ -1,6 +1,16 @@
 import Foundation
 import CryptoKit
 
+enum AppFileAccess {
+    static func isTemporaryDenial(_ error: Error) -> Bool {
+        let value = error as NSError
+        if value.domain == NSCocoaErrorDomain && [NSFileReadNoPermissionError, NSFileWriteNoPermissionError].contains(value.code) { return true }
+        if value.domain == NSPOSIXErrorDomain && [1, 13].contains(value.code) { return true }
+        if let underlying = value.userInfo[NSUnderlyingErrorKey] as? NSError { return isTemporaryDenial(underlying) }
+        return false
+    }
+}
+
 enum AppFileStorage {
     static func root(applicationSupport: URL, documents: URL, folder: String) throws -> URL {
         let target = documents.appendingPathComponent(folder == "Therapie" ? "Therapiedaten" : folder, isDirectory: true)
@@ -29,7 +39,7 @@ enum ReadableBackup {
         return String(path.dropFirst(prefix.count))
     }
     static let labels: [String: String] = [
-        "accentTheme": "Hauptfarbe", "wellbeingPreferences": "Befinden-Einstellungen", "estimateBattery": "Akku-Schaetzung aktiviert", "hourlyDecline": "Prozentpunkte je Stunde", "satisfaction": "Selbstberichtete Zufriedenheit", "memory": "Kurze Gespraechsnotiz", "quickReplies": "Passende Antwortvorschlaege", "speakReplies": "Antworten automatisch vorlesen", "conversationTranscript": "Vollstaendiges Gespraech", "conversationID": "Gespraech-ID", "percent": "Akku in Prozent",
+        "impactConfirmed": "Akku-Wirkung bestaetigt", "answeredStep": "Beantwortetes Check-in-Modul", "accentTheme": "Hauptfarbe", "wellbeingPreferences": "Befinden-Einstellungen", "estimateBattery": "Akku-Schaetzung aktiviert", "hourlyDecline": "Prozentpunkte je Stunde", "satisfaction": "Selbstberichtete Zufriedenheit", "memory": "Kurze Gespraechsnotiz", "quickReplies": "Passende Antwortvorschlaege", "speakReplies": "Antworten automatisch vorlesen", "conversationTranscript": "Vollstaendiges Gespraech", "conversationID": "Gespraech-ID", "percent": "Akku in Prozent",
         "editorDrafts": "Gespeicherte Entwuerfe", "draftText": "Noch nicht gesendeter Text", "weeklyReviewEnabled": "Automatischer Wochenrueckblick", "lastWeeklyReview": "Letzter Wochenrueckblick", "repeatEveryWeeks": "Alle x Wochen", "endsAt": "Enddatum", "recurrenceAnchor": "Wiederholung ab",
         "aiConversations": "KI-Chats", "hashtagCatalog": "Hashtags", "aiSettings": "KI-Einstellungen", "aiMessages": "KI-Gespraeche", "therapyDiscussionAcknowledgedIDs": "Besprochene Gespraechspunkte",
         "recurrence": "Therapie-Rhythmus", "extraAppointments": "Einzelne Zusatztermine", "additionalWeeklySlots": "Weitere Wochentermine", "unit": "Intervall-Einheit", "interval": "Intervall", "anchor": "Startdatum", "exactTime": "Absage gilt nur fuer diese Uhrzeit",

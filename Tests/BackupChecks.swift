@@ -109,7 +109,7 @@ struct BackupChecks {
         data.notes[0].updatedAt = Date()
         data.moodCheckIns = [MoodCheckIn(mood: 4, battery: 3, moodPercent: 76)]
         data.guidedCheckIns[0].moodPercent = 77
-        let point = BatteryPoint(title: "Technik", direction: .gives, note: "Ruhe beim Tüfteln", checkInID: data.guidedCheckIns[0].id)
+        let point = BatteryPoint(title: "Technik", direction: .gives, note: "Ruhe beim Tüfteln", checkInID: data.guidedCheckIns[0].id, impactConfirmed: false)
         data.guidedCheckIns[0].energyPoints = [point]
         data.batteryPoints = [point]
         data.companionSettings.dayCheckInSlots = DailyCheckInSlot.defaults + [DailyCheckInSlot(name: "Mein Moment", startHour: 12, endHour: 13)]
@@ -138,6 +138,11 @@ struct BackupChecks {
         try expect(try json(prepared.manifest.data) == json(data.portableSnapshot), "All AppData fields round-trip")
         try expect(prepared.manifest.data.dashboard == data.dashboard && prepared.manifest.data.archivePreferences == data.archivePreferences, "Encrypted restore retains cards, pins and archive settings")
         try expect(prepared.manifest.data.aiConversations[0].id == data.aiConversations[0].id && prepared.manifest.data.aiConversations[0].contextDays == 14 && prepared.manifest.data.guidedCheckIns[0].tags == ["Familie"] && prepared.manifest.data.hashtagCatalog == data.hashtagCatalog, "Encrypted backup restores linked chats, context and hashtags")
+        try expect(prepared.manifest.data.batteryPoints[0].impactConfirmed == false && prepared.manifest.data.guidedCheckIns[0].energyPoints?[0].signedImpact == 0, "Encrypted backups preserve unresolved AI energy impact without guessing")
+        var legacyPoint = try JSONSerialization.jsonObject(with: BackupArchive.encoder().encode(point)) as! [String: Any]
+        legacyPoint.removeValue(forKey: "impactConfirmed")
+        let migratedPoint = try BackupArchive.decoder().decode(BatteryPoint.self, from: JSONSerialization.data(withJSONObject: legacyPoint))
+        try expect(migratedPoint.hasConfirmedImpact && migratedPoint.signedImpact == 3, "Old battery points retain their previously selected strength")
         var noCompanion = prepared.manifest
         noCompanion.data.guidedCheckIns = []; noCompanion.data.routines = []; noCompanion.data.routineCompletions = []; noCompanion.data.routineSnoozes = []
         try expect(prepared.manifest.entryCount - noCompanion.entryCount == data.guidedCheckIns.count + data.routines.count + data.routineCompletions.count + data.routineSnoozes.count, "Backup overview counts all companion records")

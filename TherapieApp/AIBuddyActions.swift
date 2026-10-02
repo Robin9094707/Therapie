@@ -61,7 +61,7 @@ enum AIBuddyMutation {
             snapshot.routineSnoozes.removeAll { $0.id == occurrence.id }
         case .guidedCheckIn: throw AIBuddyAPIError(message: "Der Check-in wird direkt geöffnet.")
         case .energy:
-            snapshot.batteryPoints.insert(BatteryPoint(date: min(date, now), title: title, direction: action.targetID == "takes" ? .takes : .gives, note: text), at: 0)
+            snapshot.batteryPoints.insert(BatteryPoint(date: min(date, now), title: AIEnergyKeywords.title(title), direction: action.targetID == "takes" ? .takes : .gives, impact: action.options?.valueInt ?? 3, note: text, impactConfirmed: action.options?.valueInt != nil), at: 0)
         case .updateTask, .deleteTask:
             guard let id = action.targetID.flatMap(UUID.init(uuidString:)), let index = snapshot.weeklyTasks.firstIndex(where: { $0.id == id }) else { throw AIBuddyAPIError(message: "Diese Aufgabe ist nicht mehr vorhanden.") }
             if action.kind == .deleteTask { snapshot.weeklyTasks.remove(at: index) }

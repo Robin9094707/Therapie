@@ -1,5 +1,6 @@
 import Foundation
 import CoreLocation
+import UIKit
 
 @MainActor
 final class AppStore: ObservableObject {
@@ -21,6 +22,12 @@ final class AppStore: ObservableObject {
 
     @Published var lastSaveError: String?
     @Published private(set) var loadError: String?
+    @Published private(set) var waitingForProtectedData = false
+    private var initialLoadComplete = false
+    private var deferredSave = false
+    private var storageFolder = "Therapie"
+    private var lastStorageRetry = Date.distantPast
+    var storageReady: Bool { initialLoadComplete && !waitingForProtectedData && loadError == nil && UIApplication.shared.isProtectedDataAvailable }
     @Published private(set) var readableFileStatus = "Lesbare Dateien werden vorbereitet."
     @Published var taskReminderStatus = ""
     @Published var notificationTaskID: UUID?
@@ -65,54 +72,20 @@ final class AppStore: ObservableObject {
     init() {
         let fm = FileManager.default
         let folder = ProcessInfo.processInfo.arguments.contains("--ui-testing") ? "TherapieUITests" : "Therapie"
-        let support = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let documents = fm.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let root: URL
-        let migrationFailure: String?
-        do { root = try AppFileStorage.root(applicationSupport: support, documents: documents, folder: folder); migrationFailure = nil }
-        catch { root = support.appendingPathComponent(folder); migrationFailure = error.localizedDescription }
+        storageFolder = folder
+        let root = documents.appendingPathComponent(folder == "Therapie" ? "Therapiedaten" : folder, isDirectory: true)
         rootURL = root
         mediaURL = root.appendingPathComponent("Media", isDirectory: true)
         recordingsURL = root.appendingPathComponent("Recordings", isDirectory: true)
         dataURL = root.appendingPathComponent("therapy-data.json")
-
-        let recoveryFailure: String?
-        do { try BackupArchive.recoverInterruptedRestore(root: root); recoveryFailure = migrationFailure }
-        catch { recoveryFailure = error.localizedDescription }
-        BackupArchive.cleanAbandonedTransfers(root: root)
-        if recoveryFailure == nil { try? fm.createDirectory(at: root, withIntermediateDirectories: true) }
-        if recoveryFailure == nil {
-            try? fm.createDirectory(at: mediaURL, withIntermediateDirectories: true)
-            try? fm.createDirectory(at: recordingsURL, withIntermediateDirectories: true)
-            for directory in [root, mediaURL, recordingsURL] { try? BackupArchive.protect(directory) }
-        }
-
         data = AppData()
-        if let recoveryFailure {
-            writeBlocked = true
-            loadError = "Eine unterbrochene Wiederherstellung konnte nicht abgeschlossen werden. Die vorherige Sicherung bleibt erhalten. " + recoveryFailure
-            lastSaveError = loadError
-        }
-        if fm.fileExists(atPath: dataURL.path) {
-            do {
-                let raw = try Data(contentsOf: dataURL)
-                let decoder = JSONDecoder()
-                decoder.dateDecodingStrategy = .iso8601
-                data = try decoder.decode(AppData.self, from: raw)
-                let version = (try JSONSerialization.jsonObject(with: raw) as? [String: Any])?["schemaVersion"] as? Int ?? 1
-                let snapshot = root.appendingPathComponent("therapy-data.pre-3009.json")
-                if version < 11 && !fm.fileExists(atPath: snapshot.path) {
-                    try raw.write(to: snapshot, options: [.atomic, .completeFileProtection])
-                }
-            } catch {
-                writeBlocked = true
-                loadError = "Vorhandene Daten konnten nicht sicher geöffnet werden. Die Originaldatei bleibt unverändert. Bitte stelle ein gültiges Backup wieder her. " + error.localizedDescription
-                lastSaveError = loadError
-            }
-        }
+        loadStoredData()
         if ProcessInfo.processInfo.arguments.contains("--ui-testing") {
             writeBlocked = false
             loadError = nil
+            waitingForProtectedData = false
+            initialLoadComplete = true
             data = AppData()
             if ProcessInfo.processInfo.arguments.contains("--show-dashboard") {
                 data.profile = UserProfile(userName: "Robin", therapistName: "Therapeutin", onboardingCompleted: true)
@@ -164,10 +137,78 @@ final class AppStore: ObservableObject {
         }
         isLoading = false
         TaskNotificationCoordinator.shared.attach(self)
-        if loadError == nil {
+        if storageReady {
             if !fm.fileExists(atPath: dataURL.path) { save() } else { refreshReadableFiles(); TaskNotificationCoordinator.shared.refresh(self); TherapyWidgetBridge.refresh(self) }
         }
 
+    }
+
+    private func loadStoredData() {
+        guard !initialLoadComplete else { return }
+        guard UIApplication.shared.isProtectedDataAvailable else {
+            writeBlocked = true; waitingForProtectedData = true
+            return
+        }
+        let fm = FileManager.default
+        do {
+            let support = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            let documents = fm.urls(for: .documentDirectory, in: .userDomainMask).first!
+            let migrated = try AppFileStorage.root(applicationSupport: support, documents: documents, folder: storageFolder)
+            guard migrated == rootURL else { throw ServiceError.generic("Der Datenordner konnte nicht eindeutig geöffnet werden.") }
+            try BackupArchive.recoverInterruptedRestore(root: rootURL)
+            for directory in [rootURL, mediaURL, recordingsURL] {
+                try fm.createDirectory(at: directory, withIntermediateDirectories: true)
+                try BackupArchive.protect(directory)
+            }
+            let raw: Data?
+            do { raw = try Data(contentsOf: dataURL) }
+            catch {
+                let value = error as NSError
+                guard value.domain == NSCocoaErrorDomain && value.code == NSFileReadNoSuchFileError else { throw error }
+                raw = nil
+            }
+            var loaded = AppData()
+            if let raw {
+                let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+                loaded = try decoder.decode(AppData.self, from: raw)
+                let version = (try JSONSerialization.jsonObject(with: raw) as? [String: Any])?["schemaVersion"] as? Int ?? 1
+                let snapshot = rootURL.appendingPathComponent("therapy-data.pre-3009.json")
+                if version < 11 && !fm.fileExists(atPath: snapshot.path) { try raw.write(to: snapshot, options: [.atomic, .completeFileProtection]) }
+            }
+            let wasLoading = isLoading; isLoading = true
+            data = loaded
+            isLoading = wasLoading
+            writeBlocked = false; waitingForProtectedData = false
+            loadError = nil; lastSaveError = nil; initialLoadComplete = true
+            BackupArchive.cleanAbandonedTransfers(root: rootURL)
+        } catch {
+            writeBlocked = true
+            if !UIApplication.shared.isProtectedDataAvailable || AppFileAccess.isTemporaryDenial(error) {
+                // Alarm intents can launch before the keybag unlock completes. Retry in place;
+                // never replace existing data with a fresh snapshot or ask for a backup here.
+                waitingForProtectedData = true; loadError = nil; lastSaveError = nil
+            } else {
+                waitingForProtectedData = false
+                loadError = "Vorhandene Daten konnten nicht sicher geöffnet werden. Die Originaldatei bleibt unverändert. " + error.localizedDescription
+                lastSaveError = loadError
+            }
+        }
+    }
+
+    func resumeProtectedStorage() {
+        guard UIApplication.shared.isProtectedDataAvailable else { return }
+        if !initialLoadComplete {
+            guard loadError == nil, Date().timeIntervalSince(lastStorageRetry) >= 1 else { return }
+            lastStorageRetry = Date()
+            loadStoredData()
+            if storageReady {
+                if !FileManager.default.fileExists(atPath: dataURL.path) { save() }
+                else { refreshReadableFiles(); TaskNotificationCoordinator.shared.refresh(self); TherapyWidgetBridge.refresh(self) }
+            }
+        } else if deferredSave {
+            waitingForProtectedData = false
+            save()
+        }
     }
 
     func refreshTherapyCalendar(force: Bool = true) {
@@ -188,7 +229,12 @@ final class AppStore: ObservableObject {
     }
 
     func save() {
-        guard !writeBlocked else { lastSaveError = loadError; return }
+        guard !writeBlocked, initialLoadComplete else { lastSaveError = loadError; return }
+        guard UIApplication.shared.isProtectedDataAvailable else {
+            deferredSave = true; waitingForProtectedData = true
+            lastSaveError = "Deine Eingabe wartet auf den entsperrten Dateizugriff und wird danach erneut gespeichert."
+            return
+        }
         do {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -199,13 +245,15 @@ final class AppStore: ObservableObject {
                 [.protectionKey: FileProtectionType.complete],
                 ofItemAtPath: dataURL.path
             )
-            lastSaveError = nil
+            lastSaveError = nil; deferredSave = false; waitingForProtectedData = false
             TherapyWidgetBridge.refresh(self)
             scheduleAutomaticBackup(snapshot: data)
             refreshReadableFiles()
             TaskNotificationCoordinator.shared.refresh(self)
         } catch {
-            lastSaveError = error.localizedDescription
+            deferredSave = AppFileAccess.isTemporaryDenial(error) || !UIApplication.shared.isProtectedDataAvailable
+            waitingForProtectedData = deferredSave
+            lastSaveError = deferredSave ? "Der Dateizugriff ist kurz gesperrt. Deine Eingabe wird nach dem Entsperren erneut gespeichert." : error.localizedDescription
         }
     }
 
@@ -257,6 +305,7 @@ final class AppStore: ObservableObject {
         data = restored
         writeBlocked = false
         loadError = nil
+        initialLoadComplete = true; waitingForProtectedData = false; deferredSave = false
         isLoading = false
         save()
     }
@@ -291,6 +340,7 @@ final class AppStore: ObservableObject {
         isLoading = true
         data = restored
         writeBlocked = false; loadError = nil; lastSaveError = nil
+        initialLoadComplete = true; waitingForProtectedData = false; deferredSave = false
         isLoading = false
         TherapyEffects.shared.light()
         sessionController.restoredData()
@@ -585,6 +635,7 @@ final class AppStore: ObservableObject {
         data = AppData()
         writeBlocked = false
         loadError = nil
+        initialLoadComplete = true; waitingForProtectedData = false; deferredSave = false
         isLoading = false
         save()
     }

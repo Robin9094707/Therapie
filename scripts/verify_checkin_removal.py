@@ -53,6 +53,11 @@ if os.environ.get('BUDDY_SMOKE') == '1':
     command[command.index('CODE_SIGNING_ALLOWED=NO'):command.index('CODE_SIGNING_ALLOWED=NO')] = [
         '-only-testing:TherapieUITests/TherapieUITests/testChatSendWithKeyboardNewChatAndReopen',
         '-only-testing:TherapieUITests/TherapieUITests/testGuidedAIKeepsDraftWhenSwitchingToNormal']
+if os.environ.get('BUGFIX_SMOKE') == '1':
+    command = [part for part in command if not part.startswith('-only-testing:')]
+    command[command.index('CODE_SIGNING_ALLOWED=NO'):command.index('CODE_SIGNING_ALLOWED=NO')] = [
+        '-only-testing:TherapieUITests/TherapieUITests/testTodayRoutineCompletionCancelAndConfirm',
+        '-only-testing:TherapieUITests/TherapieUITests/testGuidedAIKeepsDraftWhenSwitchingToNormal']
 print('Testing chat send and nested menus' if os.environ.get('BUDDY_SMOKE') == '1' else 'Testing the full native UI regressions', 'on', phone['name'], flush=True)
 with (output / 'test.log').open('w') as log:
     process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)

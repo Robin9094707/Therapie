@@ -170,7 +170,7 @@ private struct CheckInBatteryDetail: View {
                     VStack(alignment: .leading, spacing: 14) {
                         SectionHeader(title: direction == .gives ? "Das gibt dir Akku" : "Das nimmt dir Akku", icon: direction.symbol)
                         ForEach(selected) { point in
-                            VStack(alignment: .leading, spacing: 5) { Text(point.title).font(.headline); if !point.note.isEmpty { Text(point.note) }; Text("Wirkung \(point.impact)/5 · " + point.category.title).font(.caption).foregroundStyle(.secondary) }.textSelection(.enabled)
+                            VStack(alignment: .leading, spacing: 5) { Text(point.title).font(.headline); if !point.note.isEmpty { Text(point.note) }; Text("Wirkung \(point.impactDescription) · " + point.category.title).font(.caption).foregroundStyle(.secondary) }.textSelection(.enabled)
                         }
                         if !legacy.isEmpty { Text(legacy).textSelection(.enabled) }
                     }

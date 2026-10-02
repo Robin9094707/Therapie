@@ -71,7 +71,11 @@ struct BatteryPoint: Identifiable, Codable, Equatable {
     var impact = 3
     var note = ""
     var checkInID: UUID?
-    var signedImpact: Int { direction.sign * impact }
+    // nil preserves the meaning of older, manually rated points.
+    var impactConfirmed: Bool?
+    var hasConfirmedImpact: Bool { impactConfirmed != false }
+    var impactDescription: String { hasConfirmedImpact ? "\(impact)/5" : "noch offen" }
+    var signedImpact: Int { hasConfirmedImpact ? direction.sign * impact : 0 }
 }
 
 struct WeekReview: Identifiable, Codable, Equatable {
@@ -225,7 +229,7 @@ enum WellnessExport {
         }
         for point in data.batteryPoints.filter({ period.contains($0.date) }).sorted(by: { $0.date < $1.date }) {
             rows.append(["Akku-Punkt", formatter.string(from: point.date), "", "", "", "", "", "",
-                         point.category.title, point.direction.title, String(point.impact), point.title, point.note, "", ""])
+                         point.category.title, point.direction.title, (point.hasConfirmedImpact ? String(point.impact) : "nicht angegeben"), point.title, point.note, "", ""])
         }
         for entry in data.energyEntries.filter({ period.contains($0.createdAt) }) {
             rows.append(["Früherer Energie-Check", formatter.string(from: entry.createdAt), "", String(entry.level),

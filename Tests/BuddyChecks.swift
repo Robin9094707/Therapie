@@ -170,7 +170,8 @@ final class BuddyMockProtocol: URLProtocol {
         let proposal = AIBuddyCheckInProposal(moodPercent: 80, batteryPercent: 0, stress: 2, sensoryLoad: 3, sleepHours: 7.5, summary: "Meine Schwester", givesEnergy: "Musik", takesEnergy: "Lärm", smallWin: "Pause gemacht", nextNeed: "Ruhe", therapyQuestion: "Grenzen", tasks: ["Tee trinken"], tags: ["familie"])
         for step in 0..<7 {
             draft.step = step
-            try expect(AICheckInGuide.apply(proposal, to: &draft, known: ["Familie"]) && draft.step == step + 1, "Guide persists standard question step \(step)")
+            var answeredProposal = proposal; answeredProposal.advance = true; answeredProposal.answeredStep = step
+            try expect(AICheckInGuide.apply(answeredProposal, to: &draft, known: ["Familie"]) && draft.step == step + 1, "Guide persists standard question step \(step)")
             _ = GuidedCheckInMutation.apply(draft, complete: false, to: &chats)
             try expect(chats.weeklyTasks.isEmpty, "Guided draft never creates tasks before confirmation")
         }
@@ -193,7 +194,7 @@ final class BuddyMockProtocol: URLProtocol {
         try expect(AIBuddyContext.requestDays(question: "Heute", settings: manualScope, chosenDays: 30) == 30, "Automatic text inference can be disabled")
         let strict = AIBuddyAPI.schema["properties"] as! [String: Any]
         let guideSchema = strict["checkIn"] as! [String: Any]
-        try expect(guideSchema["additionalProperties"] as? Bool == false && (guideSchema["required"] as! [String]).count == 16, "Structured check-in schema requires every nullable field")
+        try expect(guideSchema["additionalProperties"] as? Bool == false && (guideSchema["required"] as! [String]).count == 18, "Structured check-in schema requires every nullable field")
         var interactive = AppData()
         let msg = AIBuddyMessage(role: "assistant", text: "Vorschau"); interactive.aiMessages = [msg]
         AIConversationMutation.migrate(&interactive)
@@ -225,6 +226,34 @@ final class BuddyMockProtocol: URLProtocol {
         var noAdvance = GuidedCheckIn(summary: "Gedanke", step: 2)
         _ = AICheckInGuide.apply(AIBuddyCheckInProposal(advance: false), to: &noAdvance, known: [])
         try expect(noAdvance.step == 2, "Clarifying questions never skip the current guided step")
+        var wrongModule = GuidedCheckIn(step: 1)
+        _ = AICheckInGuide.apply(AIBuddyCheckInProposal(advance: true, answeredStep: 2, batteryPercent: 55), to: &wrongModule, known: [], userText: "Mein Akku ist 55")
+        try expect(wrongModule.step == 1 && wrongModule.batteryPercent == 55, "Later-module data is preserved without skipping the current module")
+        _ = AICheckInGuide.apply(AIBuddyCheckInProposal(moodPercent: 60), to: &wrongModule, known: [], userText: "60")
+        try expect(wrongModule.step == 1, "Missing advance flag never moves the module")
+        _ = AICheckInGuide.apply(AIBuddyCheckInProposal(advance: true, finish: true, answeredStep: 1), to: &wrongModule, known: [], userText: "Warum regnet es?")
+        try expect(wrongModule.step == 1, "Off-topic turns cannot finish a check-in or advance without module evidence")
+        let aligned = AICheckInGuide.alignedReply(AIBuddyReply(title: "Zwischenfrage", message: "Das können wir besprechen. Wie hast du geschlafen?", sections: [], actions: []), entry: wrongModule)
+        try expect(aligned.message.contains("Stimmungswert") && !aligned.message.contains("geschlafen?"), "Visible follow-up belongs to the persisted module")
+        _ = AICheckInGuide.apply(AIBuddyCheckInProposal(advance: false), to: &wrongModule, known: [], userText: "überspringen")
+        try expect(wrongModule.step == 2, "Explicit skipping works even if the model refuses to advance")
+        var batteryDraft = GuidedCheckIn(step: 2)
+        let factors = [AIBuddyEnergyFactor(title: "Mila", direction: .takes, impact: 5), AIBuddyEnergyFactor(title: "Geldprobleme", direction: .takes, impact: nil)]
+        _ = AICheckInGuide.apply(AIBuddyCheckInProposal(advance: true, answeredStep: 2, batteryPercent: 40, energyPoints: factors), to: &batteryDraft, known: [], userText: "Mila nimmt sehr viel Akku, außerdem Geldprobleme")
+        try expect(batteryDraft.step == 2 && batteryDraft.takesEnergy == "Mila, Geld" && batteryDraft.energyPoints?.count == 2, "Energy topics become separated short keywords and missing impact keeps module open")
+        try expect(batteryDraft.energyPoints?[1].signedImpact == 0 && batteryDraft.energyPoints?[1].impactConfirmed == false, "Unknown impact contributes no invented battery change")
+        let unresolved = AICheckInGuide.alignedReply(reply, entry: batteryDraft)
+        try expect(unresolved.message.contains("„Geld“") && unresolved.message.contains("1 = wenig"), "Missing strength asks about the specific unresolved keyword")
+        let geldID = batteryDraft.energyPoints![1].id
+        _ = AICheckInGuide.apply(AIBuddyCheckInProposal(advance: true, answeredStep: 2, energyPoints: [AIBuddyEnergyFactor(title: "Geld", direction: .takes, impact: 4)]), to: &batteryDraft, known: [], userText: "Geld kostet mich 4 von 5")
+        try expect(batteryDraft.step == 3 && batteryDraft.energyPoints?.count == 2 && batteryDraft.energyPoints?[1].id == geldID && batteryDraft.energyPoints?[1].signedImpact == -4, "Strength reply updates the existing point once and resumes the module sequence")
+        var energySnapshot = AppData()
+        try expect(GuidedCheckInMutation.apply(batteryDraft, complete: true, to: &energySnapshot) && energySnapshot.batteryPoints.count == 2, "Final confirmation creates regular battery points from AI draft")
+        _ = GuidedCheckInMutation.apply(batteryDraft, complete: true, to: &energySnapshot)
+        try expect(energySnapshot.batteryPoints.count == 2, "Repeated check-in confirmation never duplicates energy points")
+        let concreteTags = BuddyInteraction.hashtags(["Mila", "KI-Begleitung"], text: "Mir geht es wegen Mila und Geldproblemen schlecht", known: [])
+        try expect(concreteTags.contains("Mila") && concreteTags.contains("Geld") && !concreteTags.contains("KI-Begleitung"), "Tags preserve concrete people and money topics without generic AI filler")
+        try expect(AppFileAccess.isTemporaryDenial(NSError(domain: NSCocoaErrorDomain, code: NSFileReadNoPermissionError)) && AppFileAccess.isTemporaryDenial(NSError(domain: NSPOSIXErrorDomain, code: 13)) && !AppFileAccess.isTemporaryDenial(NSError(domain: NSCocoaErrorDomain, code: NSFileReadCorruptFileError)), "Protected storage permission errors are retryable, real corruption remains blocked")
         interactive.editorDrafts = [try AppEditorDraft.make(noAdvance, id: noAdvance.id, kind: "guided", title: "Entwurf")]
         let restoredInteractive = try dec.decode(AppData.self, from: enc.encode(interactive))
         try expect((try JSONSerialization.jsonObject(with: enc.encode(restoredInteractive)) as! NSDictionary) == (try JSONSerialization.jsonObject(with: enc.encode(interactive)) as! NSDictionary) && restoredInteractive.editorDrafts[0].decode(GuidedCheckIn.self) == noAdvance, "All new draft, action and reminder values round-trip through AppData")

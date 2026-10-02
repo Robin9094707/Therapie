@@ -32,7 +32,7 @@ struct CheckInKeywordSection: View {
                 HStack { Label(direction.title, systemImage: direction.symbol).font(.headline); Spacer(); Button { add(direction) } label: { Image(systemName: "plus.circle.fill").frame(width: 44, height: 44) }.accessibilityLabel(direction.title + " hinzufügen") }
                 ForEach(points.filter { $0.direction == direction }) { point in
                     HStack(alignment: .top) {
-                        Button { edit(point) } label: { VStack(alignment: .leading, spacing: 5) { Text(point.title).font(.headline); if !point.note.isEmpty { Text(point.note).font(.subheadline).foregroundStyle(.secondary) }; Text("Wirkung \(point.impact)/5").font(.caption).foregroundStyle(.secondary) } }.buttonStyle(.plain)
+                        Button { edit(point) } label: { VStack(alignment: .leading, spacing: 5) { Text(point.title).font(.headline); if !point.note.isEmpty { Text(point.note).font(.subheadline).foregroundStyle(.secondary) }; Text("Wirkung \(point.impactDescription)").font(.caption).foregroundStyle(.secondary) } }.buttonStyle(.plain)
                         Spacer(); Button(role: .destructive) { let id = point.id; points.removeAll { $0.id == id } } label: { Image(systemName: "trash").frame(width: 44, height: 44) }.accessibilityLabel(point.title + " entfernen")
                     }
                 }
@@ -59,7 +59,7 @@ struct CheckInKeywordEditor: View {
             }.buttonStyle(.borderless).navigationTitle("Akku-Punkt").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { dismiss() } }
-                    ToolbarItem(placement: .confirmationAction) { Button("Speichern") { var clean = point; clean.title = clean.title.trimmingCharacters(in: .whitespacesAndNewlines); save(clean); dismiss() }.disabled(!valid) }
+                    ToolbarItem(placement: .confirmationAction) { Button("Speichern") { var clean = point; clean.title = clean.title.trimmingCharacters(in: .whitespacesAndNewlines); clean.impactConfirmed = true; save(clean); dismiss() }.disabled(!valid) }
                 }
         }
     }

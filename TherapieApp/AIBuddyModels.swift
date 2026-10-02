@@ -73,7 +73,7 @@ struct AIBuddyAction: Codable, Equatable, Identifiable {
         if kind == .battery { return moodPercent != nil }
         if kind == .setting { return AIBuddySettingsChange.valid(action: self) }
         if kind == .guidedCheckIn { return targetID == "current" || targetID == "free" || targetID.flatMap(UUID.init(uuidString:)) != nil }
-        if kind == .energy { return !title.isEmpty && ["gives", "takes"].contains(targetID ?? "") }
+        if kind == .energy { return !title.isEmpty && ["gives", "takes"].contains(targetID ?? "") && (options?.valueInt == nil || (1...5).contains(options!.valueInt!)) }
         if [.updateTask, .updateRoutine, .deleteTask, .deleteRoutine].contains(kind) { return targetID.flatMap(UUID.init(uuidString:)) != nil && (kind == .deleteTask || kind == .deleteRoutine || !title.isEmpty) }
         if kind == .task, options?.repeatEveryWeeks != nil, options?.repeatCount == nil { return false }
         if (options?.repeatCount ?? 1) > 1 && options?.repeatEveryWeeks == nil { return false }
@@ -303,6 +303,7 @@ enum AppHashtags {
 struct AIBuddyCheckInProposal: Codable, Equatable {
     var advance: Bool?
     var finish: Bool?
+    var answeredStep: Int?
     var moodPercent: Int?
     var batteryPercent: Int?
     var satisfaction: Int?
@@ -317,14 +318,59 @@ struct AIBuddyCheckInProposal: Codable, Equatable {
     var therapyQuestion: String?
     var tasks: [String]?
     var tags: [String]?
+    var energyPoints: [AIBuddyEnergyFactor]?
     var valid: Bool {
         let percentages = [moodPercent, batteryPercent].compactMap { $0 }
         let scales = [stress, sensoryLoad, satisfaction].compactMap { $0 }
         let texts = [summary, givesEnergy, takesEnergy, smallWin, nextNeed, therapyQuestion].compactMap { $0 }
-        return percentages.allSatisfy { (0...100).contains($0) } && scales.allSatisfy { (1...5).contains($0) } && (sleepHours == nil || (0...24).contains(sleepHours!)) && texts.allSatisfy { $0.count <= 6000 } && (tasks ?? []).count <= 15 && (tasks ?? []).allSatisfy { $0.count <= 160 } && (tags ?? []).count <= 15 && (tags ?? []).allSatisfy { $0.count <= 60 }
+        return (answeredStep == nil || (0...6).contains(answeredStep!)) && (energyPoints ?? []).count <= 15 && (energyPoints ?? []).allSatisfy(\.valid) && percentages.allSatisfy { (0...100).contains($0) } && scales.allSatisfy { (1...5).contains($0) } && (sleepHours == nil || (0...24).contains(sleepHours!)) && texts.allSatisfy { $0.count <= 6000 } && (tasks ?? []).count <= 15 && (tasks ?? []).allSatisfy { $0.count <= 160 } && (tags ?? []).count <= 15 && (tags ?? []).allSatisfy { $0.count <= 60 }
+    }
+}
+struct AIBuddyEnergyFactor: Codable, Equatable {
+    var title: String
+    var direction: BatteryDirection
+    var impact: Int?
+    var valid: Bool { !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && title.count <= 60 && (impact == nil || (1...5).contains(impact!)) }
+}
+enum AIEnergyKeywords {
+    static func title(_ value: String) -> String {
+        let clean = AIBuddyText.plain(value).trimmingCharacters(in: .whitespacesAndNewlines)
+        let aliases = ["geldprobleme": "Geld", "geldsorgen": "Geld", "finanzprobleme": "Geld", "finanzielle sorgen": "Geld"]
+        return aliases[AppHashtags.key(clean)] ?? String(clean.prefix(60))
+    }
+    static func merge(_ factors: [AIBuddyEnergyFactor], into entry: inout GuidedCheckIn) {
+        var points = entry.energyPoints ?? []
+        for factor in factors where factor.valid {
+            let name = title(factor.title)
+            if let i = points.firstIndex(where: { AppHashtags.key($0.title) == AppHashtags.key(name) && $0.direction == factor.direction }) {
+                if let impact = factor.impact { points[i].impact = impact; points[i].impactConfirmed = true }
+            } else {
+                points.append(BatteryPoint(date: entry.date, title: name, direction: factor.direction, impact: factor.impact ?? 3, checkInID: entry.id, impactConfirmed: factor.impact != nil))
+            }
+        }
+        if !factors.isEmpty {
+            entry.energyPoints = points
+            entry.givesEnergy = points.filter { $0.direction == .gives }.map(\.title).joined(separator: ", ")
+            entry.takesEnergy = points.filter { $0.direction == .takes }.map(\.title).joined(separator: ", ")
+        }
     }
 }
 enum AICheckInGuide {
+    static func alignedReply(_ reply: AIBuddyReply, entry: GuidedCheckIn) -> AIBuddyReply {
+        var result = reply
+        // The locally persisted module owns the next question, including side conversations.
+        let acknowledgment = reply.message.replacingOccurrences(of: "[^.!?\\n]*\\?", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
+        let prompts = ["Welchen Gedanken möchtest du zum Ankommen festhalten?", "Welcher Stimmungswert passt gerade zu dir (0–100)?", "Was lädt deinen Gefühlsakku auf und was kostet dich Energie?", "Möchtest du Stress, Reizbelastung oder Schlaf für heute festhalten?", "Welcher kleine Erfolg oder welches Bedürfnis ist dir heute wichtig?", "Welche nächsten Schritte sollen in die Übersicht – oder möchtest du keine Aufgabe?", "Welches Thema soll für deine nächste Therapie stehen – oder gibt es heute keines?", "Deine Übersicht ist bereit. Prüfe sie und bestätige dort das Speichern."]
+        var question = prompts[max(0, min(7, entry.step))]
+        if entry.step == 2, let point = (entry.energyPoints ?? []).first(where: { !$0.hasConfirmedImpact }) {
+            question = "Wie stark \(point.direction == .takes ? "kostet" : "gibt") dir „\(point.title)“ Akku: 1 = wenig bis 5 = sehr stark?"
+        }
+        result.message = (acknowledgment.isEmpty ? "" : acknowledgment + "\n\n") + question
+        result.quickReplies = entry.step == 7 ? [] : nil
+        // Energy belongs to this draft, not a second independently saved copy.
+        result.actions.removeAll { [.energy, .checkIn, .guidedCheckIn].contains($0.kind) }
+        return result
+    }
     static let questions = [
         "Ankommen: Was geht dir gerade durch den Kopf?",
         "Wie geht es dir gerade? Du kannst deine Stimmung auch von 0 bis 100 beschreiben.",
@@ -339,17 +385,19 @@ enum AICheckInGuide {
         let step = max(0, min(7, entry.step))
         var result = "\nKI-GEFÜHRTER CHECK-IN. Aktuelle Standardfrage: " + questions[step]
         result += "\nDeute ausschließlich Angaben aus der aktuellen Nutzerantwort als Daten. Auch ausdrücklich genannte Angaben zu späteren Fragen dürfen übernommen werden. checkIn enthält nur belegte Angaben, sonst null. Kein Ergänzen aus älteren Einträgen. Stimmung vorsichtig vorschlagen, immer überprüfbar. tasks nur explizite gewünschte Schritte, tags bekannte Hashtags bevorzugen. Alle Fragen sind freiwillig; 'überspringen' ergibt null. Keine actions für separate Kopien dieses Check-ins."
-        result += "\nBei einer Rückfrage, Unklarheit oder Wunsch weiter darüber zu sprechen: advance=false, bleibe freundlich bei derselben Frage. Nur bei beantworteter Frage oder ausdrücklichem Überspringen advance=true. Antworte persönlich und knapp mit einem Bezug auf reale letzte Einträge, ohne neue Angaben in den Entwurf zu erfinden. Die Standardfrage steht bereits in der festen Leiste: nicht wörtlich wiederholen, sondern genau eine persönliche passende Frage stellen. Bei Speichern-/Abschlusswunsch finish=true und eine kurze Einladung zur Übersicht, nicht behaupten gespeichert zu haben. Beim letzten Schritt nur zur Übersicht einladen; Korrekturen bleiben möglich. Dann die passende nächste Standardfrage: " + questions[min(7, step + 1)]
+        result += "\nVERBINDLICHER ABLAUF: Schritt \(step + 1) von 8. answeredStep ist ausschließlich \(step), wenn die aktuelle Frage beantwortet ist, sonst null. Bei Rückfragen, Themenwechsel, Unklarheit oder weiterem Gespräch advance=false und answeredStep=null. Beantworte die Zwischenfrage kurz, kehre zum AKTUELLEN Modul zurück; stelle niemals eine Frage aus einem späteren Modul, solange das aktuelle nicht abgeschlossen ist. Nur mit belegter Antwort auf das aktuelle Modul oder ausdrücklichem Überspringen advance=true; dann genau einen Schritt weiter. Angaben zu späteren Modulen speichern, aber damit nicht den aktuellen Schritt beenden. Bei advance=true folgt: " + questions[min(7, step + 1)]
+        result += "\nDie Standardfrage ist angeheftet. Stelle nur eine passende persönliche Frage zum zulässigen Modul. finish=true nur bei ausdrücklichem Wunsch nach Übersicht/Speichern oder nach Abschluss von Schritt 7 (Therapiefrage). Am Ende zur Übersicht einladen, niemals behaupten gespeichert zu haben. energyPoints: alle ausdrücklich genannten Akku-Geber und -Nehmer einzeln, jeweils ein kurzes Stichwort, bevorzugt EIN Wort oder Personenname. Beispiel 'Mila zieht mir Akku, außerdem Geldprobleme' => takes: Mila und Geld. Keine ganzen Sätze als Titel. impact 1–5 nur aus selbst genannter Stärke (z.B. sehr stark=5, wenig=1), sonst null. Frage dann konkret nach der Stärke des einzelnen Punktes; erfinde keine Zahl. Auf eine Stärke-Rückantwort den vorhandenen Punkt per Titel/Richtung aktualisieren, keine Kopie. givesEnergy/takesEnergy ebenfalls nur getrennte Stichwörter. Hashtags enthalten konkrete Namen und Themen aus dem Gespräch, z.B. Mila und Geld, keine generischen KI-Begleitung-Tags."
         if let encoded = try? JSONEncoder().encode(entry), let text = String(data: encoded, encoding: .utf8) { result += "\nAKTUELLER ENTWURF: " + String(text.prefix(6000)) }
         return result
     }
-    static func apply(_ proposal: AIBuddyCheckInProposal, to entry: inout GuidedCheckIn, known: [String]) -> Bool {
+    static func apply(_ proposal: AIBuddyCheckInProposal, to entry: inout GuidedCheckIn, known: [String], userText: String? = nil) -> Bool {
         guard entry.isDraft, proposal.valid else { return false }
         if let v = proposal.summary { entry.summary = v }
         if let v = proposal.moodPercent { entry.moodPercent = v; entry.mood = MoodBarometer.score(v) }
         if let v = proposal.batteryPercent { entry.batteryPercent = v }
         if let v = proposal.givesEnergy { entry.givesEnergy = v }
         if let v = proposal.takesEnergy { entry.takesEnergy = v }
+        AIEnergyKeywords.merge(proposal.energyPoints ?? [], into: &entry)
         if let v = proposal.satisfaction { entry.satisfaction = v }
         if let v = proposal.stress { entry.stress = v }
         if let v = proposal.sensoryLoad { entry.sensoryLoad = v }
@@ -359,8 +407,21 @@ enum AICheckInGuide {
         if let v = proposal.therapyQuestion { entry.therapyQuestion = v }
         for title in proposal.tasks ?? [] where !title.isEmpty && !entry.tasks.contains(where: { $0.title == title }) { entry.tasks.append(CheckInTaskDraft(title: title)) }
         entry.tags = AppHashtags.clean((entry.tags ?? []) + (proposal.tags ?? []), known: known)
-        if proposal.finish == true { entry.step = 7 }
-        else if proposal.advance != false { entry.step = min(7, entry.step + 1) }
+        let skip = userText.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().range(of: "^(bitte )?(diesen schritt |die frage )?(überspringen|weiter|skip)[.! ]*$", options: .regularExpression) != nil } ?? false
+        let answered: Bool
+        switch entry.step {
+        case 0: answered = !(proposal.summary ?? "").isEmpty
+        case 1: answered = proposal.moodPercent != nil
+        case 2: answered = proposal.batteryPercent != nil || proposal.energyPoints != nil || proposal.givesEnergy != nil || proposal.takesEnergy != nil
+        case 3: answered = proposal.stress != nil || proposal.sensoryLoad != nil || proposal.sleepHours != nil
+        case 4: answered = proposal.smallWin != nil || proposal.nextNeed != nil || proposal.satisfaction != nil || proposal.summary != nil
+        case 5: answered = proposal.tasks != nil
+        case 6: answered = proposal.therapyQuestion != nil
+        default: answered = false
+        }
+        let pendingImpact = (entry.energyPoints ?? []).contains { !$0.hasConfirmedImpact }
+        if proposal.finish == true && (userText == nil || userText.map(BuddyInteraction.wantsOverview) == true || (entry.step == 6 && proposal.advance == true && proposal.answeredStep == 6 && answered)) { entry.step = 7 }
+        else if skip || (proposal.advance == true && proposal.answeredStep == entry.step && answered && !(entry.step == 2 && pendingImpact)) { entry.step = min(7, entry.step + 1) }
         return true
     }
 }
@@ -548,9 +609,11 @@ enum BuddyInteraction {
     static func hashtags(_ values: [String], text: String, known: [String]) -> [String] {
         let content = AppHashtags.key(text)
         let matches = known.filter { let key = AppHashtags.key($0); return key.count > 2 && content.contains(key) }
-        let vocabulary: [(String, [String])] = [("Familie", ["schwester", "bruder", "mutter", "vater", "familie"]), ("Schlaf", ["schlaf", "mude"]), ("Stress", ["stress", "uberfordert"]), ("Erholung", ["pause", "erholung", "auftanken"]), ("Arbeit", ["arbeit", "beruf"]), ("Freude", ["freude", "glucklich"]), ("Grenzen", ["grenzen", "nein sagen"])]
+        let vocabulary: [(String, [String])] = [("Geld", ["geld", "finanz", "schulden"]), ("Familie", ["schwester", "bruder", "mutter", "vater", "familie"]), ("Schlaf", ["schlaf", "mude"]), ("Stress", ["stress", "uberfordert"]), ("Erholung", ["pause", "erholung", "auftanken"]), ("Arbeit", ["arbeit", "beruf"]), ("Freude", ["freude", "glucklich"]), ("Grenzen", ["grenzen", "nein sagen"])]
         let inferred = vocabulary.filter { $0.1.contains(where: content.contains) }.map(\.0)
-        return Array(AppHashtags.clean(values + matches + inferred, known: known).prefix(12))
+        let explicit = text.components(separatedBy: .whitespacesAndNewlines).filter { $0.hasPrefix("#") }.map { $0.trimmingCharacters(in: .punctuationCharacters) }
+        let generic = Set(["ki begleitung", "ki-begleitung", "ki-begleiter", "ki begleiter", "ki", "check-in"])
+        return Array(AppHashtags.clean(explicit + matches + values.filter { !generic.contains(AppHashtags.key($0)) } + inferred, known: known).prefix(12))
     }
 }
 

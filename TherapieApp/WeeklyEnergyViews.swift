@@ -158,7 +158,7 @@ struct WeeklyEnergyEditorView: View {
         let end = Calendar.therapyCalendar.startOfDay(for: review.periodEnd)
         let start = review.periodStart
         let known = Set((review.gives + review.takes).map(\.id))
-        for point in store.data.batteryPoints where point.date >= start && point.date < end && !known.contains(point.id) {
+        for point in store.data.batteryPoints where point.hasConfirmedImpact && point.date >= start && point.date < end && !known.contains(point.id) {
             let factor = WeeklyEnergyFactor(id: point.id, title: point.title, impact: point.impact, category: point.category, note: point.note)
             if point.direction == .gives { review.gives.append(factor) } else { review.takes.append(factor) }
         }

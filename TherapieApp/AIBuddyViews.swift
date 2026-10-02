@@ -504,6 +504,11 @@ struct AIBuddyActionReviewView: View {
                             Text(original.moodPercent == nil ? "Die KI hat keine Stimmung festgelegt. Wähle deinen eigenen Wert." : "Die KI hat diesen Wert vorgeschlagen. Du kannst ihn frei ändern.").font(.caption).foregroundStyle(.secondary)
                         }
                         if action.kind == .goal { Picker("Priorität", selection: Binding(get: { action.options?.priority ?? "normal" }, set: { options.wrappedValue.priority = $0 })) { Text("Ruhig").tag("low"); Text("Normal").tag("normal"); Text("Dringend").tag("high") } }
+                        if action.kind == .energy {
+                            Toggle("Stärke festlegen", isOn: Binding(get: { action.options?.valueInt != nil }, set: { options.wrappedValue.valueInt = $0 ? 3 : nil }))
+                            if action.options?.valueInt != nil { Stepper("Wirkung: \(action.options?.valueInt ?? 3)/5", value: Binding(get: { action.options?.valueInt ?? 3 }, set: { options.wrappedValue.valueInt = $0 }), in: 1...5) }
+                            Text("1 = wenig · 5 = sehr stark. Ohne Angabe bleibt die Stärke offen.").font(.caption).foregroundStyle(.secondary)
+                        }
                         if recurring { WeekdaySelection(days: $action.weekdays); Text("Routine: keine Auswahl = täglich. Aufgabe: keine Auswahl = Wochentag des Termins. Die Uhrzeit stammt aus dem Zeitpunkt oben.").font(.caption).foregroundStyle(.secondary) }
                     }
                 }

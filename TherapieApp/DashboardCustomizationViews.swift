@@ -67,9 +67,7 @@ struct DashboardCustomizationView: View {
 
 struct TodayRoutinesCard: View {
     @EnvironmentObject private var store: AppStore
-    @State private var confirming: RoutineOccurrence?
-    @State private var showConfirmation = false
-    @State private var detailID: UUID?
+    let confirmCompletion: (RoutineOccurrence) -> Void
     var body: some View {
         SwiftUI.TimelineView(.periodic(from: .now, by: 30)) { context in
             let due = RoutinePlanner.due(data: store.data, now: context.date)
@@ -85,10 +83,10 @@ struct TodayRoutinesCard: View {
                     ForEach(due) { occurrence in
                         if let routine = store.data.routines.first(where: { $0.id == occurrence.routineID }) {
                             VStack(alignment: .leading, spacing: 7) {
-                                Button { detailID = routine.id } label: { Label(routine.title, systemImage: routine.symbol).font(.headline).multilineTextAlignment(.leading) }.buttonStyle(.plain)
+                                Button { store.notificationRoutineID = routine.id } label: { Label(routine.title, systemImage: routine.symbol).font(.headline).multilineTextAlignment(.leading) }.buttonStyle(.plain)
                                 Text("Fällig seit " + occurrence.due.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
                                 if let snooze = store.data.routineSnoozes.first(where: { $0.id == occurrence.id && $0.until > context.date }) { Text("Erinnerung verschoben bis " + snooze.until.formatted(date: .omitted, time: .shortened)).font(.caption).foregroundStyle(.secondary) }
-                                Button("Als erledigt bestätigen", systemImage: "checkmark.circle.fill") { confirming = occurrence; showConfirmation = true }.buttonStyle(.bordered).accessibilityIdentifier("today.routine.complete")
+                                Button("Als erledigt bestätigen", systemImage: "checkmark.circle.fill") { confirmCompletion(occurrence) }.buttonStyle(.bordered).accessibilityIdentifier("today.routine.complete")
                             }
                             if occurrence.id != due.last?.id { Divider() }
                         }
@@ -97,16 +95,7 @@ struct TodayRoutinesCard: View {
                 }
             }
         }
-        .alert("Routine wirklich erledigt?", isPresented: $showConfirmation) {
-            Button("Abbrechen", role: .cancel) { confirming = nil }
-            Button("Ja, ich habe sie erledigt") {
-                if let occurrence = confirming { store.resolveRoutine(occurrence, outcome: .done) }
-                confirming = nil
-            }
-        } message: {
-            Text("Bestätige nur, wenn du „\(store.data.routines.first { $0.id == confirming?.routineID }?.title ?? "diese Routine")“ wirklich abgeschlossen hast.")
-        }
-        .sheet(isPresented: Binding(get: { detailID != nil }, set: { if !$0 { detailID = nil } })) { if let detailID { RoutineDetailView(routineID: detailID) } }
+
     }
 }
 
