@@ -26,7 +26,7 @@ struct ModelChecks {
         fixture["schemaVersion"] = 1
         for key in ["moodCheckIns", "batteryPoints", "weekReviews", "wellnessSettings", "therapyFolders", "therapyTopics", "therapyGoals", "sessionTemplates", "currentSession", "sessionHistory", "sessionPreferences", "weeklyEnergyReviews", "reminderPreferences"] { fixture.removeValue(forKey: key) }
         let migrated = try decoder.decode(AppData.self, from: JSONSerialization.data(withJSONObject: fixture))
-        try expect(migrated.schemaVersion == 12, "Schema migration")
+        try expect(migrated.schemaVersion == 13, "Schema migration")
         try expect(migrated.profile == old.profile && migrated.notes == old.notes, "Names and notes preserved")
         try expect(migrated.weeklyTasks == old.weeklyTasks && migrated.media == old.media, "Tasks and media paths preserved")
         try expect(migrated.energyEntries == old.energyEntries && migrated.reflections == old.reflections, "Legacy energy and reflections preserved")

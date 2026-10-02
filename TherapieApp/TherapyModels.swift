@@ -73,6 +73,7 @@ struct TherapyGoal: Identifiable, Codable, Equatable {
     var smallStep = ""
     var support = ""
     var dueDate: Date?
+    var priority: String?
 }
 
 enum NoteAuthor: String, CaseIterable, Identifiable {

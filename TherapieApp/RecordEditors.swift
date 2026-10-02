@@ -11,7 +11,8 @@ struct LegacyEnergyEditorView: View {
         }) {
             Section("Energie") {
                 DatePicker("Datum", selection: $entry.createdAt, in: ...Date(), displayedComponents: [.date, .hourAndMinute])
-                Stepper("Energie: \(entry.level)/5", value: $entry.level, in: 1...5)
+                if entry.percent != nil { EnergyBatteryControl(percent: Binding(get: { entry.percent ?? 50 }, set: { entry.percent = $0; entry.level = MoodBarometer.score($0) })) }
+                else { Stepper("Energie: \(entry.level)/5", value: $entry.level, in: 1...5) }
                 TextField("Gibt mir Energie", text: $entry.givesEnergy, axis: .vertical).lineLimit(2...6)
                 TextField("Nimmt mir Energie", text: $entry.takesEnergy, axis: .vertical).lineLimit(2...6)
                 TextField("Notiz", text: $entry.note, axis: .vertical).lineLimit(3...8)

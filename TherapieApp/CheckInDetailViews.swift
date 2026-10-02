@@ -134,7 +134,7 @@ private struct CheckInMetricGrid: View {
         }
     }
     private func metric(_ title: String, _ value: String, _ symbol: String) -> some View {
-        VStack(alignment: .leading, spacing: 7) { Label(title, systemImage: symbol).font(.caption).foregroundStyle(.secondary); Text(value).font(.system(.title3, design: .rounded, weight: .semibold)).monospacedDigit() }.frame(maxWidth: .infinity, alignment: .leading).padding(12).background(Color.indigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
+        VStack(alignment: .leading, spacing: 7) { Label(title, systemImage: symbol).font(.caption).foregroundStyle(.secondary); Text(value).font(.system(.title3, design: .rounded, weight: .semibold)).monospacedDigit() }.frame(maxWidth: .infinity, alignment: .leading).padding(12).background(Color.accentColor.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
     }
 }
 private struct CheckInTextCard: View {

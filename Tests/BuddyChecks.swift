@@ -234,6 +234,41 @@ final class BuddyMockProtocol: URLProtocol {
         try expect(!RoutineRecurrence.includes(recurringRoutine, date: nextWeek) && RoutineRecurrence.includes(recurringRoutine, date: secondWeek), "Routine interval skips inactive weeks")
         recurringRoutine.endsAt = nextWeek
         try expect(!RoutineRecurrence.includes(recurringRoutine, date: secondWeek), "Finite routine stops after its end date")
+        try expect(BuddyInteraction.wantsOverview("Bitte den Check-in speichern") && !BuddyInteraction.wantsOverview("Check-in noch nicht speichern"), "Explicit finish intent and negative intent are distinct")
+        var early = GuidedCheckIn()
+        try expect(AICheckInGuide.apply(AIBuddyCheckInProposal(advance: false, finish: true, batteryPercent: 0), to: &early, known: []) && early.step == 7 && early.batteryPercent == 0 && early.isDraft, "Early finish preserves values and never bypasses confirmation")
+        try expect(AICheckInGuide.apply(AIBuddyCheckInProposal(advance: false, batteryPercent: 68), to: &early, known: []) && early.step == 7 && early.batteryPercent == 68, "Last step remains conversational and editable")
+        let longHistory = (0..<80).map { AIBuddyMessage(role: $0 % 2 == 0 ? "user" : "assistant", text: String(repeating: "Langer Gedanke", count: 1000)) }
+        let bounded = BuddyInteraction.history(longHistory)
+        try expect(bounded.count <= 8 && bounded.reduce(0) { $0 + ($1["content"]?.count ?? 0) } <= 6500, "History has a fixed total budget even in very long chats")
+        try expect(BuddyInteraction.boundedTranscript(longHistory).count <= 14000 && BuddyInteraction.transcript(longHistory).count > 14000, "Summary request is bounded, full local details preserved")
+        try expect(BuddyInteraction.window(question: "Übersicht über vorgestern", days: 1, now: now, calendar: cal) < cal.startOfDay(for: now).addingTimeInterval(-86400), "Historical day retrieval does not use today")
+        var profileData = AppData(); profileData.energyEntries = [EnergyEntry(createdAt: now, level: 3, percent: 62, givesEnergy: "", takesEnergy: "", note: "")]
+        let battery = WellbeingProfile.battery(profileData, now: now)!
+        try expect(battery.value == 62 && WellbeingProfile.estimatedBattery(profileData, reading: battery, now: now.addingTimeInterval(3600)) == 62, "Exact battery percentage, no default invented decline")
+        profileData.wellbeingPreferences.estimateBattery = true; profileData.wellbeingPreferences.hourlyDecline = 2
+        try expect(WellbeingProfile.estimatedBattery(profileData, reading: battery, now: now.addingTimeInterval(3600)) == 60, "Only explicit opt-in enables defined hourly estimate")
+        var summaryData = AppData(); let summaryChat = AIConversationMutation.create(in: &summaryData)
+        summaryData.aiMessages.append(AIBuddyMessage(role: "user", text: "Meine Schwester hilft mir", conversationID: summaryChat))
+        AIConversationMutation.saveSummary(summaryChat, title: "Familie", summary: "Unterstützung hilft.", tags: ["Familie"], in: &summaryData)
+        let summaryNote = summaryData.notes[0]
+        AIConversationMutation.delete(summaryChat, in: &summaryData)
+        try expect(summaryNote.text == "Unterstützung hilft." && summaryData.notes[0].conversationTranscript?.contains("Meine Schwester") == true, "Readable summary and complete details survive chat deletion")
+        let restoredNew = try dec.decode(AppData.self, from: enc.encode(summaryData))
+        try expect(restoredNew.notes[0].conversationTranscript == summaryNote.conversationTranscript, "Conversation details round-trip through complete snapshot")
+        var actionData = AppData(); let instruction = AIBuddyMessage(role: "assistant", text: "Prüfbarer Vorschlag"); actionData.aiMessages = [instruction]
+        let batteryAction = AIBuddyAction(kind: .battery, title: "Mein Akku", text: "Pause", moodPercent: 68, weekdays: [])
+        try AIBuddyMutation.apply(batteryAction, originalID: batteryAction.id, messageID: instruction.id, to: &actionData, now: now)
+        try expect(actionData.energyEntries[0].percent == 68 && actionData.moodCheckIns.isEmpty, "Battery action stores real energy without fabricating mood")
+        let palette = AIBuddyAction(kind: .setting, title: "Lila", text: "", targetID: "appearance.accent", weekdays: [], options: AIBuddyActionOptions(valueString: "purple"))
+        try AIBuddyMutation.apply(palette, originalID: palette.id, messageID: instruction.id, to: &actionData)
+        try expect(actionData.accentTheme == .purple && !AIBuddyAction(kind: .setting, title: "Schwarz", text: "", targetID: "appearance.accent", weekdays: [], options: AIBuddyActionOptions(valueString: "black")).valid, "Only readable curated accent palettes accepted")
+        let multiTime = AIBuddyAction(kind: .routine, title: "Meine Erinnerung", text: "", dateISO: ISO8601DateFormatter().string(from: now), weekdays: [], options: AIBuddyActionOptions(times: [480, 1200]))
+        try AIBuddyMutation.apply(multiTime, originalID: multiTime.id, messageID: instruction.id, to: &actionData, now: now)
+        try expect(actionData.routines[0].times.map(\.hour) == [8, 20] && actionData.routines[0].times.allSatisfy { $0.weekdays.count == 7 }, "Confirmed twice-daily routine keeps both real clocks")
+        let startRound = AIBuddyAction(kind: .startSession, title: "Runde", text: "", targetID: actionData.sessionTemplates[0].id.uuidString, weekdays: [])
+        try AIBuddyMutation.apply(startRound, originalID: startRound.id, messageID: instruction.id, to: &actionData, now: now)
+        try expect(actionData.currentSession?.title == actionData.sessionTemplates[0].title, "Only actual reviewed therapy template can start")
         print("Passed \(count) duplicate, flexible recurrence, therapy discussion, alarm lifecycle, AI privacy/action and offline network checks.")
     }
 }

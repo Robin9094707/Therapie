@@ -37,6 +37,8 @@ struct AppearanceCard: View {
                     }
                 }
                 .pickerStyle(.menu)
+                Picker("Hauptfarbe", selection: $store.data.accentTheme) { ForEach(AppAccent.allCases) { Text($0.title).tag($0) } }
+                Text("Text und Hintergründe folgen weiterhin der gut lesbaren iPhone-Darstellung.").font(.caption).foregroundStyle(.secondary)
                 Toggle("Ruhige Oberfläche", isOn: $calmInterface)
                 Toggle("Feine Haptik", isOn: $haptics)
                 Toggle("Konfetti bei erledigten Aufgaben", isOn: $confetti)
@@ -93,7 +95,7 @@ struct WeekOverviewCard: View {
                         Spacer(minLength: 0)
                     }
                     ProgressView(value: Double(completed), total: Double(tasks.count))
-                        .tint(.indigo)
+                        .tint(Color.accentColor)
                         .accessibilityLabel("Wochenfortschritt")
                         .accessibilityValue("\(completed) von \(tasks.count)")
                 }
@@ -101,7 +103,7 @@ struct WeekOverviewCard: View {
                 HStack(alignment: .top, spacing: 12) {
                     Image(systemName: "bolt.heart.fill")
                         .font(.title2)
-                        .foregroundStyle(.indigo)
+                        .foregroundStyle(Color.accentColor)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Stimmung & Akku heute").font(.subheadline.weight(.semibold))
                         if let entry = latestGuided, entry.date >= max(latestMood?.date ?? .distantPast, latestEnergy?.createdAt ?? .distantPast) {

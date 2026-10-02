@@ -59,6 +59,7 @@ struct WellnessHubView: View {
         NavigationStack {
             TherapyScreen {
                 VStack(spacing: 16) {
+                    NavigationLink { BuddyWellbeingProfileView() } label: { Label("Mein Befinden · Live, heute & 7 Tage", systemImage: "heart.text.clipboard") }
                     WeeklyEnergyCard()
                     WellnessProgressCard()
                     actions
@@ -318,7 +319,7 @@ private enum WellnessMetric: String, CaseIterable, Identifiable {
     func value(_ day: DailyWellnessValue) -> Double? {
         switch self { case .mood: day.mood; case .battery: day.battery; case .stress: day.stress; case .sensory: day.sensory }
     }
-    var color: Color { self == .battery ? .teal : self == .stress ? .orange : .indigo }
+    var color: Color { self == .battery ? .green : self == .stress || self == .sensory ? .orange : .green }
 }
 
 struct WellnessChartsView: View {
@@ -400,7 +401,7 @@ struct WellnessChartsView: View {
                     LineMark(x: .value("Tag", day.date), y: .value(metric.rawValue, value), series: .value("Abschnitt", day.segment))
                         .foregroundStyle(metric.color).interpolationMethod(.linear)
                     PointMark(x: .value("Tag", day.date), y: .value(metric.rawValue, value))
-                        .foregroundStyle(metric.color).symbolSize(45)
+                        .foregroundStyle(metric == .stress || metric == .sensory ? BatteryTone.burden(Int(value.rounded())) : BatteryTone.color(Int(((value - 1) * 25).rounded()))).symbolSize(45)
                 }
             }
             if let selected { RuleMark(x: .value("Ausgewählter Tag", selected.date)).foregroundStyle(.secondary.opacity(0.4)) }
@@ -459,7 +460,7 @@ struct MoodEditorView: View {
                                 else { entry.emotions.append(emotion) }
                             } label: {
                                 Text(emotion).font(.subheadline).padding(.vertical, 10).frame(maxWidth: .infinity)
-                                    .background(entry.emotions.contains(emotion) ? Color.indigo.opacity(0.18) : Color.secondary.opacity(0.08), in: Capsule())
+                                    .background(entry.emotions.contains(emotion) ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.08), in: Capsule())
                             }.buttonStyle(.plain).accessibilityAddTraits(entry.emotions.contains(emotion) ? .isSelected : [])
                         }
                     }

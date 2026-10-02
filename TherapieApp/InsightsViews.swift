@@ -12,13 +12,13 @@ struct MoodBarometerControl: View {
             }
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(LinearGradient(colors: [.orange.opacity(0.75), .yellow.opacity(0.6), .teal.opacity(0.8), .indigo], startPoint: .leading, endPoint: .trailing))
+                    Capsule().fill(LinearGradient(colors: [.red.opacity(0.75), .orange.opacity(0.7), .yellow.opacity(0.65), .green], startPoint: .leading, endPoint: .trailing))
                     Circle().fill(.white).overlay { Circle().strokeBorder(.indigo, lineWidth: 3) }.frame(width: 28, height: 28).offset(x: max(0, geometry.size.width - 28) * CGFloat(max(0, min(100, percent))) / 100)
                 }.contentShape(Rectangle()).gesture(DragGesture(minimumDistance: 0).onChanged { value in percent = max(0, min(100, Int(value.location.x / max(1, geometry.size.width) * 100))) })
             }.frame(height: 28).accessibilityHidden(true)
             Slider(value: Binding(get: { Double(percent) }, set: { percent = Int($0) }), in: 0...100, step: 1).accessibilityLabel("Stimmungsbarometer").accessibilityValue("\(percent) von 100, \(MoodBarometer.title(percent))")
             HStack { Text("Sehr niedrig"); Spacer(); Text("Gemischt"); Spacer(); Text("Sehr gut") }.font(.caption).foregroundStyle(.secondary)
-        }.padding(16).background(Color.indigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 20))
+        }.padding(16).background(Color.accentColor.opacity(0.06), in: RoundedRectangle(cornerRadius: 20))
             .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: percent)
     }
 }
@@ -142,7 +142,7 @@ struct InsightsHubView: View {
                             VStack(alignment: .leading, spacing: 10) {
                                 SectionHeader(title: "Dein Stimmungsbarometer", icon: "gauge.with.dots.needle.50percent")
                                 Text("Zuletzt \(comparison.latest, specifier: "%.1f") / 5").font(.title2.bold())
-                                ProgressView(value: max(0, min(100, (comparison.latest - 1) * 25)), total: 100).tint(.indigo)
+                                ProgressView(value: max(0, min(100, (comparison.latest - 1) * 25)), total: 100).tint(Color.accentColor)
                                 Text(comparison.message).font(.subheadline)
                                 if let value = comparison.reference { Text("Vergleich: \(value, specifier: "%.1f") / 5 aus \(min(14, comparison.previousDays)) früheren Tagen innerhalb der letzten 30 Tage.").font(.caption).foregroundStyle(.secondary) }
                                 if let trend = InsightsAnalytics.trend(data: store.data, period: period) { Text("Trend im gewählten Zeitraum: \(trend >= 0 ? "+" : "")\(trend, specifier: "%.1f") Punkte zwischen erster und zweiter Hälfte der erfassten Tage.").font(.caption).foregroundStyle(.secondary) }

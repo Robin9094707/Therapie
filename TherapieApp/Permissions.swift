@@ -90,7 +90,7 @@ struct PermissionSetupView: View {
                 Section {
                     ForEach(purposes, id: \.0) { purpose in
                         HStack(alignment: .top, spacing: 12) {
-                            Image(systemName: purpose.1).frame(width: 26).foregroundStyle(.indigo)
+                            Image(systemName: purpose.1).frame(width: 26).foregroundStyle(Color.accentColor)
                             VStack(alignment: .leading, spacing: 5) {
                                 Text(purpose.0).font(.headline)
                                 Text(purpose.2).font(.caption).foregroundStyle(.secondary)

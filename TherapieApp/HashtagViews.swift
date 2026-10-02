@@ -7,7 +7,7 @@ struct HashtagChips: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(AppHashtags.clean(tags), id: \.self) { tag in
-                        NavigationLink { HashtagEntriesView(tag: tag) } label: { Text("#" + tag).font(.caption.bold()).padding(.horizontal, 10).padding(.vertical, 7).background(Color.indigo.opacity(0.08), in: Capsule()) }
+                        NavigationLink { HashtagEntriesView(tag: tag) } label: { Text("#" + tag).font(.caption.bold()).padding(.horizontal, 10).padding(.vertical, 7).background(Color.accentColor.opacity(0.08), in: Capsule()) }
                     }
                 }
             }

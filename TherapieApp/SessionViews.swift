@@ -36,6 +36,7 @@ struct SessionConductorContent: View {
                                 let phase = session.phaseIndex().map { session.phases[$0].title } ?? "Rückblick"
                                 noteDraft = TherapyNote(title: phase, text: "", tags: ["Therapiestunde"], topicID: store.data.therapyTopics.first(where: \.isCurrent)?.id, sessionID: session.id)
                             }
+                            if store.data.aiSettings.enabled { HStack { BuddyInlineMicrophone { transcript in var snapshot = store.data; snapshot.notes.insert(TherapyNote(title: "Gedanke aus der Stunde", text: transcript, tags: ["Therapiestunde", "Sprachnotiz"], sessionID: session.id), at: 0); store.data = snapshot }; Text("Gedanken einsprechen · direkt als Notiz speichern").font(.caption).foregroundStyle(.secondary) } }
                             ForEach(store.data.therapyTopics.filter(\.isCurrent)) { topic in
                                 Label(topic.title, systemImage: topic.category.symbol).font(.subheadline)
                             }

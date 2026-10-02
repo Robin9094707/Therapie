@@ -187,7 +187,7 @@ enum WellnessAnalytics {
             let new = guided[day] ?? []
             return DailyWellnessValue(date: day,
                 mood: average(entries.map { ($0.moodPercent.map { 1 + Double($0) / 25 } ?? Double($0.mood)) } + new.compactMap { $0.moodPercent.map { 1 + Double($0) / 25 } ?? $0.mood.map(Double.init) }),
-                battery: average(entries.map { Double($0.battery) } + old.map { Double($0.level) } + new.compactMap { $0.batteryPercent.map { 1 + Double($0) / 25 } }),
+                battery: average(entries.map { Double($0.battery) } + old.map { $0.percent.map { 1 + Double($0) / 25 } ?? Double($0.level) } + new.compactMap { $0.batteryPercent.map { 1 + Double($0) / 25 } }),
                 stress: average(entries.compactMap { $0.stress.map(Double.init) } + new.compactMap { $0.stress.map(Double.init) }),
                 sensory: average(entries.compactMap { $0.sensoryLoad.map(Double.init) } + new.compactMap { $0.sensoryLoad.map(Double.init) }),
                 count: entries.count + old.count + new.count, segment: segment)
@@ -229,7 +229,7 @@ enum WellnessExport {
         }
         for entry in data.energyEntries.filter({ period.contains($0.createdAt) }) {
             rows.append(["Früherer Energie-Check", formatter.string(from: entry.createdAt), "", String(entry.level),
-                         "", "", "", "", "", "", "", entry.givesEnergy + " / " + entry.takesEnergy, entry.note, "", ""])
+                         "", "", "", "", "", "", "", entry.givesEnergy + " / " + entry.takesEnergy, (entry.percent.map { "Akku: \($0) % | " } ?? "") + entry.note, "", ""])
         }
         for review in data.weekReviews.filter({ period.contains($0.weekStart) }) {
             rows.append(["Wochenrückblick", formatter.string(from: review.weekStart), "", "", "", "", "", "", "", "", "",
@@ -238,7 +238,7 @@ enum WellnessExport {
         }
         for entry in data.guidedCheckIns.filter({ !$0.isDraft && period.contains($0.date) }).sorted(by: { $0.date < $1.date }) {
             let battery = entry.batteryPercent.map { String(1 + Double($0) / 25) } ?? ""
-            let context = "Akku in Prozent: " + (entry.batteryPercent.map(String.init) ?? "offen") + " | Energiegeber: " + entry.givesEnergy + " | Energienehmer: " + entry.takesEnergy + " | Therapiefrage: " + entry.therapyQuestion
+            let context = "Akku in Prozent: " + (entry.batteryPercent.map(String.init) ?? "offen") + " | Energiegeber: " + entry.givesEnergy + " | Energienehmer: " + entry.takesEnergy + " | Therapiefrage: " + entry.therapyQuestion + (entry.satisfaction.map { " | Zufriedenheit: \($0)/5" } ?? "")
             rows.append([entry.kind.title, formatter.string(from: entry.date), entry.mood.map(String.init) ?? "", battery,
                          entry.stress.map(String.init) ?? "", entry.sensoryLoad.map(String.init) ?? "", entry.sleepHours.map { String($0) } ?? "",
                          "", "", "", "", entry.summary, context, entry.smallWin, entry.nextNeed])

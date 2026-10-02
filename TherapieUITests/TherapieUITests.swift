@@ -317,8 +317,8 @@ final class TherapieUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Ein zweiter Gedanke."].waitForExistence(timeout: 10), "Reopening preserves the whole conversation")
         app.buttons["ai.chat.menu"].tap()
         app.buttons["ai.chat.journal"].firstMatch.tap()
-        XCTAssertTrue(app.alerts["Gespräch im Tagebuch speichern?"].waitForExistence(timeout: 10))
-        app.alerts.buttons["Speichern"].tap()
+        XCTAssertTrue(app.navigationBars["Eintrag prüfen"].waitForExistence(timeout: 10))
+        app.buttons["Speichern"].firstMatch.tap()
         XCTAssertTrue(app.textViews["ai.composer"].waitForExistence(timeout: 10))
         capture("Wieder geöffnetes Gespräch im Tagebuch gespeichert")
     }
@@ -332,7 +332,7 @@ final class TherapieUITests: XCTestCase {
         XCTAssertTrue(input.waitForExistence(timeout: 25))
         input.tap(); input.typeText("Meine Schwester gibt mir Sicherheit.")
         app.buttons["ai.send"].tap()
-        XCTAssertTrue(app.staticTexts["KI-geführter Check-in · 2 / 8"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Check-in · 2 / 8"].waitForExistence(timeout: 10))
         capture("KI-geführter Check-in mit gespeichertem Entwurf")
         let manual = app.buttons["ai.checkin.manual"]
         for _ in 0..<5 where !manual.isHittable { app.swipeDown() }
@@ -354,6 +354,17 @@ final class TherapieUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["KI-Begleiter"].waitForExistence(timeout: 10))
         app.buttons["Fertig"].firstMatch.tap()
         XCTAssertTrue(app.textViews["ai.composer"].waitForExistence(timeout: 10), "Closing nested settings never dismisses parent chat")
+        input.tap(); input.typeText("Bitte den Check-in speichern.")
+        app.buttons["ai.send"].tap()
+        XCTAssertTrue(app.staticTexts["Check-in · 8 / 8"].waitForExistence(timeout: 10), "Save intent goes directly to review, without skipping remaining questions")
+        let overview = app.buttons["ai.checkin.pinned.overview"].firstMatch
+        XCTAssertTrue(overview.isHittable, "Progress and review stay pinned above long chat")
+        overview.tap()
+        XCTAssertTrue(app.staticTexts["checkin.step"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.staticTexts["checkin.step"].label, "8 / 8")
+        app.buttons["Check-in speichern"].firstMatch.tap()
+        XCTAssertTrue(app.textViews["ai.composer"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["ai.checkin.pinned.overview"].exists, "Confirmed check-in leaves draft mode")
     }
 
     @MainActor

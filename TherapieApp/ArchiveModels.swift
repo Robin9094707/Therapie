@@ -46,7 +46,7 @@ enum ArchiveRecord: Identifiable {
         switch self {
         case .note(let value): value.title
         case .media(let value): value.title
-        case .energy(let value): "Energie-Check \(value.level)/5"
+        case .energy(let value): value.percent.map { "Akku \($0) %" } ?? "Energie-Check \(value.level)/5"
         case .reflection: "Therapie-Rückblick"
         case .mood(let value): "\(value.face) \(value.moodTitle) · Akku \(value.battery)/5"
         case .point(let value): value.title

@@ -130,6 +130,7 @@ struct GoalEditorView: View {
                     Text("Ohne Zuordnung").tag(Optional<UUID>.none)
                     ForEach(store.data.therapyTopics) { Text($0.title).tag(Optional($0.id)) }
                 }
+                Picker("Priorität", selection: Binding(get: { goal.priority ?? "normal" }, set: { goal.priority = $0 })) { Text("Ruhig").tag("low"); Text("Normal").tag("normal"); Text("Dringend").tag("high") }
                 Picker("Status", selection: $goal.status) { ForEach(TherapyWorkStatus.allCases) { Text($0.rawValue).tag($0) } }
                 Stepper("Fortschritt: \(goal.progress) %", value: $goal.progress, in: 0...100, step: 5)
                 ProgressView(value: Double(goal.progress), total: 100)
@@ -178,7 +179,7 @@ struct TherapyNoteEditorView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Label("Deine Gedanken", systemImage: "text.alignleft").font(.subheadline).foregroundStyle(.secondary)
                     TextEditor(text: $note.text).frame(minHeight: 220).scrollContentBackground(.hidden)
-                        .padding(10).background(Color.indigo.opacity(0.04), in: RoundedRectangle(cornerRadius: 16)).accessibilityLabel("Notiztext")
+                        .padding(10).background(Color.accentColor.opacity(0.04), in: RoundedRectangle(cornerRadius: 16)).accessibilityLabel("Notiztext")
                     HStack {
                         Button("Liste", systemImage: "list.bullet") { note.text += (note.text.isEmpty ? "" : "\n") + "• " }
                         Button("Checkliste", systemImage: "checklist") { note.text += (note.text.isEmpty ? "" : "\n") + "☐ " }
@@ -297,7 +298,7 @@ struct TherapyHubView: View {
             withAnimation(.easeInOut(duration: 0.16)) { section = value }
         } label: {
             Label(title, systemImage: symbol).font(.subheadline.bold()).padding(.horizontal, 13).padding(.vertical, 12)
-                .background(section == value ? Color.indigo.opacity(0.16) : Color.secondary.opacity(0.08), in: Capsule())
+                .background(section == value ? Color.accentColor.opacity(0.16) : Color.secondary.opacity(0.08), in: Capsule())
         }.buttonStyle(.plain).accessibilityAddTraits(section == value ? .isSelected : [])
     }
 }
@@ -379,7 +380,7 @@ struct TherapyFolderContentView: View {
                             } label: { Image(systemName: "ellipsis.circle").frame(width: 44, height: 44) }
                         }
                         Label(topic.status.rawValue, systemImage: topic.status.symbol).font(.caption.bold()).foregroundStyle(.secondary)
-                        if topic.isCurrent { Label("Für die nächste Stunde", systemImage: "pin.fill").font(.caption.bold()).foregroundStyle(.indigo) }
+                        if topic.isCurrent { Label("Für die nächste Stunde", systemImage: "pin.fill").font(.caption.bold()).foregroundStyle(Color.accentColor) }
                         if !topic.description.isEmpty { Text(topic.description).font(.subheadline).lineLimit(3) }
                         if !topic.nextStep.isEmpty { Label(topic.nextStep, systemImage: "arrow.right.circle").font(.subheadline) }
                         Button("Thema öffnen") { topicDetail = topic }.font(.subheadline.bold())

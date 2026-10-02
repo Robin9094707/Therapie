@@ -86,7 +86,7 @@ struct RoutineEditorView: View {
                 ForEach([2, 3, 4, 5, 6, 7, 1], id: \.self) { day in
                     Button {
                         if days.wrappedValue.contains(day) { days.wrappedValue.removeAll { $0 == day } } else { days.wrappedValue.append(day) }
-                    } label: { Text(String(TherapyDateHelper.weekdayName(day).prefix(2))).frame(maxWidth: .infinity).padding(10).background(days.wrappedValue.contains(day) ? Color.indigo.opacity(0.18) : Color.primary.opacity(0.05), in: Capsule()) }.buttonStyle(.plain).accessibilityLabel(TherapyDateHelper.weekdayName(day)).accessibilityAddTraits(days.wrappedValue.contains(day) ? .isSelected : [])
+                    } label: { Text(String(TherapyDateHelper.weekdayName(day).prefix(2))).frame(maxWidth: .infinity).padding(10).background(days.wrappedValue.contains(day) ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.05), in: Capsule()) }.buttonStyle(.plain).accessibilityLabel(TherapyDateHelper.weekdayName(day)).accessibilityAddTraits(days.wrappedValue.contains(day) ? .isSelected : [])
                 }
             }
         }

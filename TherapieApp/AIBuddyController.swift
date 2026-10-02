@@ -13,21 +13,27 @@ import UIKit
     func send(_ question: String, image: Data? = nil, inSession: Bool = false, daysOverride: Int? = nil, conversationID: UUID? = nil, onAccepted: (() -> Void)? = nil) async -> Bool {
         guard !busy, let store, store.data.aiSettings.enabled else { return false }
         let fixture = ProcessInfo.processInfo.arguments.contains("--buddy-network-fixture")
-        guard let key = fixture ? "fixture-no-network" : AIBuddyKeychain.read() else { error = "Bitte hinterlege zuerst deinen OpenAI-API-Schlüssel im Profil."; return false }
+        let storedKey = fixture ? "fixture-no-network" : AIBuddyKeychain.read()
         let clean = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty, clean.count <= 5000 else { error = "Bitte schreibe eine Nachricht mit höchstens 5.000 Zeichen."; return false }
         let chatID: UUID
         if let conversationID { chatID = conversationID }
         else { var snapshot = store.data; chatID = snapshot.aiConversations.first?.id ?? AIConversationMutation.create(in: &snapshot); store.data = snapshot }
         guard let chat = store.data.aiConversations.first(where: { $0.id == chatID }) else { return false }
+        let draftForCommand = chat.checkInID.flatMap { id in store.data.guidedCheckIns.first { $0.id == id && $0.isDraft } }
+        guard let key = storedKey ?? (draftForCommand != nil && BuddyInteraction.wantsOverview(clean) ? "local-overview" : nil) else { error = "Bitte hinterlege zuerst deinen OpenAI-API-Schlüssel im Profil."; return false }
         let settings = store.data.aiSettings
         let days = AIBuddyContext.requestDays(question: clean, settings: settings, chosenDays: daysOverride ?? chat.contextDays)
-        var context = AIBuddyContext.make(data: store.data, days: days)
+        var context = AIBuddyContext.make(data: store.data, days: days, end: BuddyInteraction.window(question: clean, days: days), question: clean, clock: Date())
         let history = store.data.aiMessages.filter { $0.conversationID == chatID }
         let draft = chat.checkInID.flatMap { id in store.data.guidedCheckIns.first { $0.id == id && $0.isDraft } }
-        let guide = draft.map(AICheckInGuide.instructions) ?? ""
-        if let note = chat.noteContext, settings.includeJournal { context.text += "\nDIE NOTIZ ZUM GESPRÄCH: " + note.title + "\n" + String(note.text.prefix(6000)) }
-        if let draft, draft.step >= 7 { error = "Deine Übersicht ist bereit. Bitte prüfe sie vor dem Abschließen."; return false }
+        var guide = draft.map(AICheckInGuide.instructions) ?? ""
+        if let memory = chat.memory { guide += "\nKURZE GESPRÄCHSNOTIZ (kann unvollständig sein): " + String(memory.prefix(1800)) }
+        if let note = chat.noteContext, settings.includeJournal { context.text += "\nDIE NOTIZ ZUM GESPRÄCH: " + note.title + "\n" + String(note.text.prefix(2000)) }
+        if let sessionID = chat.sessionID {
+            let notes = store.data.notes.filter { $0.sessionID == sessionID }
+            context.text += "\nNOTIZEN DIESER STUNDE:\n" + String(notes.map { $0.title + ": " + $0.text }.joined(separator: "\n").prefix(3000))
+        }
         // Keep sent user messages even when a request fails or is canceled. Retry the same
         // unanswered message without duplicating it; successful turns remain distinct.
         let userText = clean + (image == nil ? "" : "\n[Ein ausgewähltes Foto wurde mit ausdrücklicher Freigabe analysiert.]")
@@ -47,6 +53,9 @@ import UIKit
         if let index = store.data.aiConversations.firstIndex(where: { $0.id == chatID }), store.data.aiConversations[index].draftText != nil { store.data.aiConversations[index].draftText = nil }
         onAccepted?()
         let task = Task<AIBuddyResponse, Error> {
+            if draft != nil && BuddyInteraction.wantsOverview(clean) {
+                return AIBuddyResponse(reply: AIBuddyReply(title: "Deine Check-in-Übersicht", message: "Deine Angaben sind für die Übersicht bereit. Prüfe sie über den Knopf und bestätige dort das Speichern. Du kannst vorher auch noch etwas ergänzen.", sections: [], actions: [], checkIn: AIBuddyCheckInProposal(advance: false, finish: true)))
+            }
             if fixture {
                 try await Task.sleep(for: .milliseconds(150))
                 let proposal = draft == nil ? nil : AIBuddyCheckInProposal(summary: clean, tags: ["Familie"])
@@ -66,11 +75,18 @@ import UIKit
             snapshot.aiMessages.append(AIBuddyMessage(role: "assistant", text: result.reply.journalText, reply: result.reply, contextStart: context.start, contextEnd: context.end, model: settings.model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, conversationID: chatID))
             if let index = snapshot.aiConversations.firstIndex(where: { $0.id == chatID }) {
                 snapshot.aiConversations[index].updatedAt = Date()
+                if let memory = result.reply.memory { snapshot.aiConversations[index].memory = String(AIBuddyText.plain(memory).prefix(1800)) }
+                let userText = snapshot.aiMessages.filter { $0.conversationID == chatID && $0.role == "user" }.map(\.text).joined(separator: "\n")
+                snapshot.aiConversations[index].tags = BuddyInteraction.hashtags(result.reply.tags ?? [], text: userText, known: AppHashtags.catalog(snapshot))
                 if snapshot.aiConversations[index].title == "Neues Gespräch" { snapshot.aiConversations[index].title = String(clean.prefix(60)) }
             }
             if let id = chat.checkInID, let index = snapshot.guidedCheckIns.firstIndex(where: { $0.id == id && $0.isDraft }), let proposal = result.reply.checkIn {
                 var entry = snapshot.guidedCheckIns[index]
-                if AICheckInGuide.apply(proposal, to: &entry, known: AppHashtags.catalog(snapshot)) { _ = GuidedCheckInMutation.apply(entry, complete: false, to: &snapshot) }
+                if AICheckInGuide.apply(proposal, to: &entry, known: AppHashtags.catalog(snapshot)) {
+                    let userText = snapshot.aiMessages.filter { $0.conversationID == chatID && $0.role == "user" }.map(\.text).joined(separator: "\n")
+                    entry.tags = BuddyInteraction.hashtags((entry.tags ?? []) + (result.reply.tags ?? []), text: userText, known: AppHashtags.catalog(snapshot))
+                    _ = GuidedCheckInMutation.apply(entry, complete: false, to: &snapshot)
+                }
             }
             store.data = snapshot
             if let failure = store.lastSaveError { error = failure; return false }

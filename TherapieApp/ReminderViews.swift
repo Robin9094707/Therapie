@@ -11,7 +11,7 @@ struct WeekdaySelection: View {
                 } label: {
                     Text(String(TherapyDateHelper.weekdayName(day).prefix(2))).font(.caption.bold())
                         .frame(maxWidth: .infinity, minHeight: 44)
-                        .background(days.contains(day) ? Color.indigo.opacity(0.2) : Color(uiColor: .tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
+                        .background(days.contains(day) ? Color.accentColor.opacity(0.2) : Color(uiColor: .tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
                 }.buttonStyle(.plain).accessibilityLabel(TherapyDateHelper.weekdayName(day)).accessibilityAddTraits(days.contains(day) ? .isSelected : [])
             }
         }

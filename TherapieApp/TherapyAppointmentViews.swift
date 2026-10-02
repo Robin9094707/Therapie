@@ -10,7 +10,7 @@ struct TherapyAppointmentCard: View {
                     SectionHeader(title: "Deine nächste Therapie", icon: "calendar.badge.clock")
                     if let next = TherapyDateHelper.nextOccurrence(schedule: store.data.schedule, after: context.date) {
                         Text(TherapyCountdown.label(until: next, from: context.date))
-                            .font(.system(.title, design: .rounded, weight: .bold)).foregroundStyle(.indigo)
+                            .font(.system(.title, design: .rounded, weight: .bold)).foregroundStyle(Color.accentColor)
                             .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("therapy.countdown")
                         Text(next.formatted(date: .complete, time: .shortened)).font(.headline)
                         if !store.data.profile.therapistName.isEmpty { Text("Mit " + store.data.profile.therapistName).foregroundStyle(.secondary) }
@@ -55,7 +55,7 @@ struct TodayOverviewCard: View {
     }
     private func tile(_ title: String, value: String, icon: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Image(systemName: icon).font(.title3).foregroundStyle(.indigo)
+            Image(systemName: icon).font(.title3).foregroundStyle(Color.accentColor)
             Text(value).font(.system(.title2, design: .rounded, weight: .bold))
             Text(title).font(.caption).foregroundStyle(.secondary)
         }.frame(maxWidth: .infinity, alignment: .leading).padding(14)

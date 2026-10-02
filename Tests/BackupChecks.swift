@@ -51,6 +51,16 @@ struct BackupChecks {
         AIConversationMutation.migrate(&data)
         data.aiConversations[0].contextDays = 14
         data.aiConversations[0].draftText = "Noch nicht gesendeter Gedanke"
+        data.accentTheme = .purple
+        data.wellbeingPreferences.estimateBattery = true; data.wellbeingPreferences.hourlyDecline = 2
+        data.aiSettings.speakReplies = true
+        data.aiConversations[0].memory = "Familie und Pausen; eine Aufgabe nur vorgeschlagen"
+        data.aiConversations[0].tags = ["Familie", "Erholung"]
+        data.aiConversations[0].sessionID = routine.id
+        data.guidedCheckIns[0].satisfaction = 4
+        data.aiMessages[0].reply?.memory = "Notiz"
+        data.aiMessages[0].reply?.tags = ["Familie"]
+        data.aiMessages[0].reply?.quickReplies = [BuddyQuickReply(title: "Ruhe", text: "Ich brauche jetzt Ruhe.")]
         data.aiSettings.weeklyReviewEnabled = true
         data.aiSettings.lastWeeklyReview = Date(timeIntervalSince1970: 1_780_000_000)
         data.aiSettings.lastWeeklyReviewAttempt = data.aiSettings.lastWeeklyReview
@@ -74,11 +84,11 @@ struct BackupChecks {
         data.therapyFolders = [folder]
         let topic = TherapyTopic(title: "Reizregulation")
         data.therapyTopics = [topic]
-        data.therapyGoals = [TherapyGoal(title: "Pausen")]
-        data.notes = [TherapyNote(title: "PRIVATE-NOTE-DO-NOT-LEAK", text: "Wichtig für mich", tags: ["Privat"], folderID: folder.id, topicID: topic.id, author: "Therapeutin", isImportant: true)]
+        data.therapyGoals = [TherapyGoal(title: "Pausen", priority: "high")]
+        data.notes = [TherapyNote(title: "PRIVATE-NOTE-DO-NOT-LEAK", text: "Wichtig für mich", tags: ["Privat"], folderID: folder.id, topicID: topic.id, author: "Therapeutin", isImportant: true, conversationID: data.aiConversations[0].id, conversationTranscript: "Du: Meine Schwester hilft. Begleiter: Eine Pause planen.")]
         let week = Date().therapyWeek
         data.weeklyTasks = [WeeklyTask(weekOfYear: week.week, yearForWeekOfYear: week.year, title: "Aufgabe", details: "Wieder aufnehmen", completed: true, completedAt: Date(), topicID: topic.id, reminder: TaskReminder(), dueDate: Date(), smallStep: "Einmal probieren", support: "Zusammen", progress: 80, reminderShiftedAt: Date())]
-        data.energyEntries = [EnergyEntry(level: 3, givesEnergy: "Ruhe", takesEnergy: "Lärm", note: "Altbestand")]
+        data.energyEntries = [EnergyEntry(level: 3, percent: 62, givesEnergy: "Ruhe", takesEnergy: "Lärm", note: "Altbestand")]
         data.reflections = [TherapySessionReflection(summary: "Stunde", whatHelped: "Kaffee", nextFocus: "AirTag")]
         data.moodCheckIns = [MoodCheckIn(mood: 4, battery: 3)]
         data.batteryPoints = [BatteryPoint(title: "Wald", direction: .gives)]
@@ -208,11 +218,14 @@ struct BackupChecks {
         prefs.apply(defaults)
         try expect(PortablePreferences.capture(defaults) == prefs, "Appearance, calm, haptics and confetti restored")
         var oldJSON = try JSONSerialization.jsonObject(with: BackupArchive.encoder().encode(data)) as! [String: Any]
-        for version in 1...11 {
+        for version in 1...12 {
             oldJSON["schemaVersion"] = version
             let migrated = try BackupArchive.decoder().decode(AppData.self, from: JSONSerialization.data(withJSONObject: oldJSON))
-            try expect(migrated.schemaVersion == 12 && migrated.notes.count == 1 && migrated.media[0].attachmentOmitted == nil, "Schema \(version) migrates for backups")
+            try expect(migrated.schemaVersion == 13 && migrated.notes.count == 1 && migrated.media[0].attachmentOmitted == nil, "Schema \(version) migrates for backups")
         }
+        oldJSON["schemaVersion"] = 12; oldJSON.removeValue(forKey: "accentTheme"); oldJSON.removeValue(forKey: "wellbeingPreferences")
+        let pre3011 = try BackupArchive.decoder().decode(AppData.self, from: JSONSerialization.data(withJSONObject: oldJSON))
+        try expect(pre3011.accentTheme == .indigo && !pre3011.wellbeingPreferences.estimateBattery, "Actual schema12 defaults to existing design and no fabricated live battery")
         oldJSON["schemaVersion"] = 8; oldJSON.removeValue(forKey: "dashboard"); oldJSON.removeValue(forKey: "archivePreferences")
         let oldWithoutSettings = try BackupArchive.decoder().decode(AppData.self, from: JSONSerialization.data(withJSONObject: oldJSON))
         try expect(oldWithoutSettings.dashboard == DashboardPreferences() && oldWithoutSettings.archivePreferences == ArchivePreferences(), "Real pre-personalization backup migrates safely")

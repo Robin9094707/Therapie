@@ -7,6 +7,7 @@ extension AppStore {
         clean.moodPercent = clean.moodPercent.map { max(0, min(100, $0)) }
         clean.mood = clean.mood.map { max(1, min(5, $0)) }
         clean.batteryPercent = clean.batteryPercent.map { max(0, min(100, $0)) }
+        clean.satisfaction = clean.satisfaction.map { max(1, min(5, $0)) }
         clean.stress = clean.stress.map { max(1, min(5, $0)) }
         clean.sensoryLoad = clean.sensoryLoad.map { max(1, min(5, $0)) }
         clean.sleepHours = clean.sleepHours.map { max(0, min(24, $0)) }

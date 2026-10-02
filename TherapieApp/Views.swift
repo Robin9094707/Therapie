@@ -40,7 +40,7 @@ struct RootView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
-        .tint(.indigo)
+        .tint(Color.accentColor)
         .accessibilityIdentifier("therapy.root")
         .sheet(item: $modal, onDismiss: presentRequested) { modalContent($0) }
         .onOpenURL { url in
@@ -225,7 +225,7 @@ struct GlassCard<Content: View>: View {
                                 in: RoundedRectangle(cornerRadius: 24, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .strokeBorder(emphasized ? Color.indigo.opacity(0.24) : Color.primary.opacity(0.06), lineWidth: 1)
+                            .strokeBorder(emphasized ? Color.accentColor.opacity(0.24) : Color.primary.opacity(0.06), lineWidth: 1)
                     }
             } else {
                 cardContent
@@ -680,7 +680,7 @@ struct QuickActionButton: View {
         .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(Color.indigo.opacity(0.14), lineWidth: 1)
+                .strokeBorder(Color.accentColor.opacity(0.14), lineWidth: 1)
         }
         .accessibilityElement(children: .combine)
     }
@@ -1294,6 +1294,7 @@ struct SettingsView: View {
             TherapyScreen {
                 VStack(spacing: 16) {
                     profileCard
+                    GlassCard { NavigationLink { BuddyWellbeingProfileView() } label: { Label("Mein aktueller Akku & Befinden", systemImage: "heart.text.clipboard") } }
                     AppearanceCard()
                     HomeAndWidgetSettingsCard()
                     AIBuddySettingsCard()

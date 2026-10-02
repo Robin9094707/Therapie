@@ -37,6 +37,10 @@ struct StorageReminderChecks {
         AIConversationMutation.migrate(&data)
         data.aiConversations[0].contextDays = 14
         data.aiConversations[0].draftText = "Noch nicht gesendeter Gedanke"
+        data.accentTheme = .purple; data.wellbeingPreferences.estimateBattery = true; data.wellbeingPreferences.hourlyDecline = 2
+        data.aiSettings.speakReplies = true
+        data.aiConversations[0].memory = "Familie und Pausen"; data.aiConversations[0].tags = ["Familie"]
+        data.guidedCheckIns[0].satisfaction = 4
         data.aiSettings.weeklyReviewEnabled = true
         data.aiSettings.lastWeeklyReview = Date(timeIntervalSince1970: 1_780_000_000)
         data.aiSettings.lastWeeklyReviewAttempt = data.aiSettings.lastWeeklyReview
@@ -48,7 +52,7 @@ struct StorageReminderChecks {
         data.guidedCheckIns[0].tags = ["Familie"]
         data.therapyDiscussionAcknowledgedIDs = ["guided-discussed"]
         data.reminderPreferences.energyReviewEnabled = true
-        data.notes = [TherapyNote(title: "Lesbare Notiz", text: "Meine wichtige Zeile\nzweite Zeile", tags: ["wichtig"], isImportant: true)]
+        data.notes = [TherapyNote(title: "Lesbare Notiz", text: "Meine wichtige Zeile\nzweite Zeile", tags: ["wichtig"], isImportant: true, conversationID: data.aiConversations[0].id, conversationTranscript: "Du: Meine Schwester hilft. Begleiter: Eine Pause.")]
         data.therapyFolders = [TherapyFolder(title: "Meine Themen")]
         data.weeklyEnergyReviews = [WeeklyEnergyReview(periodEnd: now, energy: 4, gives: [WeeklyEnergyFactor(title: "Freunde", impact: 4)], takes: [WeeklyEnergyFactor(title: "Viele Reize", impact: 2)], therapyQuestion: "Wie kann ich Pausen planen?")]
         try expect(data.guidedCheckIns[0].batteryPercent == 0, "Zero battery fixture")

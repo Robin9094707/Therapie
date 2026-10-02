@@ -10,6 +10,8 @@ struct TherapieApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(store)
+                .tint(store.data.accentTheme.color)
+                .accentColor(store.data.accentTheme.color)
                 .preferredColorScheme((TherapyAppearance(rawValue: appearance) ?? .system).colorScheme)
                 .environment(\.locale, Locale(identifier: "de_DE"))
         }

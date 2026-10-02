@@ -7,6 +7,12 @@ enum AIBuddyMutation {
         let title = AIBuddyText.plain(action.title), text = AIBuddyText.plain(action.text)
         let date = action.date ?? now
         switch action.kind {
+        case .battery:
+            guard let percent = action.moodPercent else { throw AIBuddyAPIError(message: "Bitte wähle deinen Akkuwert.") }
+            snapshot.energyEntries.insert(EnergyEntry(createdAt: min(date, now), level: MoodBarometer.score(percent), percent: percent, givesEnergy: "", takesEnergy: "", note: text), at: 0)
+        case .startSession:
+            guard snapshot.currentSession == nil, let template = snapshot.sessionTemplates.first(where: { $0.id == action.targetID.flatMap(UUID.init(uuidString:)) && $0.isValid }) else { throw AIBuddyAPIError(message: "Eine Runde läuft bereits oder diese Vorlage ist nicht mehr verfügbar.") }
+            snapshot.currentSession = RunningTherapySession.start(template, at: now)
         case .note:
             snapshot.notes.insert(TherapyNote(createdAt: min(date, now), title: title.isEmpty ? "Mein Therapietagebuch" : title, text: text, tags: AppHashtags.clean(["Tagebuch", "KI-Begleiter"] + (action.tags ?? []), known: AppHashtags.catalog(snapshot)), sessionID: snapshot.currentSession?.id, category: "Therapietagebuch"), at: 0)
         case .mood:
@@ -35,10 +41,11 @@ enum AIBuddyMutation {
         case .routine:
             let clock = Calendar.current.dateComponents([.hour, .minute], from: date)
             var routine = DailyRoutine(title: title, details: text, times: [RoutineTime(weekdays: action.weekdays.isEmpty ? Array(1...7) : Array(Set(action.weekdays)).sorted(), hour: clock.hour ?? 9, minute: clock.minute ?? 0)])
+            if let times = action.options?.times { routine.times = times.sorted().map { RoutineTime(weekdays: action.weekdays.isEmpty ? Array(1...7) : Array(Set(action.weekdays)).sorted(), hour: $0 / 60, minute: $0 % 60) } }
             configure(&routine, action: action, start: date)
             snapshot.routines.insert(routine, at: 0)
         case .goal:
-            snapshot.therapyGoals.insert(TherapyGoal(title: title, why: text, smallStep: text, dueDate: action.date), at: 0)
+            snapshot.therapyGoals.insert(TherapyGoal(title: title, why: text, smallStep: text, dueDate: action.date, priority: action.options?.priority), at: 0)
         case .checkIn:
             var entry = GuidedCheckIn(date: min(date, now), summary: text, tags: AppHashtags.clean(action.tags ?? [], known: AppHashtags.catalog(snapshot)), customTitle: title.isEmpty ? nil : title)
             entry.moodPercent = action.moodPercent; entry.mood = action.moodPercent.map(MoodBarometer.score)
@@ -89,6 +96,8 @@ enum AIBuddyMutation {
         case .setting:
             let value = action.options?.valueBool ?? false
             switch action.targetID {
+            case "appearance.accent": snapshot.accentTheme = action.options?.valueString.flatMap(AppAccent.init(rawValue:)) ?? snapshot.accentTheme
+            case "ai.speakReplies": snapshot.aiSettings.speakReplies = value
             case "ai.contextDays": snapshot.aiSettings.contextDays = action.options?.valueInt ?? snapshot.aiSettings.contextDays
             case "ai.preferGuidedCheckIns": snapshot.aiSettings.preferGuidedCheckIns = value
             case "ai.automaticRange": snapshot.aiSettings.automaticRange = value

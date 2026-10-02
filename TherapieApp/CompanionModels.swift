@@ -25,6 +25,7 @@ struct GuidedCheckIn: Codable, Equatable, Identifiable {
     var sessionID: UUID?
     var mood: Int?
     var batteryPercent: Int?
+    var satisfaction: Int?
     var stress: Int?
     var sensoryLoad: Int?
     var sleepHours: Double?

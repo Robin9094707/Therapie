@@ -19,7 +19,7 @@ struct DashboardCustomizationView: View {
                 Section("Deine Heute-Karten") {
                     ForEach(draft.orderedCards) { card in
                         HStack(spacing: 12) {
-                            Image(systemName: card.symbol).foregroundStyle(.indigo).frame(width: 24)
+                            Image(systemName: card.symbol).foregroundStyle(Color.accentColor).frame(width: 24)
                             Text(card.title).font(.subheadline).frame(maxWidth: .infinity, alignment: .leading)
                             Button {
                                 toggle(card.rawValue, in: &draft.pinnedCards)

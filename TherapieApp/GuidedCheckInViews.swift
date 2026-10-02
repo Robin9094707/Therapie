@@ -5,7 +5,7 @@ import UIKit
 struct EnergyBatteryControl: View {
     @Binding var percent: Int
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private var color: Color { percent < 25 ? .orange : percent < 60 ? .teal : .indigo }
+    private var color: Color { BatteryTone.color(percent) }
     var body: some View {
         VStack(spacing: 18) {
             HStack(alignment: .center, spacing: 5) {
@@ -53,7 +53,7 @@ struct GuidedCheckInView: View {
             TherapyScreen {
                 VStack(alignment: .leading, spacing: 20) {
                     HStack { Label(entry.displayTitle, systemImage: entry.kind.symbol).font(.headline); Spacer(); Text("\(step + 1) / 8").font(.caption.monospacedDigit()).foregroundStyle(.secondary).accessibilityIdentifier("checkin.step") }
-                    ProgressView(value: Double(step + 1), total: 8).tint(.indigo)
+                    ProgressView(value: Double(step + 1), total: 8).tint(Color.accentColor)
                     GlassCard(emphasized: true) {
                         VStack(alignment: .leading, spacing: 20) {
                             Text(titles[step]).font(.system(.title, design: .rounded, weight: .bold))
@@ -106,6 +106,7 @@ struct GuidedCheckInView: View {
             Toggle("Schlaf festhalten", isOn: Binding(get: { entry.sleepHours != nil }, set: { entry.sleepHours = $0 ? 8 : nil }))
             if entry.sleepHours != nil { Stepper("Schlaf: \((entry.sleepHours ?? 8).formatted()) Stunden", value: Binding(get: { entry.sleepHours ?? 8 }, set: { entry.sleepHours = $0 }), in: 0...24, step: 0.5) }
         case 4:
+            optionalScale("Wie zufrieden bist du gerade?", value: $entry.satisfaction)
             field(entry.kind == .morning ? "Was steht heute an?" : "Was ist passiert? Was war wichtig?", text: $entry.summary)
             field("Ein kleiner Erfolg", text: $entry.smallWin)
             field("Was brauchst du jetzt?", text: $entry.nextNeed)
@@ -187,7 +188,7 @@ struct GuidedCheckInView: View {
     }
     private func persistDraft() { guard entry.isDraft, entry.hasUserContent else { return }; store.saveGuided(entry, complete: false); error = store.lastSaveError }
     private func clearStep() {
-        switch step { case 1: entry.mood = nil; entry.moodPercent = nil; case 2: entry.batteryPercent = nil; entry.energyPoints = []; entry.givesEnergy = ""; entry.takesEnergy = ""; case 3: entry.stress = nil; entry.sensoryLoad = nil; entry.sleepHours = nil; case 4: entry.summary = ""; entry.smallWin = ""; entry.nextNeed = ""; case 5: if entry.isDraft { entry.tasks = [] }; case 6: entry.therapyQuestion = ""; default: break }
+        switch step { case 1: entry.mood = nil; entry.moodPercent = nil; case 2: entry.batteryPercent = nil; entry.energyPoints = []; entry.givesEnergy = ""; entry.takesEnergy = ""; case 3: entry.stress = nil; entry.sensoryLoad = nil; entry.sleepHours = nil; case 4: entry.satisfaction = nil; entry.summary = ""; entry.smallWin = ""; entry.nextNeed = ""; case 5: if entry.isDraft { entry.tasks = [] }; case 6: entry.therapyQuestion = ""; default: break }
     }
     private func addPhoto(_ item: PhotosPickerItem) async {
         importing = true; defer { importing = false; selection = nil }
@@ -207,6 +208,7 @@ struct GuidedCheckInSummary: View {
             Text(entry.date.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
             LabeledContent("Stimmung", value: entry.mood.map { MoodCheckIn.moodTitles[max(0, min(4, $0 - 1))] } ?? "Nicht angegeben")
             LabeledContent("Akku", value: entry.batteryPercent.map { "\($0) %" } ?? "Nicht angegeben")
+            if let satisfaction = entry.satisfaction { LabeledContent("Zufriedenheit", value: "\(satisfaction)/5") }
             if let stress = entry.stress { LabeledContent("Stress", value: "\(stress)/5") }
             if let sensory = entry.sensoryLoad { LabeledContent("Reize", value: "\(sensory)/5") }
             if let sleep = entry.sleepHours { LabeledContent("Schlaf", value: "\(sleep.formatted()) Stunden") }

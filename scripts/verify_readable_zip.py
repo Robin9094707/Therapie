@@ -11,7 +11,13 @@ with zipfile.ZipFile(sys.argv[1]) as archive:
     data = json.loads(archive.read("therapy-data.json"))
     manifest = json.loads(archive.read("manifest.json"))
     assert data == manifest["data"]
-    assert data["schemaVersion"] == 12
+    assert data["schemaVersion"] == 13
+    assert data["accentTheme"] == "purple"
+    assert data["wellbeingPreferences"] == {"estimateBattery": True, "hourlyDecline": 2}
+    assert data["aiSettings"]["speakReplies"] is True
+    assert data["aiConversations"][0]["memory"] == "Familie und Pausen"
+    assert data["notes"][0]["conversationTranscript"].startswith("Du: Meine Schwester")
+    assert data["guidedCheckIns"][0]["satisfaction"] == 4
     assert data["aiSettings"]["weeklyReviewEnabled"] is True
     assert data["aiConversations"][0]["draftText"] == "Noch nicht gesendeter Gedanke"
     assert data["routines"][0]["repeatEveryWeeks"] == 2

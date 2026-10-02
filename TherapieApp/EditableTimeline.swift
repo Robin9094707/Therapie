@@ -191,7 +191,7 @@ struct ArchiveTimelineCard: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: record.symbol).font(.title3).foregroundStyle(.indigo).frame(width: 28).accessibilityHidden(true)
+                    Image(systemName: record.symbol).font(.title3).foregroundStyle(Color.accentColor).frame(width: 28).accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 4) {
                         Button(action: open) { Text(record.title).font(.headline).multilineTextAlignment(.leading) }.buttonStyle(.plain)
                         Text(record.subtitle).font(.subheadline).foregroundStyle(.secondary).lineLimit(3)

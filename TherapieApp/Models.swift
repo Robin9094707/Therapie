@@ -89,12 +89,15 @@ struct TherapyNote: Identifiable, Codable, Equatable {
     var isImportant: Bool?
     var mediaIDs: [UUID]?
     var updatedAt: Date?
+    var conversationID: UUID?
+    var conversationTranscript: String?
 }
 
 struct EnergyEntry: Identifiable, Codable, Equatable {
     var id = UUID()
     var createdAt = Date()
     var level: Int
+    var percent: Int?
     var givesEnergy: String
     var takesEnergy: String
     var note: String
@@ -150,7 +153,7 @@ struct TherapySessionReflection: Identifiable, Codable, Equatable {
 }
 
 struct AppData: Codable, Equatable {
-    var schemaVersion = 12
+    var schemaVersion = 13
     var profile = UserProfile()
     var schedule = TherapySchedule()
     var preferences = AppPreferences()
@@ -182,6 +185,8 @@ struct AppData: Codable, Equatable {
     var dashboard = DashboardPreferences()
     var archivePreferences = ArchivePreferences()
     var therapyDiscussionAcknowledgedIDs: [String] = []
+    var wellbeingPreferences = WellbeingPreferences()
+    var accentTheme = AppAccent.indigo
     var aiSettings = AIBuddySettings()
     var aiMessages: [AIBuddyMessage] = []
     var aiConversations: [AIBuddyConversation] = []
@@ -191,7 +196,7 @@ struct AppData: Codable, Equatable {
     init() {}
 
     enum CodingKeys: String, CodingKey {
-        case editorDrafts, dashboard, archivePreferences, therapyDiscussionAcknowledgedIDs, aiSettings, aiMessages, aiConversations, hashtagCatalog
+        case wellbeingPreferences, accentTheme, editorDrafts, dashboard, archivePreferences, therapyDiscussionAcknowledgedIDs, aiSettings, aiMessages, aiConversations, hashtagCatalog
         case schemaVersion, profile, schedule, preferences, weeklyTasks, notes, energyEntries, media, reflections
         case moodCheckIns, batteryPoints, weekReviews, wellnessSettings
         case therapyFolders, therapyTopics, therapyGoals, sessionTemplates, currentSession, sessionHistory, sessionPreferences
@@ -202,7 +207,7 @@ struct AppData: Codable, Equatable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let version = try c.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
-        guard (1...12).contains(version) else {
+        guard (1...13).contains(version) else {
             throw DecodingError.dataCorruptedError(forKey: .schemaVersion, in: c,
                                                    debugDescription: "Diese Daten benötigen eine neuere App-Version.")
         }
@@ -218,9 +223,11 @@ struct AppData: Codable, Equatable {
             dashboard.cardOrder.insert(HomeCard.discussion.rawValue, at: position)
         }
         therapyDiscussionAcknowledgedIDs = try c.decodeIfPresent([String].self, forKey: .therapyDiscussionAcknowledgedIDs) ?? []
+        wellbeingPreferences = try c.decodeIfPresent(WellbeingPreferences.self, forKey: .wellbeingPreferences) ?? WellbeingPreferences()
+        accentTheme = try c.decodeIfPresent(AppAccent.self, forKey: .accentTheme) ?? .indigo
         aiSettings = try c.decodeIfPresent(AIBuddySettings.self, forKey: .aiSettings) ?? AIBuddySettings()
         aiMessages = try c.decodeIfPresent([AIBuddyMessage].self, forKey: .aiMessages) ?? []
-        schemaVersion = 12
+        schemaVersion = 13
         profile = try c.decode(UserProfile.self, forKey: .profile)
         schedule = try c.decodeIfPresent(TherapySchedule.self, forKey: .schedule) ?? TherapySchedule()
         preferences = try c.decodeIfPresent(AppPreferences.self, forKey: .preferences) ?? AppPreferences()

@@ -29,7 +29,7 @@ struct TherapyInputField: View {
                 .onSubmit { if !multiline { focused = false } }
                 .padding(.horizontal, 14).padding(.vertical, 13)
                 .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
-                .overlay { RoundedRectangle(cornerRadius: 16).strokeBorder(focused ? Color.indigo.opacity(0.65) : Color.primary.opacity(0.12), lineWidth: focused ? 1.5 : 1) }
+                .overlay { RoundedRectangle(cornerRadius: 16).strokeBorder(focused ? Color.accentColor.opacity(0.65) : Color.primary.opacity(0.12), lineWidth: focused ? 1.5 : 1) }
                 .accessibilityLabel(title).accessibilityIdentifier(identifier ?? title)
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: focused)
         }

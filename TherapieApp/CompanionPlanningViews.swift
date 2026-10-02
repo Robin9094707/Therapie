@@ -77,7 +77,7 @@ private struct CheckInClockFields: View {
                         if time.weekdays.contains(day) { time.weekdays.removeAll { $0 == day } } else { time.weekdays.append(day) }
                     } label: {
                         Text(String(TherapyDateHelper.weekdayName(day).prefix(2))).frame(maxWidth: .infinity).padding(10)
-                            .background(time.weekdays.contains(day) ? Color.indigo.opacity(0.18) : Color.primary.opacity(0.05), in: Capsule())
+                            .background(time.weekdays.contains(day) ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.05), in: Capsule())
                     }.buttonStyle(.plain).accessibilityLabel(TherapyDateHelper.weekdayName(day)).accessibilityAddTraits(time.weekdays.contains(day) ? .isSelected : [])
                 }
             }
@@ -179,8 +179,8 @@ private struct TherapyReportPreview: View {
                                 SectionHeader(title: "Dein Akku im Verlauf", icon: "battery.75percent", subtitle: "Nur deine ausgewählten Angaben. Übersprungene Antworten bleiben leer.")
                                 Chart(entries) { entry in
                                     if let value = entry.batteryPercent {
-                                        LineMark(x: .value("Zeit", entry.date), y: .value("Akku", value)).foregroundStyle(.indigo)
-                                        PointMark(x: .value("Zeit", entry.date), y: .value("Akku", value)).foregroundStyle(.indigo)
+                                        LineMark(x: .value("Zeit", entry.date), y: .value("Akku", value)).foregroundStyle(Color.accentColor)
+                                        PointMark(x: .value("Zeit", entry.date), y: .value("Akku", value)).foregroundStyle(Color.accentColor)
                                     }
                                 }.chartYScale(domain: 0...100).frame(height: 180)
                                     .accessibilityLabel("Akku-Verlauf aus \(entries.compactMap(\.batteryPercent).count) Angaben")

@@ -9,7 +9,7 @@ struct MediaAttachmentThumbnail: View {
     var body: some View {
         if item.attachmentOmitted != true, item.kind == .photo, let url = try? BackupArchive.sourceURL(item.relativePath, root: store.rootURL), let image = UIImage(contentsOfFile: url.path) {
             Image(uiImage: image).resizable().scaledToFill().frame(width: 56, height: 56).clipped().clipShape(RoundedRectangle(cornerRadius: 12)).accessibilityHidden(true)
-        } else { Image(systemName: item.kind.symbol).font(.title2).frame(width: 56, height: 56).background(Color.indigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 12)).accessibilityHidden(true) }
+        } else { Image(systemName: item.kind.symbol).font(.title2).frame(width: 56, height: 56).background(Color.accentColor.opacity(0.06), in: RoundedRectangle(cornerRadius: 12)).accessibilityHidden(true) }
     }
 }
 @MainActor final class TherapyAudioPlayback: NSObject, ObservableObject, AVAudioPlayerDelegate {
@@ -121,6 +121,7 @@ struct TherapyNoteDetailView: View {
                                 if !note.text.isEmpty { Text(note.text).textSelection(.enabled).accessibilityIdentifier("note.detail.text") }
                             }
                         }
+                        if let transcript = note.conversationTranscript, !transcript.isEmpty { GlassCard { DisclosureGroup("Details · vollständiges Gespräch") { Text(transcript).font(.subheadline).textSelection(.enabled) } } }
                         if !(note.mediaIDs ?? []).isEmpty {
                             GlassCard {
                                 VStack(alignment: .leading, spacing: 12) {
