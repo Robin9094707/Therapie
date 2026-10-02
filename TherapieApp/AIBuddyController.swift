@@ -109,7 +109,7 @@ import UIKit
 
 extension AIBuddyController {
     func refreshWeeklyReview(now: Date = Date()) async {
-        guard let store, !busy, store.visibleAIComposerIDs.isEmpty, store.data.aiSettings.enabled, store.data.aiSettings.weeklyReviewEnabled, AIBuddyKeychain.read() != nil else { return }
+        guard let store, !busy, store.visibleAIComposerIDs.isEmpty, store.activeBuddyVoiceIDs.isEmpty, store.data.aiSettings.enabled, store.data.aiSettings.weeklyReviewEnabled, AIBuddyKeychain.read() != nil else { return }
         let settings = store.data.aiSettings, calendar = Calendar.therapyCalendar
         if let last = settings.lastWeeklyReview, calendar.isDate(last, equalTo: now, toGranularity: .weekOfYear) { return }
         if let attempt = settings.lastWeeklyReviewAttempt, calendar.isDate(attempt, inSameDayAs: now) { return }

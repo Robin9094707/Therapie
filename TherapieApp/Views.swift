@@ -112,10 +112,10 @@ struct RootView: View {
 
     private func modalContent(_ route: RootModal) -> AnyView {
         switch route {
-        case .ai: return AnyView(NavigationStack { AIBuddyView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Schließen") { modal = nil } } } })
+        case .ai: return AnyView(NavigationStack { AIBuddyView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Schließen") { modal = nil }.disabled(!store.visibleAIComposerIDs.isEmpty || !store.activeBuddyVoiceIDs.isEmpty) } } }.interactiveDismissDisabled(!store.visibleAIComposerIDs.isEmpty || !store.activeBuddyVoiceIDs.isEmpty))
         case .permissions: return AnyView(PermissionSetupView())
         case .session: return AnyView(NavigationStack {
-            SessionConductorView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fertig") { modal = nil } } }
+            SessionConductorView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fertig") { modal = nil }.disabled(!store.activeBuddyVoiceIDs.isEmpty) } }.interactiveDismissDisabled(!store.activeBuddyVoiceIDs.isEmpty)
                 .sheet(item: $store.pendingGuidedCheckIn) { GuidedCheckInDestination(entry: $0) }
         })
         case .checkIn(let entry): return AnyView(GuidedCheckInDestination(entry: entry))

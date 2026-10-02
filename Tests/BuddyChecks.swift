@@ -175,8 +175,10 @@ final class BuddyMockProtocol: URLProtocol {
             try expect(chats.weeklyTasks.isEmpty, "Guided draft never creates tasks before confirmation")
         }
         try expect(draft.moodPercent == 80 && draft.batteryPercent == 0 && draft.sleepHours == 7.5 && draft.therapyQuestion == "Grenzen" && draft.tags == ["Familie"], "Structured guide preserves zero, fields and canonical tags")
+        chats.aiMessages.append(AIBuddyMessage(role: "user", text: "Meine Schwester hilft mir", conversationID: conversation))
         try expect(GuidedCheckInMutation.apply(draft, complete: true, to: &chats) && chats.weeklyTasks.count == 1, "Confirmed guided overview creates one normal task")
         let completed = chats.guidedCheckIns[0]
+        try expect(completed.conversationTranscript?.contains("Meine Schwester hilft mir") == true, "Completing a guided check-in snapshots its full source conversation")
         var noEdit = completed
         try expect(!AICheckInGuide.apply(proposal, to: &noEdit, known: []) && noEdit == completed, "AI cannot rewrite completed check-ins")
         var invalidDraft = GuidedCheckIn()
@@ -246,6 +248,8 @@ final class BuddyMockProtocol: URLProtocol {
         try expect(BuddyInteraction.window(question: "Übersicht über vorgestern", days: 1, now: now, calendar: cal) < cal.startOfDay(for: now).addingTimeInterval(-86400), "Historical day retrieval does not use today")
         var profileData = AppData(); profileData.energyEntries = [EnergyEntry(createdAt: now, level: 3, percent: 62, givesEnergy: "", takesEnergy: "", note: "")]
         let battery = WellbeingProfile.battery(profileData, now: now)!
+        let onlyEnergy = WellbeingProfile.snapshot(profileData, range: 0, now: now)
+        try expect(onlyEnergy.metrics.map(\.title) == ["Akku"] && onlyEnergy.metrics[0].value == 62, "Live profile never creates mood, stress or satisfaction from an energy-only entry")
         try expect(battery.value == 62 && WellbeingProfile.estimatedBattery(profileData, reading: battery, now: now.addingTimeInterval(3600)) == 62, "Exact battery percentage, no default invented decline")
         profileData.wellbeingPreferences.estimateBattery = true; profileData.wellbeingPreferences.hourlyDecline = 2
         try expect(WellbeingProfile.estimatedBattery(profileData, reading: battery, now: now.addingTimeInterval(3600)) == 60, "Only explicit opt-in enables defined hourly estimate")

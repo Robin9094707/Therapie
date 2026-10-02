@@ -601,3 +601,47 @@ enum WellbeingProfile {
         return max(0, min(100, reading.value + points - decline))
     }
 }
+
+struct WellbeingMetric: Identifiable {
+    var title: String
+    var value: Int
+    var maximum: Int
+    var burden = false
+    var suffix: String
+    var id: String { title }
+}
+struct WellbeingSnapshot {
+    var metrics: [WellbeingMetric]
+    var batteryCaption: String?
+}
+extension WellbeingProfile {
+    static func snapshot(_ data: AppData, range: Int, now: Date = Date(), calendar: Calendar = .current) -> WellbeingSnapshot {
+        let start = range == 0 ? Date.distantPast : calendar.date(byAdding: .day, value: -(range == 7 ? 6 : 0), to: calendar.startOfDay(for: now)) ?? now
+        let daily = WellnessAnalytics.daily(data, period: WellnessPeriod(start: start, end: now.addingTimeInterval(0.001)))
+        let guided = data.guidedCheckIns.filter { !$0.isDraft && $0.date >= start && $0.date <= now }
+        let moods = data.moodCheckIns.filter { $0.date >= start && $0.date <= now }
+        func latest(_ values: [(Date, Int?)]) -> Int? { values.filter { $0.1 != nil }.max { $0.0 < $1.0 }?.1 }
+        func percentage(_ values: [Double]) -> Int? { WellnessAnalytics.average(values).map { Int((($0 - 1) * 25).rounded()) } }
+        func scale(_ values: [Double]) -> Int? { WellnessAnalytics.average(values).map { Int($0.rounded()) } }
+        var result = WellbeingSnapshot(metrics: [])
+        if let reading = battery(data, now: now, start: start) {
+            let value = range == 7 ? percentage(daily.compactMap(\.battery)) ?? reading.value : estimatedBattery(data, reading: reading, now: now, calendar: calendar)
+            result.metrics.append(WellbeingMetric(title: "Akku", value: value, maximum: 100, suffix: "%"))
+            if range == 7 { result.batteryCaption = "Mittelwert der erfassten Tage" }
+            else {
+                let estimated = data.wellbeingPreferences.estimateBattery && calendar.isDate(reading.date, inSameDayAs: now)
+                result.batteryCaption = (estimated ? "Geschätzter Stand · Ausgangswert " : "Selbstberichteter Stand · ") + reading.date.formatted(date: .abbreviated, time: .shortened)
+            }
+        }
+        let moodReadings: [(Date, Int?)] = guided.map { ($0.date, $0.moodPercent ?? $0.mood.map { ($0 - 1) * 25 }) } + moods.map { ($0.date, $0.moodPercent ?? (($0.mood - 1) * 25)) }
+        let mood = range == 7 ? percentage(daily.compactMap(\.mood)) : latest(moodReadings)
+        if let mood { result.metrics.append(WellbeingMetric(title: "Stimmung", value: mood, maximum: 100, suffix: "/100")) }
+        let stress = range == 7 ? scale(daily.compactMap(\.stress)) : latest(guided.map { ($0.date, $0.stress) } + moods.map { ($0.date, $0.stress) })
+        if let stress { result.metrics.append(WellbeingMetric(title: "Stress", value: stress, maximum: 5, burden: true, suffix: "/5")) }
+        let sensory = range == 7 ? scale(daily.compactMap(\.sensory)) : latest(guided.map { ($0.date, $0.sensoryLoad) } + moods.map { ($0.date, $0.sensoryLoad) })
+        if let sensory { result.metrics.append(WellbeingMetric(title: "Reizbelastung", value: sensory, maximum: 5, burden: true, suffix: "/5")) }
+        let satisfaction = range == 7 ? scale(guided.compactMap { $0.satisfaction.map(Double.init) }) : latest(guided.map { ($0.date, $0.satisfaction) })
+        if let satisfaction { result.metrics.append(WellbeingMetric(title: "Zufriedenheit", value: satisfaction, maximum: 5, suffix: "/5")) }
+        return result
+    }
+}

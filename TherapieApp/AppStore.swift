@@ -34,6 +34,7 @@ final class AppStore: ObservableObject {
     @Published var pendingGuidedCheckIn: GuidedCheckIn?
     @Published var notificationAIHub = false
     @Published var visibleAIComposerIDs: Set<UUID> = []
+    @Published var activeBuddyVoiceIDs: Set<UUID> = []
     @Published var notificationRoutineID: UUID?
     @Published var routineReminderStatus = ""
     @Published var checkInReminderStatus = ""

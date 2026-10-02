@@ -13,6 +13,7 @@ enum BatteryTone {
 @MainActor final class BuddySpeech: ObservableObject {
     @Published var readingID: UUID?
     private let synthesizer = AVSpeechSynthesizer()
+    init() { synthesizer.usesApplicationAudioSession = false }
     func stop() { synthesizer.stopSpeaking(at: .immediate); readingID = nil }
     func read(_ text: String, id: UUID) {
         if readingID == id && synthesizer.isSpeaking { stop(); return }
@@ -29,6 +30,7 @@ struct BuddyInlineMicrophone: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var recorder = AudioRecorderService()
     @State private var file = FileManager.default.temporaryDirectory.appendingPathComponent("buddy-inline-" + UUID().uuidString + ".m4a")
+    @State private var activityID = UUID()
     @State private var starting = false
     @State private var busy = false
     @State private var pending = false
@@ -68,9 +70,13 @@ struct BuddyInlineMicrophone: View {
         .onChange(of: busy) { _, _ in updateState() }
         .onChange(of: starting) { _, _ in updateState() }
         .onChange(of: pending) { _, _ in updateState() }
-        .onDisappear { operation?.cancel(); _ = recorder.stop(); reset(); onStateChange(false) }
+        .onDisappear { operation?.cancel(); _ = recorder.stop(); reset(); store.activeBuddyVoiceIDs.remove(activityID); onStateChange(false) }
     }
-    private func updateState() { onStateChange(recorder.isRecording || starting || busy || pending) }
+    private func updateState() {
+        let active = recorder.isRecording || starting || busy || pending
+        if store.activeBuddyVoiceIDs.contains(activityID) != active { if active { store.activeBuddyVoiceIDs.insert(activityID) } else { store.activeBuddyVoiceIDs.remove(activityID) } }
+        onStateChange(active)
+    }
     private func start() {
         guard !busy, !starting, AIBuddyKeychain.read() != nil else { error = "Bitte zuerst den API-Schlüssel hinterlegen."; return }
         beforeRecording(); starting = true; error = nil
@@ -190,32 +196,23 @@ struct BuddyWellbeingProfileView: View {
     }
     @State private var showAI = false
     @ViewBuilder private func profile(now: Date) -> some View {
-        let start = range == 0 ? Date.distantPast : Calendar.current.date(byAdding: .day, value: -(range == 7 ? 6 : 0), to: Calendar.current.startOfDay(for: now)) ?? now
-        let period = WellnessPeriod(start: start, end: now.addingTimeInterval(0.001))
-        let daily = WellnessAnalytics.daily(store.data, period: period)
-        let guided = store.data.guidedCheckIns.filter { !$0.isDraft && $0.date >= start && $0.date <= now }.sorted { $0.date > $1.date }
-        let moods = store.data.moodCheckIns.filter { $0.date >= start && $0.date <= now }.sorted { $0.date > $1.date }
+        let snapshot = WellbeingProfile.snapshot(store.data, range: range, now: now)
         GlassCard(emphasized: true) {
             VStack(alignment: .leading, spacing: 12) {
                 SectionHeader(title: range == 7 ? "Deine letzten sieben Tage" : "Dein letzter bekannter Stand", icon: "heart.text.clipboard", subtitle: "Nur deine gespeicherten Angaben. Fehlende Werte bleiben offen.")
-                if let reading = WellbeingProfile.battery(store.data, now: now, start: start) {
-                    let value = range == 7 ? WellnessAnalytics.average(daily.compactMap(\.battery)).map { Int((($0 - 1) * 25).rounded()) } ?? reading.value : WellbeingProfile.estimatedBattery(store.data, reading: reading, now: now)
-                    metric("Akku", value: value, maximum: 100, color: BatteryTone.color(value), suffix: "%")
-                    Text(range == 7 ? "Mittelwert der erfassten Tage" : (store.data.wellbeingPreferences.estimateBattery && Calendar.current.isDate(reading.date, inSameDayAs: now) ? "Geschätzter Stand · Ausgangswert " : "Selbstberichteter Stand · ") + reading.date.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
-                } else { Label("Akku: noch keine Angabe", systemImage: "battery.0percent").foregroundStyle(.secondary) }
-                let recentMood = (guided.compactMap { c in c.moodPercent.map { WellbeingReading(date: c.date, value: $0) } ?? c.mood.map { WellbeingReading(date: c.date, value: ($0 - 1) * 25) } } + moods.map { WellbeingReading(date: $0.date, value: $0.moodPercent ?? (($0.mood - 1) * 25)) }).max { $0.date < $1.date }
-                if let value = range == 7 ? WellnessAnalytics.average(daily.compactMap(\.mood)).map({ Int((($0 - 1) * 25).rounded()) }) : recentMood?.value { metric("Stimmung", value: value, maximum: 100, color: BatteryTone.color(value), suffix: "/100") }
-                let stress = latest(guided.map { ($0.date, $0.stress) } + moods.map { ($0.date, $0.stress) })
-                let sensory = latest(guided.map { ($0.date, $0.sensoryLoad) } + moods.map { ($0.date, $0.sensoryLoad) })
-                let satisfaction = latest(guided.map { ($0.date, $0.satisfaction) })
-                if let value = range == 7 ? WellnessAnalytics.average(daily.compactMap(\.stress)).map({ Int($0.rounded()) }) : stress { metric("Stress", value: value, maximum: 5, color: BatteryTone.burden(value), suffix: "/5") }
-                if let value = range == 7 ? WellnessAnalytics.average(daily.compactMap(\.sensory)).map({ Int($0.rounded()) }) : sensory { metric("Reizbelastung", value: value, maximum: 5, color: BatteryTone.burden(value), suffix: "/5") }
-                if let value = range == 7 ? WellnessAnalytics.average(guided.compactMap { $0.satisfaction.map(Double.init) }).map({ Int($0.rounded()) }) : satisfaction { metric("Zufriedenheit", value: value, maximum: 5, color: BatteryTone.color((value - 1) * 25), suffix: "/5") }
+                if !snapshot.metrics.contains(where: { $0.title == "Akku" }) { Label("Akku: noch keine Angabe", systemImage: "battery.0percent").foregroundStyle(.secondary) }
+                ForEach(snapshot.metrics) { value in
+                    metric(value.title, value: value.value, maximum: value.maximum, color: metricColor(value), suffix: value.suffix)
+                    if value.title == "Akku", let caption = snapshot.batteryCaption { Text(caption).font(.caption).foregroundStyle(.secondary) }
+                }
                 Text(range == 7 ? "Durchschnitt erfasster Tageswerte; Zufriedenheit: Durchschnitt deiner Angaben. Hohe Belastung ist rot, hohe Energie grün. Keine medizinische Bewertung." : "Werte können von unterschiedlichen Zeitpunkten stammen und ändern sich erst mit neuen Angaben. Bei Live können auch ältere letzte Angaben erscheinen. Kein automatisch erfundener Gesundheits-Score.").font(.caption).foregroundStyle(.secondary)
             }
         }
     }
-    private func latest(_ values: [(Date, Int?)]) -> Int? { values.filter { $0.1 != nil }.max { $0.0 < $1.0 }?.1 }
+    private func metricColor(_ metric: WellbeingMetric) -> Color {
+        if metric.burden { return BatteryTone.burden(metric.value) }
+        return BatteryTone.color(metric.maximum == 100 ? metric.value : (metric.value - 1) * 25)
+    }
     private func metric(_ title: String, value: Int, maximum: Int, color: Color, suffix: String) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack { Text(title).font(.subheadline.bold()); Spacer(); Text("\(value)\(suffix)").font(.headline).monospacedDigit() }

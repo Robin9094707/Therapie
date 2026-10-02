@@ -57,7 +57,7 @@ struct SessionConductorContent: View {
                 history
             }
         }
-        .navigationTitle("Therapiezeit")
+        .navigationTitle("Therapiezeit").interactiveDismissDisabled(voiceActive)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) { Button { showPreferences = true } label: { Image(systemName: "slider.horizontal.3") }.accessibilityLabel("Timer-Einstellungen") }
         }

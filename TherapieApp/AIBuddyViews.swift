@@ -308,7 +308,7 @@ struct AIBuddyChatContent: View {
                 ChatComposerInput(text: $text, handle: inputHandle)
                     .overlay(alignment: .topLeading) { if text.isEmpty { Text("Nachricht …").foregroundStyle(.secondary).padding(.leading, 10).padding(.top, 11).allowsHitTesting(false).accessibilityHidden(true) } }
                     .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 22))
-                Button { send() } label: { Image(systemName: "arrow.up.circle.fill").font(.system(size: 36)).foregroundStyle(Color.accentColor) }.accessibilityLabel("Senden").disabled(sending || controller.busy || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || text.count > 5000).accessibilityIdentifier("ai.send")
+                Button { send() } label: { Image(systemName: "arrow.up.circle.fill").font(.system(size: 36)).foregroundStyle(Color.accentColor) }.accessibilityLabel("Senden").disabled(voiceActive || sending || controller.busy || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || text.count > 5000).accessibilityIdentifier("ai.send")
             }
             if text.count > 4800 { Text("\(text.count) / 5.000 Zeichen").font(.caption).foregroundStyle(.secondary) }
         }

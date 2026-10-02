@@ -29,6 +29,7 @@ final class TherapySessionController: ObservableObject {
     }
     func finish(early: Bool) {
         guard let store, var session = store.data.currentSession else { return }
+        guard early || store.activeBuddyVoiceIDs.isEmpty else { return }
         let now = Date()
         if session.pausedAt != nil { session.resume(at: now) }
         session.endedAt = early ? now : session.expectedEnd
