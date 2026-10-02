@@ -1,0 +1,52 @@
+name: Deliver verified Therapie 3011
+on:
+  push:
+    branches: [ delivery/v3011-2026-10-02 ]
+permissions:
+  contents: write
+  actions: read
+jobs:
+  deliver:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download the exact successful build
+        run: |
+          mkdir delivery ui
+          gh api repos/Robin9094707/Therapie/actions/runs/37035311011 > verified-run.json
+          gh run download 37035311011 --name Therapie-v3011.0.0-IPA --dir delivery
+          gh run download 37035311011 --name Therapie-v3011.0.0-source --dir delivery
+          gh run download 37035311011 --name Therapie-UI-Previews --dir ui
+          git archive --format=zip --output=delivery/Therapie-v3010.0.0-vor-gefuehrten-Gespraechen-source.zip 18c47210d698e8247551b8718a9d203d6517807c
+      - name: Verify all delivered files and real UI results
+        run: python3 scripts/verify_delivery_3011.py
+      - name: Publish the verified download files
+        run: |
+          cat > release-notes.md <<'NOTES'
+          Therapie 3011.0.0 (Build 18): KI-geführte Check-ins mit angehefteter Fortschrittsleiste, verlässlicher Übersicht und bearbeitbarem Abschluss. Chats nach Tagen/Wochen, Suche im Chat und in allen Gesprächen, Filter und schrittweises Nachladen.
+          
+          Begrenzter, auf die Frage bezogener Kontext mit Gesprächsnotiz, passenden Aktionen und besseren Hashtags. Zusammenfassung, Titel und Tags vor dem Speichern bearbeiten; das vollständige Gespräch bleibt unter Details erhalten, auch nach Löschen des Chats.
+          
+          Direkte Sprachaufnahme mit automatischer Transkription nach Upload-Freigabe, schnelle Sprachnotizen während der Stunde und kostenlose iPhone-Sprachausgabe. Native Vorschauen für Akku, mehrere Routine-Uhrzeiten, Ziele mit Priorität/Datum, Therapierunden und sichere Hauptfarben. Weitere Einstellungen über Bereichslinks.
+          
+          Befindensprofil Live / Heute / 7 Tage mit Akku, Stimmung, Stress, Reizen und Zufriedenheit. Verständliche Rot/Gelb/Grün-Farben und optionale, transparent erklärte Akku-Schätzung. Modell und Transkriptionsmodell bleiben unverändert.
+          
+          Alle neuen Daten einschließlich Gesprächsdetails und Einstellungen sind in verschlüsselten Backups, lesbaren ZIPs und Spiegeln enthalten. Schema 1–12 bleibt importierbar; neue Exporte verwenden Schema 13.
+          
+          Geprüft: 279 kurze Kernprüfungen, unabhängiger ZIP-Reader, nativer iPhone-Build mit tatsächlicher Bundle-Prüfung und zwei bestandene iPhone-Simulator-Bedienungstests. Ausgelieferte IPA und beide Quellcode-ZIPs werden gegen die exakten Commits geprüft.
+          
+          Build: https://github.com/Robin9094707/Therapie/actions/runs/37035311011
+          Quellcode: aa58218b36b83bd9352b2e782775351491e7e9cd
+          Vorheriger Stand: 18c47210d698e8247551b8718a9d203d6517807c / backup/v3010.0.0-before-guided-chat-2026-10-02
+          
+          Die IPA ist unsigniert. Echte OpenAI-Aufrufe, Mikrofon, Vorlesen und gerätegebundene Funktionen benötigen einen Test auf dem installierten iPhone. Für ein späteres Code-Rollback zusätzlich ein persönliches Datenbackup von vor dem Update behalten; die alte App liest Schema 13 nicht.
+          NOTES
+          gh release create v3011.0.0 --target aa58218b36b83bd9352b2e782775351491e7e9cd --draft --title "Therapie 3011.0.0 · Geführte Gespräche" --notes-file release-notes.md
+          gh release upload v3011.0.0 delivery/Therapie-v3011.0.0.ipa delivery/Therapie-v3011.0.0-source.zip delivery/Therapie-v3010.0.0-vor-gefuehrten-Gespraechen-source.zip
+          gh release edit v3011.0.0 --draft=false
