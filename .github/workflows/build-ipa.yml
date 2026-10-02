@@ -36,6 +36,9 @@ jobs:
           xcodebuild -version
           swift --version
 
+      - name: Verify release-critical models, AI actions and both backup formats
+        run: bash scripts/verify_release_core.sh
+
       - name: Install build tools
         run: |
           brew install xcodegen
@@ -72,9 +75,6 @@ jobs:
 
       - name: Validate actual iPhone bundle
         run: python3 scripts/validate_bundle.py build/Build/Products/Release-iphoneos/Therapie.app
-
-      - name: Verify release-critical models, AI actions and both backup formats
-        run: bash scripts/verify_release_core.sh
 
       - name: Test guided check-ins and routine scheduling
         if: github.event_name == 'workflow_dispatch' && inputs.extended_checks

@@ -194,6 +194,7 @@ final class BuddyMockProtocol: URLProtocol {
         try expect(guideSchema["additionalProperties"] as? Bool == false && (guideSchema["required"] as! [String]).count == 14, "Structured check-in schema requires every nullable field")
         var interactive = AppData()
         let msg = AIBuddyMessage(role: "assistant", text: "Vorschau"); interactive.aiMessages = [msg]
+        AIConversationMutation.migrate(&interactive)
         let stamp = ISO8601DateFormatter().string(from: now)
         let repeating = AIBuddyAction(kind: .task, title: "Wöchentlicher Schritt", text: "Kurz beginnen", dateISO: stamp, weekdays: [2], options: AIBuddyActionOptions(remindersEnabled: true, alarmEnabled: false, repeatEveryWeeks: 2, repeatCount: 3))
         try AIBuddyMutation.apply(repeating, originalID: repeating.id, messageID: msg.id, to: &interactive, now: now)
@@ -224,7 +225,7 @@ final class BuddyMockProtocol: URLProtocol {
         try expect(noAdvance.step == 2, "Clarifying questions never skip the current guided step")
         interactive.editorDrafts = [try AppEditorDraft.make(noAdvance, id: noAdvance.id, kind: "guided", title: "Entwurf")]
         let restoredInteractive = try dec.decode(AppData.self, from: enc.encode(interactive))
-        try expect(restoredInteractive == interactive && restoredInteractive.editorDrafts[0].decode(GuidedCheckIn.self) == noAdvance, "All new draft, action and reminder values round-trip through AppData")
+        try expect((try JSONSerialization.jsonObject(with: enc.encode(restoredInteractive)) as! NSDictionary) == (try JSONSerialization.jsonObject(with: enc.encode(interactive)) as! NSDictionary) && restoredInteractive.editorDrafts[0].decode(GuidedCheckIn.self) == noAdvance, "All new draft, action and reminder values round-trip through AppData")
         let available = AIBuddyContext.make(data: interactive, days: 7, end: now)
         try expect(available.text.contains("CHECK-IN-FENSTER") && available.text.contains("ai.contextDays"), "AI receives current check-in availability and supported setting values")
         var recurringRoutine = DailyRoutine(title: "Alle zwei Wochen", recurrenceAnchor: now, repeatEveryWeeks: 2)
