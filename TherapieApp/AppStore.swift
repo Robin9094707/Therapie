@@ -236,6 +236,12 @@ final class AppStore: ObservableObject {
             return
         }
         do {
+            // A deferred first write can run before any data directories exist.
+            // Prepare them only after protected data is available, including retries.
+            for directory in [rootURL, mediaURL, recordingsURL] {
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                try BackupArchive.protect(directory)
+            }
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             encoder.dateEncodingStrategy = .iso8601
