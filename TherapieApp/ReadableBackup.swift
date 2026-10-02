@@ -29,6 +29,7 @@ enum ReadableBackup {
         return String(path.dropFirst(prefix.count))
     }
     static let labels: [String: String] = [
+        "editorDrafts": "Gespeicherte Entwuerfe", "draftText": "Noch nicht gesendeter Text", "weeklyReviewEnabled": "Automatischer Wochenrueckblick", "lastWeeklyReview": "Letzter Wochenrueckblick", "repeatEveryWeeks": "Alle x Wochen", "endsAt": "Enddatum", "recurrenceAnchor": "Wiederholung ab",
         "aiConversations": "KI-Chats", "hashtagCatalog": "Hashtags", "aiSettings": "KI-Einstellungen", "aiMessages": "KI-Gespraeche", "therapyDiscussionAcknowledgedIDs": "Besprochene Gespraechspunkte",
         "recurrence": "Therapie-Rhythmus", "extraAppointments": "Einzelne Zusatztermine", "additionalWeeklySlots": "Weitere Wochentermine", "unit": "Intervall-Einheit", "interval": "Intervall", "anchor": "Startdatum", "exactTime": "Absage gilt nur fuer diese Uhrzeit",
         "allowMultipleCheckInsPerSlot": "Zusaetzliche Check-ins pro Zeitfenster erlauben", "alarmShowsActualTitles": "Echte Routine-Titel in AlarmKit",
@@ -90,7 +91,11 @@ enum ReadableBackup {
                         context += "Therapieordner: " + TherapyHierarchy.path(for: folder, folders: data.therapyFolders) + "\n"
                     }
                     if let topic = (record["topicID"] as? String).flatMap(UUID.init(uuidString:)), let item = data.therapyTopics.first(where: { $0.id == topic }) { context += "Therapiethema: " + item.title + "\n" }
-                    try writeText(title + "\n\n" + context + "\n" + description(record) + "\n", to: base.appendingPathComponent(relative))
+                    var readable = record
+                    if key == "editorDrafts", let payload = record["payload"] as? String, let bytes = Data(base64Encoded: payload), let fields = try? JSONSerialization.jsonObject(with: bytes) {
+                        readable["payload"] = fields
+                    }
+                    try writeText(title + "\n\n" + context + "\n" + description(readable) + "\n", to: base.appendingPathComponent(relative))
                     let cleanTitle = title.replacingOccurrences(of: "\n", with: " ").replacingOccurrences(of: "[", with: "(").replacingOccurrences(of: "]", with: ")")
                     index += "- [\(cleanTitle)](Eintraege/\(relative))\n"
                 }

@@ -27,9 +27,11 @@ struct AIBuddySettingsView: View {
             Form {
                 Section("Optional aktivieren") {
                     Toggle("KI-Begleiter verwenden", isOn: $store.data.aiSettings.enabled)
+                    Toggle("Wöchentlichen KI-Rückblick automatisch erstellen", isOn: $store.data.aiSettings.weeklyReviewEnabled)
+                    Text("Optional: einmal pro Kalenderwoche beim Öffnen der App. Dabei wird der Textkontext der letzten sieben Tage an OpenAI gesendet und der Rückblick im Tagebuch gespeichert. Bei Fehlern höchstens ein automatischer Versuch pro Tag. Kein garantierter Hintergrundzeitpunkt.").font(.caption).foregroundStyle(.secondary)
                     Toggle("Check-ins standardmäßig mit KI führen", isOn: $store.data.aiSettings.preferGuidedCheckIns)
                     Text("Du kannst jederzeit zum normalen Check-in wechseln. Der Entwurf und das Gespräch bleiben erhalten.").font(.caption).foregroundStyle(.secondary)
-                    Text("Beim Senden werden deine Nachricht und der angezeigte Textzeitraum an OpenAI übertragen. Aktuelle offene Aufgaben, Routinen und Gesprächspunkte können zusätzlich enthalten sein. Keine automatischen Anfragen im Hintergrund. Die OpenAI-API wird getrennt von einem ChatGPT-Abo abgerechnet.").font(.caption).foregroundStyle(.secondary)
+                    Text("Beim Senden werden deine Nachricht und der angezeigte Textzeitraum an OpenAI übertragen. Aktuelle offene Aufgaben, Routinen und Gesprächspunkte können zusätzlich enthalten sein. Automatische Rückblicke nur nach Aktivierung und beim Öffnen der App. Die OpenAI-API wird getrennt von einem ChatGPT-Abo abgerechnet.").font(.caption).foregroundStyle(.secondary)
                 }
                 Section("Persönlicher API-Schlüssel") {
                     SecureField(hasKey ? "Neuen Schlüssel hinterlegen" : "OpenAI-API-Schlüssel", text: $key).textInputAutocapitalization(.never).autocorrectionDisabled()
@@ -64,7 +66,7 @@ struct AIBuddySettingsView: View {
                     Toggle("Sprachnachricht transkribieren dürfen", isOn: $store.data.aiSettings.allowVoiceUploads)
                     Text("Vor jedem Foto-Upload folgt eine Bestätigung. Eine Sprachaufnahme sendest du ausdrücklich zum Transkribieren und kannst den Text vor dem Chat-Senden bearbeiten. Keine Aufnahme der Therapiestunde im Hintergrund.").font(.caption).foregroundStyle(.secondary)
                 }
-            }.navigationTitle("KI-Begleiter").navigationBarTitleDisplayMode(.inline)
+            }.buttonStyle(.borderless).navigationTitle("KI-Begleiter").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { key = ""; dismiss() } } }
                 .alert("API-Schlüssel entfernen?", isPresented: $deleteKey) { Button("Abbrechen", role: .cancel) {}; Button("Entfernen", role: .destructive) { AIBuddyKeychain.remove(); hasKey = false; store.data.aiSettings.enabled = false } }
         }
@@ -89,6 +91,6 @@ struct TherapyJournalView: View {
                     GlassCard { Button { edited = note } label: { VStack(alignment: .leading, spacing: 8) { Text(note.title).font(.headline); Text(note.createdAt.formatted(date: .abbreviated, time: .omitted)).font(.caption).foregroundStyle(.secondary); Text(note.text).font(.subheadline).lineLimit(5) }.frame(maxWidth: .infinity, alignment: .leading) }.buttonStyle(.plain) }
                 }
             }
-        }.navigationTitle("Therapietagebuch").sheet(item: $edited) { TherapyNoteEditorView(note: $0) }
+        }.buttonStyle(.borderless).navigationTitle("Therapietagebuch").sheet(item: $edited) { TherapyNoteEditorView(note: $0) }
     }
 }

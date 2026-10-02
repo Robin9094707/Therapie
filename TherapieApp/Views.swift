@@ -5,10 +5,23 @@ import UIKit
 
 private let therapyContentMaxWidth: CGFloat = 720
 
+private enum RootModal: Identifiable {
+    case ai, permissions, session, checkIn(GuidedCheckIn), task(WeeklyTask), routine(UUID), widgetSetup, routines, reminders, therapy, mood, energy
+    var id: String {
+        switch self {
+        case .ai: "ai"; case .permissions: "permissions"; case .session: "session"
+        case .checkIn(let entry): "check-in-" + entry.id.uuidString
+        case .task(let task): "task-" + task.id.uuidString
+        case .routine(let id): "routine-" + id.uuidString
+        case .widgetSetup: "widget-setup"; case .routines: "routines"; case .reminders: "reminders"; case .therapy: "therapy"; case .mood: "mood"; case .energy: "energy"
+        }
+    }
+}
+
 struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var openSession = false
+    @State private var modal: RootModal?
     @State private var lastReminderRefresh = Date()
     @AppStorage("therapy.permissions3000") private var permissionSetupDone = false
     @State private var showPermissions = false
@@ -29,19 +42,31 @@ struct RootView: View {
         .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
         .tint(.indigo)
         .accessibilityIdentifier("therapy.root")
-        .sheet(isPresented: $store.notificationAIHub) { NavigationStack { AIBuddyView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Schließen") { store.notificationAIHub = false } } } } }
-        .sheet(isPresented: $showPermissions) { PermissionSetupView() }
-        .sheet(isPresented: $openSession) {
-            NavigationStack {
-                SessionConductorView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fertig") { openSession = false } } }
-                    .sheet(item: $store.pendingGuidedCheckIn) { GuidedCheckInDestination(entry: $0) }
+        .sheet(item: $modal, onDismiss: presentRequested) { route in
+            switch route {
+            case .ai: NavigationStack { AIBuddyView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Schließen") { modal = nil } } } }
+            case .permissions: PermissionSetupView()
+            case .session:
+                NavigationStack {
+                    SessionConductorView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fertig") { modal = nil } } }
+                        .sheet(item: $store.pendingGuidedCheckIn) { GuidedCheckInDestination(entry: $0) }
+                }
+            case .checkIn(let entry): GuidedCheckInDestination(entry: entry)
+            case .task(let task): WeeklyTaskEditorView(task: task)
+            case .routine(let id): RoutineDetailView(routineID: id)
+            case .widgetSetup: WidgetSetupHelpView()
+            case .routines: NavigationStack { RoutineHubView() }
+            case .reminders: NavigationStack { ReminderCenterView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { modal = nil } } } }
+            case .therapy: TherapyAppointmentsView()
+            case .mood: MoodEditorView()
+            case .energy: WeeklyEnergyEditorView()
             }
         }
         .onOpenURL { url in
             guard url.scheme == "therapie" else { return }
             switch url.host {
             case "widgetsetup": store.notificationWidgetSetup = true
-            case "session": openSession = true
+            case "session": store.notificationSession = true
             case "today": store.selectedTab = 0
             case "archive": store.selectedTab = 3
             case "appointments": store.notificationTherapy = true
@@ -53,24 +78,24 @@ struct RootView: View {
             }
         }
         .onChange(of: scenePhase) { _, phase in if phase == .active { store.sessionController.synchronize(); store.consumeRoutineAlarmRoute(); store.refreshTherapyCalendar(force: false); TaskNotificationCoordinator.shared.refresh(store); TherapyWidgetBridge.refresh(store) } }
-        .sheet(isPresented: Binding(get: { store.notificationTaskID != nil }, set: { if !$0 { store.notificationTaskID = nil } })) {
-            if let id = store.notificationTaskID, let task = store.data.weeklyTasks.first(where: { $0.id == id }) { WeeklyTaskEditorView(task: task) }
-        }
-        .sheet(item: Binding(get: { openSession ? nil : store.pendingGuidedCheckIn }, set: { store.pendingGuidedCheckIn = $0 })) { GuidedCheckInDestination(entry: $0) }
-        .sheet(isPresented: Binding(get: { store.notificationRoutineID != nil }, set: { if !$0 { store.notificationRoutineID = nil } })) {
-            if let id = store.notificationRoutineID { RoutineDetailView(routineID: id) }
-        }
-        .onChange(of: store.notificationSession) { _, value in if value { store.notificationSession = false; openSession = true } }
-        .sheet(isPresented: $store.notificationWidgetSetup) { WidgetSetupHelpView() }
-        .sheet(isPresented: $store.notificationRoutines) { NavigationStack { RoutineHubView() } }
-        .sheet(isPresented: $store.notificationReminders) { NavigationStack { ReminderCenterView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { store.notificationReminders = false } } } } }
-        .sheet(isPresented: $store.notificationTherapy) { TherapyAppointmentsView() }
-        .sheet(isPresented: $store.notificationMood) { MoodEditorView() }
-        .sheet(isPresented: $store.openEnergyReview) { WeeklyEnergyEditorView() }
+        .onChange(of: store.notificationAIHub) { _, _ in presentRequested() }
+        .onChange(of: showPermissions) { _, _ in presentRequested() }
+        .onChange(of: store.notificationSession) { _, _ in presentRequested() }
+        .onChange(of: store.pendingGuidedCheckIn) { _, _ in presentRequested() }
+        .onChange(of: store.notificationTaskID) { _, _ in presentRequested() }
+        .onChange(of: store.notificationRoutineID) { _, _ in presentRequested() }
+        .onChange(of: store.notificationWidgetSetup) { _, _ in presentRequested() }
+        .onChange(of: store.notificationRoutines) { _, _ in presentRequested() }
+        .onChange(of: store.notificationReminders) { _, _ in presentRequested() }
+        .onChange(of: store.notificationTherapy) { _, _ in presentRequested() }
+        .onChange(of: store.notificationMood) { _, _ in presentRequested() }
+        .onChange(of: store.openEnergyReview) { _, _ in presentRequested() }
+        .onAppear { presentRequested() }
         .task {
             store.sessionController.synchronize()
             store.refreshTherapyCalendar(force: false)
             store.consumeRoutineAlarmRoute()
+            if modal == nil { await store.aiController.refreshWeeklyReview() }
             while !Task.isCancelled {
                 store.sessionController.reconcile()
                 store.consumeRoutineAlarmRoute()
@@ -78,6 +103,7 @@ struct RootView: View {
                     lastReminderRefresh = Date()
                     store.pruneUndo()
                     TaskNotificationCoordinator.shared.refresh(store)
+                    if modal == nil { await store.aiController.refreshWeeklyReview() }
                 }
                 do { try await Task.sleep(for: .seconds(1)) } catch { break }
             }
@@ -112,6 +138,23 @@ struct RootView: View {
                 }
             }
         }
+    }
+
+    private func presentRequested() {
+        // One stable presentation owner. Other requests wait for this sheet to close.
+        guard modal == nil else { return }
+        if showPermissions { showPermissions = false; modal = .permissions }
+        else if store.notificationSession { store.notificationSession = false; modal = .session }
+        else if let entry = store.pendingGuidedCheckIn { store.pendingGuidedCheckIn = nil; modal = .checkIn(entry) }
+        else if store.notificationAIHub { store.notificationAIHub = false; modal = .ai }
+        else if let id = store.notificationTaskID { store.notificationTaskID = nil; if let task = store.data.weeklyTasks.first(where: { $0.id == id }) { modal = .task(task) } }
+        else if let id = store.notificationRoutineID { store.notificationRoutineID = nil; modal = .routine(id) }
+        else if store.notificationWidgetSetup { store.notificationWidgetSetup = false; modal = .widgetSetup }
+        else if store.notificationRoutines { store.notificationRoutines = false; modal = .routines }
+        else if store.notificationReminders { store.notificationReminders = false; modal = .reminders }
+        else if store.notificationTherapy { store.notificationTherapy = false; modal = .therapy }
+        else if store.notificationMood { store.notificationMood = false; modal = .mood }
+        else if store.openEnergyReview { store.openEnergyReview = false; modal = .energy }
     }
 
     private func recordViewport(width: CGFloat, height: CGFloat) {
@@ -1260,6 +1303,7 @@ struct SettingsView: View {
                     AppearanceCard()
                     HomeAndWidgetSettingsCard()
                     AIBuddySettingsCard()
+                    NavigationLink { EditorDraftListView() } label: { Label("Meine Entwürfe (\(store.data.editorDrafts.count))", systemImage: "square.and.pencil") }
                     GlassCard {
                         NavigationLink { WellnessSettingsView() } label: {
                             Label("Stimmung: Ziele, Erinnerungen & Freigaben", systemImage: "heart.text.clipboard")
@@ -1599,46 +1643,8 @@ struct AddNoteView: View {
 }
 
 struct AddEnergyView: View {
-    @EnvironmentObject private var store: AppStore
-    @Environment(\.dismiss) private var dismiss
-    @State private var level = 3
-    @State private var gives = ""
-    @State private var takes = ""
-    @State private var note = ""
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Energie heute") {
-                    Stepper("Energie: \(level)/5", value: $level, in: 1...5)
-                }
-                Section("Was gibt mir Energie?") {
-                    TextField("Menschen, Ruhe, Musik …", text: $gives, axis: .vertical)
-                        .lineLimit(2...6)
-                }
-                Section("Was nimmt mir Energie?") {
-                    TextField("Lärm, Konflikte, Termine …", text: $takes, axis: .vertical)
-                        .lineLimit(2...6)
-                }
-                Section("Notiz") {
-                    TextField("Optional", text: $note, axis: .vertical)
-                        .lineLimit(2...6)
-                }
-            }
-            .navigationTitle("Energie-Check")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Abbrechen") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Speichern") {
-                        store.addEnergy(level: level, gives: gives, takes: takes, note: note)
-                        dismiss()
-                    }
-                }
-            }
-        }
-    }
+    @State private var draft = EnergyEntry(level: 3, givesEnergy: "", takesEnergy: "", note: "")
+    var body: some View { LegacyEnergyEditorView(entry: draft) }
 }
 
 struct AddReflectionView: View {

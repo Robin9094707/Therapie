@@ -26,8 +26,10 @@ struct TherapyRecurrenceEditor: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
     @State var rule: TherapyRecurrence
+    @State private var initial: TherapyRecurrence?
+    @State private var draftID = UUID()
     var body: some View {
-        TherapyEditorSheet(title: "Therapie-Rhythmus", dirty: true, save: { store.data.schedule.recurrence = rule }) {
+        TherapyEditorSheet(title: "Therapie-Rhythmus", dirty: initial != nil && rule != initial, draftID: draftID, saveDraft: { store.saveEditorDraft(rule, id: draftID, kind: "recurrence", title: "Therapie-Rhythmus") }, save: { store.data.schedule.recurrence = rule }) {
             Section("Ab jetzt planen") {
                 Picker("Einheit", selection: $rule.unit) { ForEach(TherapyRecurrenceUnit.allCases) { Text($0.title).tag($0) } }
                 Stepper("Alle \(rule.interval) \(rule.unit.title)", value: $rule.interval, in: 1...52)
@@ -51,14 +53,15 @@ struct TherapyRecurrenceEditor: View {
                 Text("Vorhandene Einträge und Absagen bleiben gespeichert. Kalender, Widgets und Erinnerungen verwenden denselben Plan.").font(.caption).foregroundStyle(.secondary)
                 Button("Zum bisherigen Wochenrhythmus zurück", role: .destructive) { store.data.schedule.recurrence = nil; if store.lastSaveError == nil { dismiss() } }
             }
-        }
+        }.onAppear { if initial == nil { initial = rule } }
     }
 }
 struct TherapyExtraAppointmentEditor: View {
     @EnvironmentObject private var store: AppStore
     @State var appointment: TherapyExtraAppointment
+    @State private var initial: TherapyExtraAppointment?
     var body: some View {
-        TherapyEditorSheet(title: "Zusatztermin", dirty: true, canSave: !appointment.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, save: {
+        TherapyEditorSheet(title: "Zusatztermin", dirty: initial != nil && appointment != initial, canSave: !appointment.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, draftID: appointment.id, saveDraft: { store.saveEditorDraft(appointment, id: appointment.id, kind: "appointment", title: appointment.title) }, save: {
             var values = store.data.schedule.extraAppointments ?? []; values.removeAll { $0.id == appointment.id }; values.append(appointment); store.data.schedule.extraAppointments = values
         }) {
             Section { TextField("Bezeichnung", text: $appointment.title); DatePicker("Datum & Beginn", selection: $appointment.date) }

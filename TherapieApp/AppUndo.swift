@@ -20,6 +20,11 @@ extension AppStore {
         let retained = Set(new.media.map(\.relativePath))
         for item in old.media where !retained.contains(item.relativePath) { deferredMediaDeletion[item.relativePath] = Date().addingTimeInterval(600) }
         undoAvailable = true
+        undoExpiryTask?.cancel()
+        undoExpiryTask = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: .seconds(10)) } catch { return }
+            self?.undoAvailable = false
+        }
     }
     func undoLastChange() {
         pruneUndo()
@@ -35,7 +40,7 @@ extension AppStore {
         data = restored
         undoInProgress = false
         if lastSaveError != nil { undoInProgress = true; data = current; undoInProgress = false; undoSteps.append(step) }
-        undoAvailable = !undoSteps.isEmpty
+        undoAvailable = undoSteps.last.map { Date().timeIntervalSince($0.date) < 10 } ?? false
         if lastSaveError == nil { TherapyEffects.shared.light() }
     }
     func pruneUndo() {
@@ -45,9 +50,9 @@ extension AppStore {
             do { try BackupArchive.validatePath(path); try FileManager.default.removeItem(at: rootURL.appendingPathComponent(path)) } catch { /* Retain current data even if cleanup cannot finish. */ }
             deferredMediaDeletion.removeValue(forKey: path)
         }
-        undoAvailable = !undoSteps.isEmpty
+        undoAvailable = undoSteps.last.map { Date().timeIntervalSince($0.date) < 10 } ?? false
     }
-    func clearUndo() { undoSteps = []; deferredMediaDeletion = [:]; undoAvailable = false }
+    func clearUndo() { undoExpiryTask?.cancel(); undoExpiryTask = nil; undoSteps = []; deferredMediaDeletion = [:]; undoAvailable = false }
 }
 
 struct UndoChangesButton: View {
@@ -56,7 +61,7 @@ struct UndoChangesButton: View {
         if store.undoAvailable && store.visibleAIComposerIDs.isEmpty {
             Button { store.undoLastChange() } label: { Label("Letzte Eingabe rückgängig", systemImage: "arrow.uturn.backward").font(.subheadline.bold()).padding(.horizontal, 16).padding(.vertical, 10) }
                 .buttonStyle(.plain).background(.regularMaterial, in: Capsule()).shadow(color: .black.opacity(0.08), radius: 6).padding(8)
-                .accessibilityIdentifier("input.undo").accessibilityHint("Bis zu 20 gespeicherte Änderungen, zehn Minuten lang während die App geöffnet ist")
+                .accessibilityIdentifier("input.undo").accessibilityHint("Die Schaltfläche verschwindet zehn Sekunden nach der letzten Änderung")
         }
     }
 }

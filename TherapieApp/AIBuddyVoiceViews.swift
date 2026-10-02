@@ -37,7 +37,7 @@ struct AIBuddyVoiceView: View {
                     if busy { ProgressView() }
                     if let error { Text(error).foregroundStyle(.orange) }
                 }
-            }.navigationTitle("Einsprechen").navigationBarTitleDisplayMode(.inline)
+            }.buttonStyle(.borderless).navigationTitle("Einsprechen").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { transcription?.cancel(); dismiss() } } }
                 .onChange(of: recorder.elapsed) { _, elapsed in if elapsed >= 120 { duration = recorder.stop() } }
                 .onChange(of: scenePhase) { _, phase in if phase != .active && recorder.isRecording { duration = recorder.stop() } }

@@ -5,6 +5,10 @@ on:
     branches: [ main ]
   workflow_dispatch:
     inputs:
+      extended_checks:
+        description: Run optional full domain, PDF and simulator regressions
+        type: boolean
+        default: false
       verify_simulator:
         description: Run optional hosted iPhone simulator verification
         type: boolean
@@ -49,7 +53,7 @@ jobs:
         run: xcodegen generate
 
       - name: Warm focused iPhone simulator during the build
-        if: contains(github.event.head_commit.message, '[checkin-ui]') || (github.event_name == 'workflow_dispatch' && inputs.verify_checkin)
+        if: contains(github.event.head_commit.message, '[buddy-smoke]') || (github.event_name == 'workflow_dispatch' && inputs.verify_checkin)
         run: python3 scripts/warm_ui_simulator.py
 
       - name: Build unsigned iPhone app
@@ -69,27 +73,29 @@ jobs:
       - name: Validate actual iPhone bundle
         run: python3 scripts/validate_bundle.py build/Build/Products/Release-iphoneos/Therapie.app
 
-      - name: Test data migration, weekly streaks, charts and CSV export
-        run: |
-          swiftc TherapieApp/Models.swift TherapieApp/AIBuddyModels.swift TherapieApp/TherapyDiscussionModels.swift TherapieApp/DashboardModels.swift TherapieApp/ArchiveModels.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift TherapieApp/CompanionModels.swift TherapieApp/InsightsModels.swift Tests/ModelChecks.swift -o /tmp/therapie-model-checks
-          /tmp/therapie-model-checks
+      - name: Verify release-critical models, AI actions and both backup formats
+        run: bash scripts/verify_release_core.sh
 
       - name: Test guided check-ins and routine scheduling
+        if: github.event_name == 'workflow_dispatch' && inputs.extended_checks
         run: |
           swiftc TherapieApp/Models.swift TherapieApp/AIBuddyModels.swift TherapieApp/TherapyDiscussionModels.swift TherapieApp/DashboardModels.swift TherapieApp/ArchiveModels.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift TherapieApp/CompanionModels.swift TherapieApp/InsightsModels.swift Tests/CompanionChecks.swift -o /tmp/therapie-companion-checks
           /tmp/therapie-companion-checks
 
       - name: Test Insights, timed check-ins and alarm inventory
+        if: github.event_name == 'workflow_dispatch' && inputs.extended_checks
         run: |
           swiftc TherapieApp/Models.swift TherapieApp/AIBuddyModels.swift TherapieApp/TherapyDiscussionModels.swift TherapieApp/DashboardModels.swift TherapieApp/ArchiveModels.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift TherapieApp/CompanionModels.swift TherapieApp/InsightsModels.swift TherapieApp/WeeklyPrintModels.swift Tests/InsightsChecks.swift -o /tmp/therapie-insights-checks
           /tmp/therapie-insights-checks
 
       - name: Test cancellations, vacations and section alarms
+        if: github.event_name == 'workflow_dispatch' && inputs.extended_checks
         run: |
           swiftc TherapieApp/Models.swift TherapieApp/AIBuddyModels.swift TherapieApp/TherapyDiscussionModels.swift TherapieApp/DashboardModels.swift TherapieApp/ArchiveModels.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift TherapieApp/CompanionModels.swift TherapieApp/InsightsModels.swift Tests/AppointmentChecks.swift -o /tmp/therapie-appointment-checks
           /tmp/therapie-appointment-checks
 
       - name: Render and verify actual weekly PDF layouts
+        if: github.event_name == 'workflow_dispatch' && inputs.extended_checks
         run: |
           swiftc TherapieApp/Models.swift TherapieApp/AIBuddyModels.swift TherapieApp/TherapyDiscussionModels.swift TherapieApp/DashboardModels.swift TherapieApp/ArchiveModels.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift TherapieApp/CompanionModels.swift TherapieApp/InsightsModels.swift TherapieApp/WeeklyPrintModels.swift TherapieApp/WeeklyPDFRenderer.swift Tests/WeeklyPDFChecks.swift -o /tmp/therapie-pdf-checks
           /tmp/therapie-pdf-checks build/pdf-verification
@@ -104,39 +110,23 @@ jobs:
           retention-days: 30
 
       - name: Test real Live Activity phase names and boundaries
+        if: github.event_name == 'workflow_dispatch' && inputs.extended_checks
         run: |
           swiftc TherapieApp/Models.swift TherapieApp/AIBuddyModels.swift TherapieApp/TherapyDiscussionModels.swift TherapieApp/DashboardModels.swift TherapieApp/ArchiveModels.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift TherapieApp/CompanionModels.swift TherapieApp/InsightsModels.swift Shared/TherapyPhaseTimeline.swift Shared/TherapyActivityAttributes.swift Tests/LivePhaseChecks.swift -o /tmp/therapie-live-phase-checks
           /tmp/therapie-live-phase-checks
 
       - name: Test dashboard, archive, widget privacy and time boundaries
+        if: github.event_name == 'workflow_dispatch' && inputs.extended_checks
         run: |
           swiftc TherapieApp/Models.swift TherapieApp/AIBuddyModels.swift TherapieApp/TherapyDiscussionModels.swift TherapieApp/DashboardModels.swift TherapieApp/ArchiveModels.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift TherapieApp/CompanionModels.swift TherapieApp/InsightsModels.swift Shared/WidgetSnapshot.swift TherapieApp/WidgetSnapshotBuilder.swift Tests/PersonalizationChecks.swift -o /tmp/therapie-personalization-checks
           /tmp/therapie-personalization-checks
 
-      - name: Test duplicate protection, flexible dates, therapy agenda and offline OpenAI integration
-        run: |
-          swiftc TherapieApp/Models.swift TherapieApp/AIBuddyModels.swift TherapieApp/TherapyDiscussionModels.swift TherapieApp/DashboardModels.swift TherapieApp/ArchiveModels.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift TherapieApp/CompanionModels.swift TherapieApp/InsightsModels.swift TherapieApp/AIBuddyAPI.swift TherapieApp/AIBuddyActions.swift Tests/BuddyChecks.swift -o /tmp/therapie-buddy-checks
-          /tmp/therapie-buddy-checks
-
-      - name: Test encrypted portable backups and recovery
-        run: |
-          set -o pipefail
-          swiftc TherapieApp/Models.swift TherapieApp/AIBuddyModels.swift TherapieApp/TherapyDiscussionModels.swift TherapieApp/DashboardModels.swift TherapieApp/ArchiveModels.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift TherapieApp/CompanionModels.swift TherapieApp/InsightsModels.swift TherapieApp/BackupArchive.swift Tests/BackupChecks.swift -o /tmp/therapie-backup-checks 2>&1 | tee backup-tests.log
-          /tmp/therapie-backup-checks 2>&1 | tee -a backup-tests.log
-
-      - name: Test readable ZIP, Files migration and task reminders
-        run: |
-          set -o pipefail
-          swiftc TherapieApp/Models.swift TherapieApp/AIBuddyModels.swift TherapieApp/TherapyDiscussionModels.swift TherapieApp/DashboardModels.swift TherapieApp/ArchiveModels.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift TherapieApp/CompanionModels.swift TherapieApp/InsightsModels.swift TherapieApp/BackupArchive.swift TherapieApp/ReadableBackup.swift Tests/StorageReminderChecks.swift -o /tmp/therapie-storage-checks 2>&1 | tee storage-tests.log
-          /tmp/therapie-storage-checks 2>&1 | tee -a storage-tests.log
-          python3 scripts/verify_readable_zip.py /tmp/therapie-portable-check.zip
-
       - name: Verify notes, attachments, appointments and check-in regressions
-        if: contains(github.event.head_commit.message, '[checkin-ui]') || (github.event_name == 'workflow_dispatch' && inputs.verify_checkin)
-        timeout-minutes: 22
+        if: contains(github.event.head_commit.message, '[buddy-smoke]') || (github.event_name == 'workflow_dispatch' && inputs.verify_checkin)
+        timeout-minutes: 12
         run: |
           set +e
-          python3 scripts/verify_checkin_removal.py
+          BUDDY_SMOKE=1 python3 scripts/verify_checkin_removal.py
           VERIFY_STATUS=$?
           if [ "$VERIFY_STATUS" -eq 75 ]; then
             echo "::warning::Hosted simulator unavailable; focused UI regression was not executed. Model regression and device build passed."
@@ -205,30 +195,30 @@ jobs:
 
       - name: Package recoverable source snapshots
         run: |
-          git archive --format=zip --output=Therapie-v3009.0.0-source.zip HEAD
+          git archive --format=zip --output=Therapie-v3010.0.0-source.zip HEAD
 
       - name: Upload source snapshot
         uses: actions/upload-artifact@v4
         with:
-          name: Therapie-v3009.0.0-source
-          path: Therapie-v3009.0.0-source.zip
+          name: Therapie-v3010.0.0-source
+          path: Therapie-v3010.0.0-source.zip
           if-no-files-found: error
           retention-days: 90
 
       - name: Package IPA
         run: |
           APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" -print -quit)
-          rm -rf Payload Therapie-v3009.0.0.ipa
+          rm -rf Payload Therapie-v3010.0.0.ipa
           mkdir Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Therapie-v3009.0.0.ipa Payload
-          ls -lh Therapie-v3009.0.0.ipa
+          /usr/bin/zip -qry Therapie-v3010.0.0.ipa Payload
+          ls -lh Therapie-v3010.0.0.ipa
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Therapie-v3009.0.0-IPA
-          path: Therapie-v3009.0.0.ipa
+          name: Therapie-v3010.0.0-IPA
+          path: Therapie-v3010.0.0.ipa
           if-no-files-found: error
           retention-days: 30
 

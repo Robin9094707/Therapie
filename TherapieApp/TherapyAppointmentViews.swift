@@ -129,7 +129,7 @@ struct TherapyAppointmentsView: View {
                         }
                     }
                 }
-            }.navigationTitle("Deine Therapietermine").navigationBarTitleDisplayMode(.inline)
+            }.buttonStyle(.borderless).navigationTitle("Deine Therapietermine").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fertig") { dismiss() }.accessibilityIdentifier("therapy.manage.close") } }
                 .safeAreaInset(edge: .bottom) { WellnessSaveErrorView() }
                 .sheet(item: $destination) { route in switch route { case .cancel(let date): TherapyCancellationEditor(date: date); case .vacation: TherapyVacationEditor() } }

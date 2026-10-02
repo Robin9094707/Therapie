@@ -5,6 +5,8 @@ struct RoutineEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @State var routine: DailyRoutine
     @State private var error: String?
+    @State private var initial: DailyRoutine?
+    @State private var confirmExit = false
     private let symbols = ["checkmark.circle", "pills.fill", "shower.fill", "fork.knife", "drop.fill", "figure.walk", "bed.double.fill", "book.fill", "heart.fill", "sun.max.fill", "briefcase.fill", "leaf.fill"]
     private let symbolTitles = ["Allgemein", "Medikament", "Duschen", "Essen", "Trinken", "Bewegung", "Schlafen", "Lesen", "Wohlbefinden", "Morgen", "Arbeit", "Pause"]
     private var valid: Bool { !routine.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !routine.times.isEmpty && routine.times.allSatisfy { !$0.weekdays.isEmpty } }
@@ -58,12 +60,24 @@ struct RoutineEditorView: View {
                     Toggle("Check-in nach Therapie-Timer anbieten", isOn: $store.data.companionSettings.offerTherapyCheckIn)
                 }
                 if let error { Section { Text(error).foregroundStyle(.red) } }
-            }.navigationTitle("Routine gestalten").navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { dismiss() } }
-                    ToolbarItem(placement: .confirmationAction) { Button("Speichern") { store.saveRoutine(routine); if store.lastSaveError == nil { dismiss() } else { error = store.lastSaveError } }.disabled(!valid) }
+                Section("Wiederholung & Zeitraum") {
+                    Stepper("Alle \(routine.repeatEveryWeeks ?? 1) Wochen", value: Binding(get: { routine.repeatEveryWeeks ?? 1 }, set: { routine.repeatEveryWeeks = $0; if routine.recurrenceAnchor == nil { routine.recurrenceAnchor = Date() } }), in: 1...52)
+                    if routine.recurrenceAnchor != nil { DatePicker("Start", selection: Binding(get: { routine.recurrenceAnchor ?? Date() }, set: { routine.recurrenceAnchor = $0 })) }
+                    Toggle("Enddatum", isOn: Binding(get: { routine.endsAt != nil }, set: { routine.endsAt = $0 ? Date().addingTimeInterval(28 * 86400) : nil }))
+                    if routine.endsAt != nil { DatePicker("Letzter Termin bis", selection: Binding(get: { routine.endsAt ?? Date() }, set: { routine.endsAt = $0 })) }
                 }
-        }
+            }.buttonStyle(.borderless).navigationTitle("Routine gestalten").navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { if initial != nil && routine != initial { confirmExit = true } else { dismiss() } } }
+                    ToolbarItem(placement: .confirmationAction) { Button("Speichern") { store.saveRoutine(routine); if store.lastSaveError == nil { store.removeEditorDraft(routine.id); if store.lastSaveError == nil { dismiss() } } else { error = store.lastSaveError } }.disabled(!valid) }
+                }
+        }.onAppear { if initial == nil { initial = routine } }
+            .interactiveDismissDisabled(initial != nil && routine != initial)
+            .alert("Eingaben behalten?", isPresented: $confirmExit) {
+                Button("Weiter bearbeiten", role: .cancel) {}
+                Button("Als Entwurf speichern") { store.saveEditorDraft(routine, id: routine.id, kind: "routine", title: routine.title); if store.lastSaveError == nil { dismiss() } }
+                Button("Verwerfen", role: .destructive) { store.removeEditorDraft(routine.id); if store.lastSaveError == nil { dismiss() } }
+            }
     }
     private func weekdayPicker(days: Binding<[Int]>) -> some View {
         VStack(alignment: .leading, spacing: 6) {

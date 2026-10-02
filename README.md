@@ -1,3 +1,14 @@
+## Update 3010.0.0 · Interaktiver Begleiter
+
+- Nachrichten werden unmittelbar nach lokalem Speichern aus dem Editor entfernt. Ein synchroner Sendezustand verhindert doppelte Taps. Fehlgeschlagene Antworten können ohne erneute Nutzernachricht wiederholt werden. Native Tipp-Punkte ersetzen die Lade-Karte.
+- Ein Präsentationszustand pro Ebene hält untergeordnete Check-ins, Einstellungen und Aktionsvorschauen stabil. Der Check-in-Einstieg wechselt seinen Modus nicht während einer laufenden Präsentation.
+- KI-Aktionen: vorhandene Check-ins passend zum Zeitfenster öffnen/fortsetzen, Akku-Punkte, Aufgaben und Erinnerungen, endliche wöchentliche Aufgabenserien (bis 52), Routineintervalle/Ende, konkrete Änderungen/Löschungen an Aufgaben und Routinen sowie eine Liste unterstützter Einstellungen. Immer Vorschau und ausdrückliche Bestätigung; geänderte Vorschauziele werden erneut geprüft. Bei Routinen mit mehreren Uhrzeiten werden Zeitänderungen über den Routine-Editor vorgenommen.
+- Check-in-Rückfragen können beim aktuellen Schritt bleiben. Kontext enthält vorhandene Fenster/Abschlüsse, erinnerte Aktionen, Aufgabenzeiten, Routine- und Einstellungswerte. Modellwahl bleibt unverändert.
+- Leere neue Chats verschwinden beim Verlassen. Ungesendeter Text und bearbeitete Notizen, Aufgaben, Routinen, Themen, Ziele, Ordner, Medienmetadaten, Stimmung/Schlagwörter, Energie-Checks und Rückblicke können ausdrücklich als Entwurf gespeichert werden. Entwürfe im Profil; Schema 12 mit Defaults für ältere Daten, vollständig in verschlüsselten und lesbaren Backups. Lesbare Entwurfstexte enthalten ihren Inhalt statt nur Base64.
+- Die Rückgängig-Schaltfläche verschwindet zehn Sekunden nach der letzten Änderung; die lokale Wiederherstellung hält gelöschte Anhänge weiterhin bis zu zehn Minuten zurück.
+- Optionaler Wochenrückblick einmal pro Kalenderwoche beim Öffnen der App, mit klarer Freigabe für API-Kosten. Maximal ein automatischer Versuch pro Tag; kein garantierter Hintergrundzeitpunkt.
+- Schneller Standardbuild: native iPhone-Kompilierung und Bundle-Prüfung sowie einmal kompilierte Modelle mit vier Kernprüfungen (Migration, AI/Idempotenz, verschlüsselte und lesbare Backups). PDFs und vollständige UI-/Domain-Regressionssammlung sind optional per workflow_dispatch. Für dieses Update zwei gezielte native Smoke-Tests für echtes Senden und verschachtelte Menüs.
+
 ## Update 3009.0.0 · KI im Alltag
 
 - Getrennte lokale Chats: neu beginnen, öffnen, löschen und ganze Gespräche im Tagebuch speichern. Bisheriger Verlauf wird in einen Chat übernommen; Schema 11 und vollständige verschlüsselte/lesbare Backups.

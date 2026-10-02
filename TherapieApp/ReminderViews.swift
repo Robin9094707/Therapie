@@ -64,6 +64,6 @@ struct ReminderCenterView: View {
                 Text("Therapietermine verwenden AlarmKit. Aktualisiere sie über Kalender → Mit iPhone synchronisieren. Aufgaben können zusätzlich AlarmKit nutzen; zum Erledigen und Verschieben öffnet der Wecker die App.").font(.footnote)
                 NavigationLink { TherapyCalendarView() } label: { Label("Therapie-Alarme & Kalender", systemImage: "alarm") }
             }
-        }.navigationTitle("Erinnerungen")
+        }.buttonStyle(.borderless).navigationTitle("Erinnerungen")
     }
 }

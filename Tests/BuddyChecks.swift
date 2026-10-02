@@ -191,7 +191,48 @@ final class BuddyMockProtocol: URLProtocol {
         try expect(AIBuddyContext.requestDays(question: "Heute", settings: manualScope, chosenDays: 30) == 30, "Automatic text inference can be disabled")
         let strict = AIBuddyAPI.schema["properties"] as! [String: Any]
         let guideSchema = strict["checkIn"] as! [String: Any]
-        try expect(guideSchema["additionalProperties"] as? Bool == false && (guideSchema["required"] as! [String]).count == 13, "Structured check-in schema requires every nullable field")
+        try expect(guideSchema["additionalProperties"] as? Bool == false && (guideSchema["required"] as! [String]).count == 14, "Structured check-in schema requires every nullable field")
+        var interactive = AppData()
+        let msg = AIBuddyMessage(role: "assistant", text: "Vorschau"); interactive.aiMessages = [msg]
+        let stamp = ISO8601DateFormatter().string(from: now)
+        let repeating = AIBuddyAction(kind: .task, title: "Wöchentlicher Schritt", text: "Kurz beginnen", dateISO: stamp, weekdays: [2], options: AIBuddyActionOptions(remindersEnabled: true, alarmEnabled: false, repeatEveryWeeks: 2, repeatCount: 3))
+        try AIBuddyMutation.apply(repeating, originalID: repeating.id, messageID: msg.id, to: &interactive, now: now)
+        try expect(interactive.weeklyTasks.count == 3 && Set(interactive.weeklyTasks.map(\.id)).count == 3 && interactive.weeklyTasks.allSatisfy { $0.reminder?.weekdays == [2] }, "Confirmed weekly plan creates exactly three individually editable tasks with reminders")
+        let originalCount = interactive.weeklyTasks.count
+        do { try AIBuddyMutation.apply(repeating, originalID: repeating.id, messageID: msg.id, to: &interactive, now: now); throw Failure.assertion("Repeated action executed") } catch is AIBuddyAPIError { count += 1 }
+        try expect(interactive.weeklyTasks.count == originalCount, "Repeated tap does not duplicate planned tasks")
+        let taskID = interactive.weeklyTasks[0].id
+        let editTask = AIBuddyAction(kind: .updateTask, title: "Geänderter Schritt", text: "Neue Beschreibung", targetID: taskID.uuidString, weekdays: [])
+        let previousReminder = interactive.weeklyTasks[0].reminder
+        try AIBuddyMutation.apply(editTask, originalID: editTask.id, messageID: msg.id, to: &interactive)
+        try expect(interactive.weeklyTasks[0].id == taskID && interactive.weeklyTasks[0].reminder == previousReminder, "Editing a task preserves ID and unnamed reminder settings")
+        let setting = AIBuddyAction(kind: .setting, title: "Kontext", text: "14 Tage", targetID: "ai.contextDays", weekdays: [], options: AIBuddyActionOptions(valueInt: 14))
+        try AIBuddyMutation.apply(setting, originalID: setting.id, messageID: msg.id, to: &interactive)
+        try expect(interactive.aiSettings.contextDays == 14 && !AIBuddyAction(kind: .setting, title: "Schlüssel", text: "", targetID: "ai.apiKey", weekdays: [], options: AIBuddyActionOptions(valueBool: true)).valid, "Settings changes are bounded and credentials cannot be changed by AI")
+        let energy = AIBuddyAction(kind: .energy, title: "Schwester", text: "Gibt mir Ruhe", targetID: "gives", weekdays: [])
+        try AIBuddyMutation.apply(energy, originalID: energy.id, messageID: msg.id, to: &interactive)
+        try expect(interactive.batteryPoints[0].direction == .gives && interactive.batteryPoints[0].note == "Gibt mir Ruhe", "Confirmed energy suggestion creates a regular editable energy point")
+        let emptyChat = AIConversationMutation.create(in: &interactive)
+        AIConversationMutation.removeIfEmpty(emptyChat, in: &interactive)
+        try expect(!interactive.aiConversations.contains { $0.id == emptyChat }, "Opening an empty chat never leaves a saved draft")
+        let draftChat = AIConversationMutation.create(in: &interactive)
+        interactive.aiConversations[0].draftText = "Unfertiger Gedanke"
+        AIConversationMutation.removeIfEmpty(draftChat, in: &interactive)
+        try expect(interactive.aiConversations.contains { $0.id == draftChat }, "Explicitly saved unsent text survives cleanup")
+        var noAdvance = GuidedCheckIn(summary: "Gedanke", step: 2)
+        _ = AICheckInGuide.apply(AIBuddyCheckInProposal(advance: false), to: &noAdvance, known: [])
+        try expect(noAdvance.step == 2, "Clarifying questions never skip the current guided step")
+        interactive.editorDrafts = [try AppEditorDraft.make(noAdvance, id: noAdvance.id, kind: "guided", title: "Entwurf")]
+        let restoredInteractive = try dec.decode(AppData.self, from: enc.encode(interactive))
+        try expect(restoredInteractive == interactive && restoredInteractive.editorDrafts[0].decode(GuidedCheckIn.self) == noAdvance, "All new draft, action and reminder values round-trip through AppData")
+        let available = AIBuddyContext.make(data: interactive, days: 7, end: now)
+        try expect(available.text.contains("CHECK-IN-FENSTER") && available.text.contains("ai.contextDays"), "AI receives current check-in availability and supported setting values")
+        var recurringRoutine = DailyRoutine(title: "Alle zwei Wochen", recurrenceAnchor: now, repeatEveryWeeks: 2)
+        let nextWeek = Calendar.current.date(byAdding: .weekOfYear, value: 1, to: now)!
+        let secondWeek = Calendar.current.date(byAdding: .weekOfYear, value: 2, to: now)!
+        try expect(!RoutineRecurrence.includes(recurringRoutine, date: nextWeek) && RoutineRecurrence.includes(recurringRoutine, date: secondWeek), "Routine interval skips inactive weeks")
+        recurringRoutine.endsAt = nextWeek
+        try expect(!RoutineRecurrence.includes(recurringRoutine, date: secondWeek), "Finite routine stops after its end date")
         print("Passed \(count) duplicate, flexible recurrence, therapy discussion, alarm lifecycle, AI privacy/action and offline network checks.")
     }
 }

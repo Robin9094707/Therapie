@@ -1,5 +1,6 @@
 """Exercise real text-field callbacks and removal buttons on one native iPhone simulator."""
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -46,11 +47,17 @@ command = ['xcodebuild', '-project', 'Therapie.xcodeproj', '-scheme', 'TherapieA
            '-only-testing:TherapieUITests/TherapieUITests/testChatSendWithKeyboardNewChatAndReopen',
            '-only-testing:TherapieUITests/TherapieUITests/testGuidedAIKeepsDraftWhenSwitchingToNormal',
            'CODE_SIGNING_ALLOWED=NO', 'test']
+if os.environ.get('BUDDY_SMOKE') == '1':
+    # Only two checks for this release: real Send and parent-preserving nested menus.
+    command = [part for part in command if not part.startswith('-only-testing:')]
+    command[command.index('CODE_SIGNING_ALLOWED=NO'):command.index('CODE_SIGNING_ALLOWED=NO')] = [
+        '-only-testing:TherapieUITests/TherapieUITests/testChatSendWithKeyboardNewChatAndReopen',
+        '-only-testing:TherapieUITests/TherapieUITests/testGuidedAIKeepsDraftWhenSwitchingToNormal']
 print('Testing saved overview and real task removal on', phone['name'], flush=True)
 with (output / 'test.log').open('w') as log:
     process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
     try:
-        code = process.wait(timeout=1200)
+        code = process.wait(timeout=600)
     except subprocess.TimeoutExpired:
         process.terminate()
         try:

@@ -229,7 +229,7 @@ struct SessionTemplateEditorView: View {
     private let initial: TherapySessionTemplate
     init(template: TherapySessionTemplate) { initial = template; _template = State(initialValue: template) }
     var body: some View {
-        TherapyEditorSheet(title: "Stundenplan bearbeiten", dirty: template != initial, canSave: template.isValid, save: { store.saveSessionTemplate(template) }) {
+        TherapyEditorSheet(title: "Stundenplan bearbeiten", dirty: template != initial, canSave: template.isValid, draftID: template.id, saveDraft: { store.saveEditorDraft(template, id: template.id, kind: "sessionTemplate", title: template.title) }, save: { store.saveSessionTemplate(template) }) {
             Section {
                 TextField("Name des Stundenplans", text: $template.title)
                 Text("Gesamt: \(template.totalMinutes) Minuten").font(.headline)

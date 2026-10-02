@@ -45,6 +45,7 @@ final class AppStore: ObservableObject {
     @Published var routineAlarmStatus = ""
     @Published var undoAvailable = false
     var undoSteps: [AppUndoStep] = []
+    var undoExpiryTask: Task<Void, Never>?
     var deferredMediaDeletion: [String: Date] = [:]
     var undoInProgress = false
     private var writeBlocked = false

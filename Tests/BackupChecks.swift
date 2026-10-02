@@ -50,6 +50,14 @@ struct BackupChecks {
         data.aiMessages = [AIBuddyMessage(role: "assistant", text: "Mein Rückblick", reply: AIBuddyReply(title: "Meine Woche", message: "Eine gute Pause", sections: [], actions: [AIBuddyAction(kind: .note, title: "Gedanke", text: "Gut", weekdays: [])], suggestedDays: 14))]
         AIConversationMutation.migrate(&data)
         data.aiConversations[0].contextDays = 14
+        data.aiConversations[0].draftText = "Noch nicht gesendeter Gedanke"
+        data.aiSettings.weeklyReviewEnabled = true
+        data.aiSettings.lastWeeklyReview = Date(timeIntervalSince1970: 1_780_000_000)
+        data.aiSettings.lastWeeklyReviewAttempt = data.aiSettings.lastWeeklyReview
+        data.editorDrafts = [try AppEditorDraft.make(TherapyNote(title: "Entwurfsnotiz", text: "Mein nicht verlorener Entwurf", tags: ["Familie"]), id: UUID(), kind: "note", title: "Entwurfsnotiz")]
+        data.routines[0].recurrenceAnchor = Date(timeIntervalSince1970: 1_770_000_000)
+        data.routines[0].repeatEveryWeeks = 2
+        data.routines[0].endsAt = Date(timeIntervalSince1970: 1_880_000_000)
         data.hashtagCatalog = ["Familie", "Technik"]
         data.guidedCheckIns[0].tags = ["Familie"]
         data.therapyDiscussionAcknowledgedIDs = ["guided-discussed"]
@@ -200,10 +208,10 @@ struct BackupChecks {
         prefs.apply(defaults)
         try expect(PortablePreferences.capture(defaults) == prefs, "Appearance, calm, haptics and confetti restored")
         var oldJSON = try JSONSerialization.jsonObject(with: BackupArchive.encoder().encode(data)) as! [String: Any]
-        for version in 1...10 {
+        for version in 1...11 {
             oldJSON["schemaVersion"] = version
             let migrated = try BackupArchive.decoder().decode(AppData.self, from: JSONSerialization.data(withJSONObject: oldJSON))
-            try expect(migrated.schemaVersion == 11 && migrated.notes.count == 1 && migrated.media[0].attachmentOmitted == nil, "Schema \(version) migrates for backups")
+            try expect(migrated.schemaVersion == 12 && migrated.notes.count == 1 && migrated.media[0].attachmentOmitted == nil, "Schema \(version) migrates for backups")
         }
         oldJSON["schemaVersion"] = 8; oldJSON.removeValue(forKey: "dashboard"); oldJSON.removeValue(forKey: "archivePreferences")
         let oldWithoutSettings = try BackupArchive.decoder().decode(AppData.self, from: JSONSerialization.data(withJSONObject: oldJSON))

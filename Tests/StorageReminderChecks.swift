@@ -36,6 +36,14 @@ struct StorageReminderChecks {
         data.aiMessages = [AIBuddyMessage(role: "assistant", text: "Mein KI-Rückblick", reply: AIBuddyReply(title: "Meine Woche", message: "Ein ruhiger Moment", sections: [], actions: [], suggestedDays: 7))]
         AIConversationMutation.migrate(&data)
         data.aiConversations[0].contextDays = 14
+        data.aiConversations[0].draftText = "Noch nicht gesendeter Gedanke"
+        data.aiSettings.weeklyReviewEnabled = true
+        data.aiSettings.lastWeeklyReview = Date(timeIntervalSince1970: 1_780_000_000)
+        data.aiSettings.lastWeeklyReviewAttempt = data.aiSettings.lastWeeklyReview
+        data.editorDrafts = [try AppEditorDraft.make(TherapyNote(title: "Entwurfsnotiz", text: "Mein nicht verlorener Entwurf", tags: ["Familie"]), id: UUID(), kind: "note", title: "Entwurfsnotiz")]
+        data.routines[0].recurrenceAnchor = Date(timeIntervalSince1970: 1_770_000_000)
+        data.routines[0].repeatEveryWeeks = 2
+        data.routines[0].endsAt = Date(timeIntervalSince1970: 1_880_000_000)
         data.hashtagCatalog = ["Familie"]
         data.guidedCheckIns[0].tags = ["Familie"]
         data.therapyDiscussionAcknowledgedIDs = ["guided-discussed"]

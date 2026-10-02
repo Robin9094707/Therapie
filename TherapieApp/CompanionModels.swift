@@ -77,6 +77,9 @@ struct DailyRoutine: Codable, Equatable, Identifiable {
     var escalationMinutes = 5
     var quietStartHour: Int?
     var quietEndHour = 7
+    var recurrenceAnchor: Date?
+    var repeatEveryWeeks: Int?
+    var endsAt: Date?
 }
 enum RoutineOutcome: String, Codable, Hashable { case done, skipped }
 struct RoutineCompletion: Codable, Equatable, Identifiable {
@@ -133,7 +136,7 @@ struct RoutineReminderSlot: Identifiable, Equatable {
 }
 enum RoutinePlanner {
     static func active(_ routine: DailyRoutine, settings: CompanionSettings, at date: Date) -> Bool {
-        routine.enabled && !(routine.pausedUntil.map { $0 > date } ?? false) && !(routine.pauseOnVacation && (settings.vacationUntil.map { $0 > date } ?? false))
+        routine.enabled && RoutineRecurrence.includes(routine, date: date) && !(routine.pausedUntil.map { $0 > date } ?? false) && !(routine.pauseOnVacation && (settings.vacationUntil.map { $0 > date } ?? false))
     }
     static func resolved(_ occurrence: RoutineOccurrence, completions: [RoutineCompletion]) -> Bool {
         completions.contains { $0.routineID == occurrence.routineID && $0.timeID == occurrence.timeID && $0.scheduledAt == occurrence.due }
@@ -432,5 +435,18 @@ enum IdentifiedDraftAccess {
         guard value.id == id, let index = values.firstIndex(where: { $0.id == id }) else { return false }
         values[index] = value
         return true
+    }
+}
+
+
+enum RoutineRecurrence {
+    static func includes(_ routine: DailyRoutine, date: Date, calendar: Calendar = .current) -> Bool {
+        if let anchor = routine.recurrenceAnchor, date < anchor { return false }
+        if let end = routine.endsAt, date > end { return false }
+        guard let anchor = routine.recurrenceAnchor, let every = routine.repeatEveryWeeks, every > 1,
+              let start = calendar.dateInterval(of: .weekOfYear, for: anchor)?.start,
+              let week = calendar.dateInterval(of: .weekOfYear, for: date)?.start else { return true }
+        let days = calendar.dateComponents([.day], from: start, to: week).day ?? 0
+        return days >= 0 && (days / 7) % every == 0
     }
 }

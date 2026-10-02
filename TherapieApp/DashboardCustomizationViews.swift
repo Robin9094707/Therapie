@@ -220,7 +220,7 @@ struct WidgetSetupHelpView: View {
                 Section("Gemeinsame Daten") {
                     Text("Automatische Live-Daten brauchen beim Signieren dieselbe App-Gruppe group.eu.rjuhas.therapie in App und Erweiterung. Eine Widget-Einstellung kann eine entfernte iOS-Berechtigung nicht ersetzen. Nach einer passenden Installation App öffnen und das Widget gegebenenfalls neu hinzufügen.").font(.caption)
                 }
-            }.navigationTitle("Widget einrichten").navigationBarTitleDisplayMode(.inline)
+            }.buttonStyle(.borderless).navigationTitle("Widget einrichten").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { dismiss() } } }
                 .onAppear { TherapyWidgetBridge.refresh(store, force: true) }
         }

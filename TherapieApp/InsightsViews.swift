@@ -56,7 +56,7 @@ struct CheckInKeywordEditor: View {
                     Stepper("Wie stark? \(point.impact)/5", value: $point.impact, in: 1...5)
                     Picker("Bereich", selection: $point.category) { ForEach(BatteryCategory.allCases) { Text($0.title).tag($0) } }
                 }
-            }.navigationTitle("Akku-Punkt").navigationBarTitleDisplayMode(.inline)
+            }.buttonStyle(.borderless).navigationTitle("Akku-Punkt").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { dismiss() } }
                     ToolbarItem(placement: .confirmationAction) { Button("Speichern") { var clean = point; clean.title = clean.title.trimmingCharacters(in: .whitespacesAndNewlines); save(clean); dismiss() }.disabled(!valid) }
@@ -110,7 +110,7 @@ struct DayCheckInSettingsView: View {
                 }
                 Button("Eigenen Check-in ergänzen", systemImage: "plus.circle") { slots.append(DailyCheckInSlot(kind: .free, name: "Mein Check-in", startHour: 12, endHour: 14)) }
                 if let error { Text(error).foregroundStyle(.red) }
-            }.onAppear { allowMultiple = store.data.companionSettings.allowMultipleCheckInsPerSlot ?? false }.navigationTitle("Dein Check-in-Rhythmus").navigationBarTitleDisplayMode(.inline)
+            }.onAppear { allowMultiple = store.data.companionSettings.allowMultipleCheckInsPerSlot ?? false }.buttonStyle(.borderless).navigationTitle("Dein Check-in-Rhythmus").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { dismiss() } }
                     ToolbarItem(placement: .confirmationAction) { Button("Speichern") { var snapshot = store.data; snapshot.companionSettings.dayCheckInSlots = slots; snapshot.companionSettings.allowMultipleCheckInsPerSlot = allowMultiple; store.data = snapshot; if store.lastSaveError == nil { dismiss() } else { error = store.lastSaveError } }.disabled(slots.contains { $0.kind == .free && $0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) }
@@ -175,7 +175,7 @@ struct InsightsHubView: View {
                         }
                     }
                 }
-            }.navigationTitle("Insights")
+            }.buttonStyle(.borderless).navigationTitle("Insights")
                 .sheet(item: $mood) { MoodEditorView(entry: $0) }
                 .sheet(isPresented: $report) { WeeklyPDFReportView() }
         }

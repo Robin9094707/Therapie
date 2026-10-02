@@ -56,7 +56,7 @@ struct WeeklyPDFReportView: View {
                     if let error { Text(error).foregroundStyle(.red) }
                     Text("Nur gewählte Bereiche werden ausgegeben. Prüfe die Vorschau vor dem Teilen. Es findet keine automatische Übermittlung statt.").font(.caption).foregroundStyle(.secondary)
                 }
-            }.navigationTitle("Meine Therapiewoche").navigationBarTitleDisplayMode(.inline)
+            }.buttonStyle(.borderless).navigationTitle("Meine Therapiewoche").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Schließen") { dismiss() } } }
                 .onChange(of: options) { old, new in
                     result = nil

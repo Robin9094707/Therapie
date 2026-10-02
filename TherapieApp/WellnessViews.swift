@@ -508,7 +508,7 @@ struct MoodEditorView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { if dirty { discard = true } else { dismiss() } } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Speichern") { store.saveCheckIn(entry, points: points); if store.lastSaveError == nil { dismiss() } }
+                    Button("Speichern") { store.saveCheckIn(entry, points: points); if store.lastSaveError == nil { store.removeEditorDraft(entry.id); if store.lastSaveError == nil { dismiss() } } }
                         .accessibilityIdentifier("wellness.save-checkin")
                 }
             }
@@ -521,7 +521,8 @@ struct MoodEditorView: View {
             }
             .alert("Änderungen verwerfen?", isPresented: $discard) {
                 Button("Weiter bearbeiten", role: .cancel) {}
-                Button("Verwerfen", role: .destructive) { dismiss() }
+                Button("Als Entwurf speichern") { store.saveEditorDraft(MoodEntryDraft(entry: entry, points: points), id: entry.id, kind: "mood", title: "Stimmungs-Check-in"); if store.lastSaveError == nil { dismiss() } }
+                Button("Verwerfen", role: .destructive) { store.removeEditorDraft(entry.id); if store.lastSaveError == nil { dismiss() } }
             }
             .alert("Akku-Punkt entfernen?", isPresented: $showDelete) {
                 Button("Abbrechen", role: .cancel) {}
@@ -567,14 +568,15 @@ struct BatteryPointEditorView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { if point != initial { discard = true } else { dismiss() } } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Speichern") { if onSave(point) { dismiss() } }.disabled(point.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Button("Speichern") { if onSave(point) { store.removeEditorDraft(point.id); if store.lastSaveError == nil { dismiss() } } }.disabled(point.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
             .interactiveDismissDisabled(point != initial)
             .safeAreaInset(edge: .bottom) { WellnessSaveErrorView() }
             .alert("Änderungen verwerfen?", isPresented: $discard) {
                 Button("Weiter bearbeiten", role: .cancel) {}
-                Button("Verwerfen", role: .destructive) { dismiss() }
+                Button("Als Entwurf speichern") { store.saveEditorDraft(point, id: point.id, kind: "battery", title: point.title); if store.lastSaveError == nil { dismiss() } }
+                Button("Verwerfen", role: .destructive) { store.removeEditorDraft(point.id); if store.lastSaveError == nil { dismiss() } }
             }
         }
     }
@@ -628,14 +630,14 @@ struct WeekReviewEditorView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { if review != initial { discard = true } else { dismiss() } } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Speichern") { store.saveWeekReview(review); if store.lastSaveError == nil { dismiss() } }.disabled(!hasContent)
+                    Button("Speichern") { store.saveWeekReview(review); if store.lastSaveError == nil { store.removeEditorDraft(review.id); if store.lastSaveError == nil { dismiss() } } }.disabled(!hasContent)
                 }
             }
             .interactiveDismissDisabled(review != initial)
             .safeAreaInset(edge: .bottom) { WellnessSaveErrorView() }
             .alert("Änderungen verwerfen?", isPresented: $discard) {
                 Button("Weiter bearbeiten", role: .cancel) {}
-                Button("Verwerfen", role: .destructive) { dismiss() }
+                Button("Als Entwurf speichern") { store.saveEditorDraft(review, id: review.id, kind: "weekReview", title: "Wochenrückblick"); if store.lastSaveError == nil { dismiss() } }
             }
         }
     }

@@ -10,7 +10,7 @@ import UIKit
     private var request: Task<AIBuddyResponse, Error>?
     init(store: AppStore) { self.store = store }
     func cancel() { activeID = nil; request?.cancel(); request = nil; busy = false; pendingQuestion = "" }
-    func send(_ question: String, image: Data? = nil, inSession: Bool = false, daysOverride: Int? = nil, conversationID: UUID? = nil) async -> Bool {
+    func send(_ question: String, image: Data? = nil, inSession: Bool = false, daysOverride: Int? = nil, conversationID: UUID? = nil, onAccepted: (() -> Void)? = nil) async -> Bool {
         guard !busy, let store, store.data.aiSettings.enabled else { return false }
         let fixture = ProcessInfo.processInfo.arguments.contains("--buddy-network-fixture")
         guard let key = fixture ? "fixture-no-network" : AIBuddyKeychain.read() else { error = "Bitte hinterlege zuerst deinen OpenAI-API-Schlüssel im Profil."; return false }
@@ -44,6 +44,8 @@ import UIKit
         let requestHistory = history.last?.id == userID ? Array(history.dropLast()) : history
         let identifier = UUID(); activeID = identifier
         busy = true; error = nil; pendingQuestion = clean
+        if let index = store.data.aiConversations.firstIndex(where: { $0.id == chatID }), store.data.aiConversations[index].draftText != nil { store.data.aiConversations[index].draftText = nil }
+        onAccepted?()
         let task = Task<AIBuddyResponse, Error> {
             if fixture {
                 try await Task.sleep(for: .milliseconds(150))
@@ -84,5 +86,24 @@ import UIKit
         let note = TherapyNote(title: AIBuddyText.plain(reply.title.isEmpty ? "Mein KI-Rückblick" : reply.title), text: reply.journalText + "\n\nBerücksichtigter Zeitraum: " + period + "\nKI-gestützter Rückblick, bitte persönlich prüfen.", tags: ["Tagebuch", "KI-Rückblick"], sessionID: snapshot.currentSession?.id, category: "Therapietagebuch")
         snapshot.notes.insert(note, at: 0); snapshot.aiMessages[index].savedNoteID = note.id
         store.data = snapshot
+    }
+}
+
+
+extension AIBuddyController {
+    func refreshWeeklyReview(now: Date = Date()) async {
+        guard let store, !busy, store.visibleAIComposerIDs.isEmpty, store.data.aiSettings.enabled, store.data.aiSettings.weeklyReviewEnabled, AIBuddyKeychain.read() != nil else { return }
+        let settings = store.data.aiSettings, calendar = Calendar.therapyCalendar
+        if let last = settings.lastWeeklyReview, calendar.isDate(last, equalTo: now, toGranularity: .weekOfYear) { return }
+        if let attempt = settings.lastWeeklyReviewAttempt, calendar.isDate(attempt, inSameDayAs: now) { return }
+        var snapshot = store.data
+        let id = AIConversationMutation.create(in: &snapshot)
+        if let index = snapshot.aiConversations.firstIndex(where: { $0.id == id }) { snapshot.aiConversations[index].title = "Mein Wochenrückblick · " + now.formatted(date: .abbreviated, time: .omitted) }
+        snapshot.aiSettings.lastWeeklyReviewAttempt = now; store.data = snapshot
+        guard store.lastSaveError == nil else { return }
+        let success = await send("Erstelle meinen Wochenrückblick für die letzten 7 Tage: hilfreiche Momente, Belastungen, selbstberichtete Stimmung und Energie, offene Themen und einen kleinen nächsten Schritt. Keine actions, keine Diagnosen.", daysOverride: 7, conversationID: id)
+        if success {
+            var saved = store.data; AIConversationMutation.save(id, in: &saved); saved.aiSettings.lastWeeklyReview = now; store.data = saved
+        }
     }
 }

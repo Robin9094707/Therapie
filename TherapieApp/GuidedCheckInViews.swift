@@ -65,12 +65,13 @@ struct GuidedCheckInView: View {
             }
             .navigationTitle("Check-in").navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Schließen") { if entry.isDraft { persistDraft(); if store.lastSaveError == nil { dismiss() } } else { showExit = true } } }
+                ToolbarItem(placement: .cancellationAction) { Button("Schließen") { if entry.isDraft && !entry.hasUserContent { discardDraft(); dismiss() } else { showExit = true } } }
                 ToolbarItem(placement: .topBarTrailing) { if entry.isDraft && store.data.aiSettings.enabled { Button("Mit KI fortsetzen", systemImage: "sparkles") { persistDraft(); if store.lastSaveError == nil { showAI = true } } } }
                 ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Tastatur schließen") { dismissKeyboard() }.accessibilityIdentifier("checkin.keyboard.done") }
             }
             .safeAreaInset(edge: .bottom) { footer.padding(16).background(.regularMaterial) }
-            .alert("Bearbeitung beenden?", isPresented: $showExit) { Button("Weiter bearbeiten", role: .cancel) {}; Button("Änderungen verwerfen", role: .destructive) { dismiss() } } message: { Text("Änderungen am abgeschlossenen Check-in werden erst beim abschließenden Speichern übernommen. Neu importierte Fotos bleiben als Materialien im Archiv.") }
+            .interactiveDismissDisabled(entry.hasUserContent)
+            .alert("Bearbeitung beenden?", isPresented: $showExit) { Button("Weiter bearbeiten", role: .cancel) {}; if entry.isDraft { Button("Als Entwurf speichern") { persistDraft(); if store.lastSaveError == nil { dismiss() } } }; Button("Änderungen verwerfen", role: .destructive) { if entry.isDraft { discardDraft() }; dismiss() } } message: { Text("Änderungen am abgeschlossenen Check-in werden erst beim abschließenden Speichern übernommen. Neu importierte Fotos bleiben als Materialien im Archiv.") }
             .onAppear { battery = entry.batteryPercent ?? 50; moodDial = entry.moodPercent ?? ((entry.mood ?? 3) - 1) * 25 }
             .sheet(isPresented: $showAI, onDismiss: { if let saved = store.data.guidedCheckIns.first(where: { $0.id == entry.id }) { entry = saved; battery = entry.batteryPercent ?? 50; moodDial = entry.moodPercent ?? 50 } }) { AIBuddyEntryView(checkIn: entry) }
             .sheet(item: $pointDraft) { point in CheckInKeywordEditor(point: point) { value in var all = entry.energyPoints ?? []; all.removeAll { $0.id == value.id }; all.append(value); entry.energyPoints = all } }
@@ -179,7 +180,12 @@ struct GuidedCheckInView: View {
     }
     private func dismissKeyboard() { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
     private func advance(_ amount: Int) { dismissKeyboard(); withAnimation(reduceMotion ? nil : .smooth) { entry.step = max(0, min(7, step + amount)) }; persistDraft() }
-    private func persistDraft() { guard entry.isDraft else { return }; store.saveGuided(entry, complete: false); error = store.lastSaveError }
+    private func discardDraft() {
+        var snapshot = store.data; snapshot.guidedCheckIns.removeAll { $0.id == entry.id && $0.isDraft }
+        for chat in snapshot.aiConversations.filter({ $0.checkInID == entry.id }) { AIConversationMutation.delete(chat.id, in: &snapshot) }
+        store.data = snapshot
+    }
+    private func persistDraft() { guard entry.isDraft, entry.hasUserContent else { return }; store.saveGuided(entry, complete: false); error = store.lastSaveError }
     private func clearStep() {
         switch step { case 1: entry.mood = nil; entry.moodPercent = nil; case 2: entry.batteryPercent = nil; entry.energyPoints = []; entry.givesEnergy = ""; entry.takesEnergy = ""; case 3: entry.stress = nil; entry.sensoryLoad = nil; entry.sleepHours = nil; case 4: entry.summary = ""; entry.smallWin = ""; entry.nextNeed = ""; case 5: if entry.isDraft { entry.tasks = [] }; case 6: entry.therapyQuestion = ""; default: break }
     }

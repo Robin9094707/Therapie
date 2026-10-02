@@ -11,9 +11,11 @@ struct TherapyEditorSheet<Content: View>: View {
     let dirty: Bool
     let canSave: Bool
     let save: () -> Void
+    var draftID: UUID?
+    var saveDraft: (() -> Void)?
     let content: Content
-    init(title: String, dirty: Bool, canSave: Bool = true, save: @escaping () -> Void, @ViewBuilder content: () -> Content) {
-        self.title = title; self.dirty = dirty; self.canSave = canSave; self.save = save; self.content = content()
+    init(title: String, dirty: Bool, canSave: Bool = true, draftID: UUID? = nil, saveDraft: (() -> Void)? = nil, save: @escaping () -> Void, @ViewBuilder content: () -> Content) {
+        self.title = title; self.dirty = dirty; self.canSave = canSave; self.save = save; self.draftID = draftID; self.saveDraft = saveDraft; self.content = content()
     }
     var body: some View {
         NavigationStack {
@@ -26,14 +28,15 @@ struct TherapyEditorSheet<Content: View>: View {
                         Button("Abbrechen") { if dirty { confirmDiscard = true } else { dismiss() } }
                     }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Speichern") { save(); if store.lastSaveError == nil { dismiss() } }.disabled(!canSave)
+                        Button("Speichern") { save(); if store.lastSaveError == nil { if let draftID { store.removeEditorDraft(draftID) }; if store.lastSaveError == nil { dismiss() } } }.disabled(!canSave)
                     }
                 }
                 .safeAreaInset(edge: .bottom) { WellnessSaveErrorView() }
                 .interactiveDismissDisabled(dirty)
                 .alert("Änderungen verwerfen?", isPresented: $confirmDiscard) {
                     Button("Weiter bearbeiten", role: .cancel) {}
-                    Button("Verwerfen", role: .destructive) { dismiss() }
+                    if let saveDraft { Button("Als Entwurf speichern") { saveDraft(); if store.lastSaveError == nil { dismiss() } } }
+                    Button("Verwerfen", role: .destructive) { if let draftID { store.removeEditorDraft(draftID) }; if store.lastSaveError == nil { dismiss() } }
                 }
         }
     }
@@ -64,7 +67,7 @@ struct FolderEditorView: View {
     init(folder: TherapyFolder) { initial = folder; _folder = State(initialValue: folder) }
     private var unavailable: Set<UUID> { TherapyHierarchy.descendants(of: folder.id, folders: store.data.therapyFolders).union([folder.id]) }
     var body: some View {
-        TherapyEditorSheet(title: "Themenordner", dirty: folder != initial, canSave: !folder.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, save: { store.saveFolder(folder) }) {
+        TherapyEditorSheet(title: "Themenordner", dirty: folder != initial, canSave: !folder.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, draftID: folder.id, saveDraft: { store.saveEditorDraft(folder, id: folder.id, kind: "folder", title: folder.title) }, save: { store.saveFolder(folder) }) {
             Section("Dein Ordner") {
                 TextField("Zum Beispiel: Alltag & Arbeit", text: $folder.title)
                 Picker("Übergeordneter Ordner", selection: $folder.parentID) {
@@ -89,7 +92,7 @@ struct TopicEditorView: View {
     private let initial: TherapyTopic
     init(topic: TherapyTopic) { initial = topic; _topic = State(initialValue: topic) }
     var body: some View {
-        TherapyEditorSheet(title: "Therapiethema", dirty: topic != initial, canSave: !topic.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, save: { store.saveTopic(topic) }) {
+        TherapyEditorSheet(title: "Therapiethema", dirty: topic != initial, canSave: !topic.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, draftID: topic.id, saveDraft: { store.saveEditorDraft(topic, id: topic.id, kind: "topic", title: topic.title) }, save: { store.saveTopic(topic) }) {
             Section("Thema & Stand") {
                 TextField("Worum geht es?", text: $topic.title, axis: .vertical).lineLimit(2...4)
                 Picker("Bereich", selection: $topic.category) { ForEach(TherapyCategory.allCases) { Label($0.rawValue, systemImage: $0.symbol).tag($0) } }
@@ -120,7 +123,7 @@ struct GoalEditorView: View {
     private let initial: TherapyGoal
     init(goal: TherapyGoal) { initial = goal; _goal = State(initialValue: goal) }
     var body: some View {
-        TherapyEditorSheet(title: "Mein Therapieziel", dirty: goal != initial, canSave: !goal.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, save: { store.saveGoal(goal) }) {
+        TherapyEditorSheet(title: "Mein Therapieziel", dirty: goal != initial, canSave: !goal.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, draftID: goal.id, saveDraft: { store.saveEditorDraft(goal, id: goal.id, kind: "goal", title: goal.title) }, save: { store.saveGoal(goal) }) {
             Section("Ein Ziel, das zu mir passt") {
                 TextField("Was möchte ich erreichen?", text: $goal.title, axis: .vertical).lineLimit(2...5)
                 Picker("Thema", selection: $goal.topicID) {
@@ -161,7 +164,10 @@ struct TherapyNoteEditorView: View {
     }
     private var canSave: Bool { !note.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !note.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !(note.mediaIDs ?? []).isEmpty }
     var body: some View {
-        TherapyEditorSheet(title: note.author == NoteAuthor.therapist.rawValue ? "Beitrag für die Therapie" : "Therapie-Notiz", dirty: note != initial || tags != initial.tags.joined(separator: ", "), canSave: canSave && !importing, save: {
+        TherapyEditorSheet(title: note.author == NoteAuthor.therapist.rawValue ? "Beitrag für die Therapie" : "Therapie-Notiz", dirty: note != initial || tags != initial.tags.joined(separator: ", "), canSave: canSave && !importing, draftID: note.id, saveDraft: {
+            var clean = note; clean.tags = AppHashtags.clean(tags.split(separator: ",").map(String.init), known: AppHashtags.catalog(store.data))
+            store.saveEditorDraft(clean, id: clean.id, kind: "note", title: clean.title)
+        }, save: {
             var clean = note
             if clean.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { clean.title = "Notiz" }
             clean.tags = AppHashtags.clean(tags.split(separator: ",").map(String.init), known: AppHashtags.catalog(store.data))
@@ -230,7 +236,7 @@ struct TherapyMediaEditorView: View {
     private let initial: MediaItem
     init(item: MediaItem) { initial = item; _item = State(initialValue: item); _tags = State(initialValue: item.tags.joined(separator: ", ")) }
     var body: some View {
-        TherapyEditorSheet(title: "Therapiematerial", dirty: item != initial || tags != initial.tags.joined(separator: ", "), canSave: !item.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, save: {
+        TherapyEditorSheet(title: "Therapiematerial", dirty: item != initial || tags != initial.tags.joined(separator: ", "), canSave: !item.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, draftID: item.id, saveDraft: { var clean = item; clean.tags = AppHashtags.clean(tags.split(separator: ",").map(String.init)); store.saveEditorDraft(clean, id: clean.id, kind: "media", title: clean.title) }, save: {
             var clean = item; clean.tags = tags.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }; store.saveMediaDetails(clean)
         }) {
             Section("Material & Informationen") {
@@ -329,7 +335,7 @@ struct TherapyFolderContentView: View {
                 GlassCard {
                     HStack {
                         NavigationLink {
-                            TherapyScreen { TherapyFolderContentView(folderID: folder.id) }.navigationTitle(folder.title)
+                            TherapyScreen { TherapyFolderContentView(folderID: folder.id) }.buttonStyle(.borderless).navigationTitle(folder.title)
                         } label: { Label(folder.title, systemImage: folder.symbol).font(.headline) }
                         Spacer()
                         Menu {

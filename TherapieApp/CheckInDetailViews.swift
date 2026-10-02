@@ -5,10 +5,15 @@ import QuickLook
 struct GuidedCheckInDestination: View {
     @EnvironmentObject private var store: AppStore
     let entry: GuidedCheckIn
+    @State private var usesAI: Bool?
     var body: some View {
-        if entry.isDraft && store.data.aiSettings.enabled && store.data.aiSettings.preferGuidedCheckIns { AIBuddyEntryView(checkIn: DayCheckInPolicy.reopen(entry, in: store.data)) }
-        else if entry.isDraft { GuidedCheckInView(entry: entry) }
-        else { GuidedCheckInDetailView(entryID: entry.id) }
+        Group {
+            if let usesAI {
+                if entry.isDraft && usesAI { AIBuddyEntryView(checkIn: entry) }
+                else if entry.isDraft { GuidedCheckInView(entry: entry) }
+                else { GuidedCheckInDetailView(entryID: entry.id) }
+            } else { ProgressView() }
+        }.onAppear { if usesAI == nil { usesAI = store.data.aiSettings.enabled && store.data.aiSettings.preferGuidedCheckIns } }
     }
 }
 

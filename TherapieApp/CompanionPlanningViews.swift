@@ -52,7 +52,7 @@ struct CheckInReminderSettingsView: View {
                     Text("Bereits abgeschlossene Check-ins entfernen den Hinweis für den jeweiligen Tag. Zeiten folgen deiner lokalen iPhone-Zeitzone. Die App plant bis zu sieben Tage voraus und erneuert den Vorrat beim Öffnen.").font(.caption).foregroundStyle(.secondary)
                     if let error { Text(error).foregroundStyle(.red) }
                 }
-            }.navigationTitle("Check-in-Erinnerungen").navigationBarTitleDisplayMode(.inline)
+            }.buttonStyle(.borderless).navigationTitle("Check-in-Erinnerungen").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { dismiss() } }
                     ToolbarItem(placement: .confirmationAction) {
@@ -157,7 +157,7 @@ struct TherapyReportView: View {
                     Button("Vorschau ansehen", systemImage: "doc.text.magnifyingglass") { preview = true }
                     Text("Teilen öffnet erst in der Vorschau das iOS-Teilen-Menü. Es wird nichts automatisch an deine Therapeutin oder deinen Therapeuten gesendet.").font(.caption).foregroundStyle(.secondary)
                 }
-            }.navigationTitle("Für deinen Therapietermin").navigationBarTitleDisplayMode(.inline)
+            }.buttonStyle(.borderless).navigationTitle("Für deinen Therapietermin").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fertig") { dismiss() } } }
                 .sheet(isPresented: $preview) { TherapyReportPreview(options: options) }
         }
@@ -190,7 +190,7 @@ private struct TherapyReportPreview: View {
                     }
                     GlassCard { Text(text).font(.body).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
                 }
-            }.navigationTitle("Deine Vorschau").navigationBarTitleDisplayMode(.inline)
+            }.buttonStyle(.borderless).navigationTitle("Deine Vorschau").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Zurück") { dismiss() } }
                     ToolbarItem(placement: .primaryAction) { ShareLink(item: text, subject: Text("Meine Therapieübersicht")) { Label("Teilen", systemImage: "square.and.arrow.up") } }

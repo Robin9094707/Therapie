@@ -6,8 +6,8 @@ struct LegacyEnergyEditorView: View {
     private let initial: EnergyEntry
     init(entry: EnergyEntry) { initial = entry; _entry = State(initialValue: entry) }
     var body: some View {
-        TherapyEditorSheet(title: "Energie-Check bearbeiten", dirty: entry != initial, save: {
-            if let index = store.data.energyEntries.firstIndex(where: { $0.id == entry.id }) { store.data.energyEntries[index] = entry }
+        TherapyEditorSheet(title: "Energie-Check bearbeiten", dirty: entry != initial, draftID: entry.id, saveDraft: { store.saveEditorDraft(entry, id: entry.id, kind: "energy", title: "Energie-Check") }, save: {
+            var snapshot = store.data; snapshot.energyEntries.removeAll { $0.id == entry.id }; snapshot.energyEntries.insert(entry, at: 0); store.data = snapshot
         }) {
             Section("Energie") {
                 DatePicker("Datum", selection: $entry.createdAt, in: ...Date(), displayedComponents: [.date, .hourAndMinute])
@@ -28,7 +28,7 @@ struct TherapyReflectionEditorView: View {
         initial = entry; _entry = State(initialValue: entry)
     }
     var body: some View {
-        TherapyEditorSheet(title: "Therapie-Rückblick", dirty: entry != initial, canSave: [entry.summary, entry.whatHelped, entry.nextFocus].contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }, save: {
+        TherapyEditorSheet(title: "Therapie-Rückblick", dirty: entry != initial, canSave: [entry.summary, entry.whatHelped, entry.nextFocus].contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }, draftID: entry.id, saveDraft: { store.saveEditorDraft(entry, id: entry.id, kind: "reflection", title: "Therapie-Rückblick") }, save: {
             var snapshot = store.data
             snapshot.reflections.removeAll { $0.id == entry.id }
             snapshot.reflections.insert(entry, at: 0)
@@ -58,7 +58,7 @@ struct WeeklyTaskEditorView: View {
         _weekDate = State(initialValue: date)
     }
     var body: some View {
-        TherapyEditorSheet(title: "Wochenaufgabe", dirty: task != initial, canSave: !task.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, save: {
+        TherapyEditorSheet(title: "Wochenaufgabe", dirty: task != initial, canSave: !task.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, draftID: task.id, saveDraft: { store.saveEditorDraft(task, id: task.id, kind: "task", title: task.title) }, save: {
             var clean = task
             clean.weekOfYear = weekDate.therapyWeek.week; clean.yearForWeekOfYear = weekDate.therapyWeek.year
             clean.completedAt = clean.completed ? (clean.completedAt ?? Date()) : nil

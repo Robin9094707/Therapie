@@ -3,6 +3,9 @@ import Foundation
 struct AIBuddySettings: Codable, Equatable {
     var enabled = false
     var preferGuidedCheckIns = true
+    var weeklyReviewEnabled = false
+    var lastWeeklyReview: Date?
+    var lastWeeklyReviewAttempt: Date?
     var model = "gpt-5.6-luna"
     var transcriptionModel = "gpt-4o-mini-transcribe"
     var contextDays = 7
@@ -11,9 +14,12 @@ struct AIBuddySettings: Codable, Equatable {
     var allowPhotoUploads = false
     var allowVoiceUploads = false
     init() {}
-    enum CodingKeys: String, CodingKey { case preferGuidedCheckIns, enabled, model, transcriptionModel, contextDays, automaticRange, includeJournal, allowPhotoUploads, allowVoiceUploads }
+    enum CodingKeys: String, CodingKey { case lastWeeklyReviewAttempt, weeklyReviewEnabled, lastWeeklyReview, preferGuidedCheckIns, enabled, model, transcriptionModel, contextDays, automaticRange, includeJournal, allowPhotoUploads, allowVoiceUploads }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        weeklyReviewEnabled = try c.decodeIfPresent(Bool.self, forKey: .weeklyReviewEnabled) ?? false
+        lastWeeklyReviewAttempt = try c.decodeIfPresent(Date.self, forKey: .lastWeeklyReviewAttempt)
+        lastWeeklyReview = try c.decodeIfPresent(Date.self, forKey: .lastWeeklyReview)
         preferGuidedCheckIns = try c.decodeIfPresent(Bool.self, forKey: .preferGuidedCheckIns) ?? true
         enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
         model = try c.decodeIfPresent(String.self, forKey: .model) ?? "gpt-5.6-luna"
@@ -26,21 +32,23 @@ struct AIBuddySettings: Codable, Equatable {
     }
 }
 enum AIBuddyActionKind: String, Codable, CaseIterable {
-    case note, mood, topic, task, appointment, routine, goal, checkIn, reflection, completeTask, completeRoutine, openScreen
+    case note, mood, topic, task, appointment, routine, goal, checkIn, reflection, completeTask, completeRoutine, openScreen, guidedCheckIn, energy, updateTask, updateRoutine, deleteTask, deleteRoutine, setting
     var label: String {
         switch self {
+        case .guidedCheckIn: "Check-in starten / öffnen"; case .energy: "Akku-Punkt"; case .updateTask: "Aufgabe ändern"; case .updateRoutine: "Routine ändern"; case .deleteTask: "Aufgabe entfernen"; case .deleteRoutine: "Routine entfernen"; case .setting: "Einstellung ändern"
         case .note: "Notiz / Tagebuch"; case .mood: "Stimmung eintragen"; case .topic: "Therapiethema"; case .task: "Aufgabe"; case .appointment: "Zusatztermin"; case .routine: "Routine"; case .goal: "Ziel"; case .checkIn: "Check-in"; case .reflection: "Therapie-Rückblick"; case .completeTask: "Aufgabe erledigen"; case .completeRoutine: "Routine bestätigen"; case .openScreen: "Bereich öffnen"
         }
     }
     var symbol: String {
         switch self {
+        case .guidedCheckIn: "sparkles"; case .energy: "battery.100percent"; case .updateTask, .updateRoutine: "pencil"; case .deleteTask, .deleteRoutine: "trash"; case .setting: "slider.horizontal.3"
         case .note: "note.text"; case .mood: "face.smiling"; case .topic: "text.bubble"; case .task, .completeTask: "checklist"; case .appointment: "calendar.badge.plus"; case .routine, .completeRoutine: "checkmark.circle"; case .goal: "scope"; case .checkIn: "sparkles"; case .reflection: "clock.arrow.circlepath"; case .openScreen: "arrow.up.right.square"
         }
     }
 }
 struct AIBuddyAction: Codable, Equatable, Identifiable {
     // Stable content identity prevents double execution after a repeated tap/re-render.
-    var id: String { kind.rawValue + "|" + title + "|" + text + "|" + (targetID ?? "") + "|" + (dateISO ?? "") }
+    var id: String { kind.rawValue + "|" + title + "|" + text + "|" + (targetID ?? "") + "|" + (dateISO ?? "") + (options.map { "|" + String(describing: $0) } ?? "") }
     var kind: AIBuddyActionKind
     var title: String
     var text: String
@@ -50,10 +58,17 @@ struct AIBuddyAction: Codable, Equatable, Identifiable {
     var minutes: Int?
     var weekdays: [Int]
     var tags: [String]?
+    var options: AIBuddyActionOptions?
     var date: Date? { dateISO.flatMap { ISO8601DateFormatter().date(from: $0) } }
     var valid: Bool {
-        guard (tags ?? []).count <= 15, (tags ?? []).allSatisfy({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.count <= 60 }), title.count <= 160, text.count <= 6000, (dateISO == nil || date != nil), (moodPercent == nil || (0...100).contains(moodPercent!)), weekdays.allSatisfy({ (1...7).contains($0) }) else { return false }
+        guard (options?.valid ?? true), (tags ?? []).count <= 15, (tags ?? []).allSatisfy({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.count <= 60 }), title.count <= 160, text.count <= 6000, (dateISO == nil || date != nil), (moodPercent == nil || (0...100).contains(moodPercent!)), weekdays.allSatisfy({ (1...7).contains($0) }) else { return false }
         if ![AIBuddyActionKind.note, .checkIn].contains(kind), !(tags ?? []).isEmpty { return false }
+        if kind == .setting { return AIBuddySettingsChange.valid(action: self) }
+        if kind == .guidedCheckIn { return targetID == "current" || targetID == "free" || targetID.flatMap(UUID.init(uuidString:)) != nil }
+        if kind == .energy { return !title.isEmpty && ["gives", "takes"].contains(targetID ?? "") }
+        if [.updateTask, .updateRoutine, .deleteTask, .deleteRoutine].contains(kind) { return targetID.flatMap(UUID.init(uuidString:)) != nil && (kind == .deleteTask || kind == .deleteRoutine || !title.isEmpty) }
+        if kind == .task, options?.repeatEveryWeeks != nil, options?.repeatCount == nil { return false }
+        if (options?.repeatCount ?? 1) > 1 && options?.repeatEveryWeeks == nil { return false }
         if kind == .openScreen { return ["today", "insights", "therapy", "archive", "session", "routines", "appointments", "reminders"].contains(targetID ?? "") }
         if [.completeTask, .completeRoutine].contains(kind) { return !(targetID ?? "").isEmpty }
         if kind == .appointment || kind == .routine { return date != nil && !title.isEmpty }
@@ -169,7 +184,10 @@ struct AIBuddyContext {
         }
         let due: String = dueLines.joined(separator: "\n")
         var taskLines: [String] = []
-        for task in data.weeklyTasks.filter({ !$0.completed }).prefix(15) { taskLines.append(task.id.uuidString + " | " + task.title) }
+        for task in data.weeklyTasks.filter({ !$0.completed }).prefix(15) {
+            let clock = TaskReminderPlanner.settings(for: task, schedule: data.schedule)
+            taskLines.append(task.id.uuidString + " | " + task.title + " | " + String(task.details.prefix(500)) + " | " + (task.dueDate.map(formatter.string) ?? "Kein Termin") + " | Erinnerung " + String(format: "%02d:%02d", clock.hour, clock.minute) + " Tage " + clock.weekdays.map(String.init).joined(separator: ","))
+        }
         let openTasks: String = taskLines.joined(separator: "\n")
         var topicLines: [String] = []
         for point in TherapyDiscussionPlanner.points(in: data).prefix(15) {
@@ -189,6 +207,15 @@ struct AIBuddyContext {
         text += " Selbstberichtete Tagesmittel: \(average) bei \(moods.count) Tagen mit Stimmung; Trend \(trend) auf Skala 1–5, keine Diagnose."
         text += " Nächste Therapie: " + next
         text += "\nBEKANNTE HASHTAGS (Namen wiederverwenden): " + AppHashtags.catalog(data).prefix(80).joined(separator: ", ")
+        text += "\nLOKALE ZEIT: " + end.formatted(date: .complete, time: .shortened) + " · Zeitzone " + TimeZone.current.identifier
+        text += "\nCHECK-IN-FENSTER (aktueller Stand, IDs für guidedCheckIn):\n"
+        for slot in DayCheckInPolicy.slots(data.companionSettings).filter({ $0.enabled }) {
+            let existing = DayCheckInPolicy.existing(for: DayCheckInPolicy.entry(slot, at: end), in: data)
+            let state = existing.map { $0.isDraft ? "Entwurf fortsetzen" : "Bereits abgeschlossen; nur öffnen" } ?? (slot.contains(end) ? "Jetzt verfügbar" : "Außerhalb des Zeitfensters")
+            text += slot.id.uuidString + " | " + slot.title + " | " + slot.windowText + " | " + state + "\n"
+        }
+        text += "\nROUTINEN FÜR BEARBEITUNG (IDs):\n" + data.routines.prefix(20).map { $0.id.uuidString + " | " + $0.title + " | " + $0.details + " | " + ($0.enabled ? "aktiv" : "pausiert") + " | " + $0.times.map { String(format: "%02d:%02d", $0.hour, $0.minute) + " Tage " + $0.weekdays.map(String.init).joined(separator: ",") }.joined(separator: "; ") }.joined(separator: "\n")
+        text += "\nÄNDERBARE EINSTELLUNGEN:\n" + (AIBuddySettingsChange.booleanKeys + ["ai.contextDays"]).map { $0 + " | " + AIBuddySettingsChange.value($0, data: data) }.joined(separator: "\n")
         text += "\nEINTRÄGE:\n" + lines.joined(separator: "\n")
         text += "\nFÄLLIGE ROUTINEN (IDs):\n" + due
         text += "\nOFFENE AUFGABEN (IDs):\n" + openTasks
@@ -208,6 +235,7 @@ struct AIBuddyConversation: Codable, Equatable, Identifiable {
     var contextDays: Int?
     var savedNoteID: UUID?
     var savedMessageCount: Int?
+    var draftText: String?
 }
 
 /// Shared vocabulary. Existing stored spellings remain intact; comparisons use canonical keys.
@@ -233,6 +261,7 @@ enum AppHashtags {
     }
 }
 struct AIBuddyCheckInProposal: Codable, Equatable {
+    var advance: Bool?
     var moodPercent: Int?
     var batteryPercent: Int?
     var stress: Int?
@@ -268,7 +297,7 @@ enum AICheckInGuide {
         let step = max(0, min(7, entry.step))
         var result = "\nKI-GEFÜHRTER CHECK-IN. Aktuelle Standardfrage: " + questions[step]
         result += "\nDeute ausschließlich die aktuelle Nutzerantwort als Daten für diese Frage. checkIn enthält nur belegte Angaben, sonst null. Kein Ergänzen aus älteren Einträgen. Stimmung vorsichtig vorschlagen, immer überprüfbar. tasks nur explizite gewünschte Schritte, tags bekannte Hashtags bevorzugen. Alle Fragen sind freiwillig; 'überspringen' ergibt null. Keine actions für separate Kopien dieses Check-ins."
-        result += "\nAntworte freundlich auf die Antwort und stelle dann genau die nächste Standardfrage, persönlich umformuliert: " + questions[min(7, step + 1)]
+        result += "\nBei einer Rückfrage, Unklarheit oder Wunsch weiter darüber zu sprechen: advance=false, bleibe freundlich bei derselben Frage. Nur bei beantworteter Frage oder ausdrücklichem Überspringen advance=true. Antworte persönlich und knapp mit einem Bezug auf reale letzte Einträge, ohne neue Angaben in den Entwurf zu erfinden. Dann die passende nächste Standardfrage: " + questions[min(7, step + 1)]
         if let encoded = try? JSONEncoder().encode(entry), let text = String(data: encoded, encoding: .utf8) { result += "\nAKTUELLER ENTWURF: " + String(text.prefix(6000)) }
         return result
     }
@@ -295,7 +324,7 @@ enum AICheckInGuide {
         default: return false
         }
         entry.tags = AppHashtags.clean((entry.tags ?? []) + (proposal.tags ?? []), known: known)
-        entry.step = min(7, entry.step + 1)
+        if proposal.advance != false { entry.step = min(7, entry.step + 1) }
         return true
     }
 }
@@ -332,3 +361,76 @@ enum AIConversationMutation {
         data.aiConversations[index].savedMessageCount = messages.count
     }
 }
+
+
+struct AppEditorDraft: Codable, Equatable, Identifiable {
+    var id: UUID
+    var kind: String
+    var title: String
+    var updatedAt = Date()
+    var payload: Data
+    static func make<T: Encodable>(_ value: T, id: UUID, kind: String, title: String) throws -> Self {
+        .init(id: id, kind: kind, title: title, payload: try JSONEncoder().encode(value))
+    }
+    func decode<T: Decodable>(_ type: T.Type) -> T? { try? JSONDecoder().decode(type, from: payload) }
+}
+extension GuidedCheckIn {
+    var hasUserContent: Bool {
+        mood != nil || moodPercent != nil || batteryPercent != nil || stress != nil || sensoryLoad != nil || sleepHours != nil ||
+        [summary, givesEnergy, takesEnergy, smallWin, nextNeed, therapyQuestion].contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } ||
+        tasks.contains { !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } || !mediaIDs.isEmpty || !(energyPoints ?? []).isEmpty
+    }
+}
+extension AIConversationMutation {
+    static func removeIfEmpty(_ id: UUID, in data: inout AppData) {
+        guard let chat = data.aiConversations.first(where: { $0.id == id }),
+              (chat.draftText ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !data.aiMessages.contains(where: { $0.conversationID == id && $0.role == "user" }) else { return }
+        if let checkID = chat.checkInID {
+            guard !data.guidedCheckIns.contains(where: { $0.id == checkID && (!$0.isDraft || $0.hasUserContent) }) else { return }
+            data.guidedCheckIns.removeAll { $0.id == checkID && $0.isDraft }
+        }
+        delete(id, in: &data)
+    }
+}
+
+
+struct AIBuddyActionOptions: Codable, Equatable {
+    var remindersEnabled: Bool?
+    var alarmEnabled: Bool?
+    var retryMinutes: Int?
+    var repeatEveryWeeks: Int?
+    var repeatCount: Int?
+    var enabled: Bool?
+    var valueBool: Bool?
+    var valueInt: Int?
+    var valid: Bool {
+        (retryMinutes == nil || (5...180).contains(retryMinutes!)) &&
+        (repeatEveryWeeks == nil || (1...52).contains(repeatEveryWeeks!)) &&
+        (repeatCount == nil || (1...52).contains(repeatCount!)) &&
+        (valueInt == nil || (1...90).contains(valueInt!))
+    }
+}
+enum AIBuddySettingsChange {
+    static let booleanKeys = ["ai.preferGuidedCheckIns", "ai.automaticRange", "ai.weeklyReview", "dashboard.compactCards", "dashboard.showWidgetTitles", "reminders.privateTaskTitles", "companion.privateRoutineTitles"]
+    static func valid(action: AIBuddyAction) -> Bool {
+        guard let key = action.targetID else { return false }
+        if key == "ai.contextDays" { return action.options?.valueInt.map { (1...90).contains($0) } ?? false }
+        return booleanKeys.contains(key) && action.options?.valueBool != nil
+    }
+    static func value(_ key: String, data: AppData) -> String {
+        switch key {
+        case "ai.contextDays": return "\(data.aiSettings.contextDays) Tage"
+        case "ai.preferGuidedCheckIns": return data.aiSettings.preferGuidedCheckIns ? "An" : "Aus"
+        case "ai.automaticRange": return data.aiSettings.automaticRange ? "An" : "Aus"
+        case "ai.weeklyReview": return data.aiSettings.weeklyReviewEnabled ? "An" : "Aus"
+        case "dashboard.compactCards": return data.dashboard.compactCards ? "An" : "Aus"
+        case "dashboard.showWidgetTitles": return data.dashboard.showWidgetTitles ? "An" : "Aus"
+        case "reminders.privateTaskTitles": return data.reminderPreferences.privateTaskTitles ? "An" : "Aus"
+        case "companion.privateRoutineTitles": return data.companionSettings.privateRoutineTitles ? "An" : "Aus"
+        default: return "Unbekannt"
+        }
+    }
+}
+
+struct MoodEntryDraft: Codable, Equatable { var entry: MoodCheckIn; var points: [BatteryPoint] }
