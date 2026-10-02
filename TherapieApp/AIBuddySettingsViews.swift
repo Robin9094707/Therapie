@@ -10,7 +10,7 @@ struct AIBuddySettingsCard: View {
                 Button("KI & OpenAI-Schlüssel einrichten", systemImage: "key") { show = true }.buttonStyle(.bordered)
                 if store.data.aiSettings.enabled || !store.data.aiConversations.isEmpty { NavigationLink { AIBuddyView() } label: { Label("Meine KI-Gespräche", systemImage: "bubble.left.and.bubble.right") } }
                 NavigationLink { TherapyJournalView() } label: { Label("Mein Therapietagebuch", systemImage: "book.closed") }
-                Text("Gespeicherte Eingaben lassen sich zehn Minuten lang rückgängig machen, solange die App geöffnet bleibt. Auch gelöschte lokale Anhänge bleiben in diesem Zeitraum verfügbar.").font(.caption).foregroundStyle(.secondary)
+                Text("Der Rückgängig-Knopf bleibt nach einer Änderung zehn Sekunden sichtbar, solange die App geöffnet bleibt.").font(.caption).foregroundStyle(.secondary)
             }
         }.sheet(isPresented: $show) { AIBuddySettingsView() }
     }

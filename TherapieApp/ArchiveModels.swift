@@ -100,11 +100,11 @@ enum ArchiveRecord: Identifiable {
     var deletionMessage: String {
         switch self {
         case .guided: "Der Check-in wird gelöscht. Angelegte Aufgaben und Fotos bleiben erhalten."
-        case .mood: "Der Check-in und seine zugehörigen Akku-Punkte werden gelöscht. In der geöffneten App kannst du das zehn Minuten lang rückgängig machen."
-        case .media: "Der Eintrag und seine lokale Datei werden gelöscht. In der geöffneten App kannst du das zehn Minuten lang rückgängig machen."
+        case .mood: "Der Check-in und seine zugehörigen Akku-Punkte werden gelöscht. In der geöffneten App kannst du das zehn Sekunden lang rückgängig machen."
+        case .media: "Der Eintrag und seine lokale Datei werden gelöscht. In der geöffneten App kannst du das zehn Sekunden lang rückgängig machen."
         case .topic: "Das Thema wird gelöscht. Verknüpfte Inhalte bleiben ohne Themenzuordnung erhalten."
         case .session: "Die Sitzung wird gelöscht. Ihre Notizen bleiben ohne Sitzungszuordnung erhalten."
-        default: "Dieser Eintrag wird gelöscht. In der geöffneten App kannst du das zehn Minuten lang rückgängig machen."
+        default: "Dieser Eintrag wird gelöscht. In der geöffneten App kannst du das zehn Sekunden lang rückgängig machen."
         }
     }
 }

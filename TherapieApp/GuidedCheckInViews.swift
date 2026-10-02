@@ -65,7 +65,7 @@ struct GuidedCheckInView: View {
             }
             .navigationTitle("Check-in").navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Schließen") { if entry.isDraft && !entry.hasUserContent { discardDraft(); dismiss() } else { showExit = true } } }
+                ToolbarItem(placement: .cancellationAction) { Button("Schließen") { if entry.isDraft && !entry.hasUserContent { discardDraft(); dismiss() } else { showExit = true } }.accessibilityIdentifier("checkin.close") }
                 ToolbarItem(placement: .topBarTrailing) { if entry.isDraft && store.data.aiSettings.enabled { Button("Mit KI fortsetzen", systemImage: "sparkles") { persistDraft(); if store.lastSaveError == nil { showAI = true } } } }
                 ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Tastatur schließen") { dismissKeyboard() }.accessibilityIdentifier("checkin.keyboard.done") }
             }

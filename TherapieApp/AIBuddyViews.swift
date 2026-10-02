@@ -32,7 +32,7 @@ struct AIBuddyView: View {
             .alert("Gespräch löschen?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
                 Button("Abbrechen", role: .cancel) { deleting = nil }
                 Button("Löschen", role: .destructive) { if let deleting { store.aiController.cancel(); var snapshot = store.data; AIConversationMutation.delete(deleting.id, in: &snapshot); store.data = snapshot }; deleting = nil }
-            } message: { Text("Gespeicherte Tagebucheinträge und Check-ins bleiben erhalten. Rückgängig ist zehn Minuten lang in der geöffneten App möglich.") }
+            } message: { Text("Gespeicherte Tagebucheinträge und Check-ins bleiben erhalten. Rückgängig ist zehn Sekunden lang in der geöffneten App möglich.") }
             .onAppear { if ProcessInfo.processInfo.arguments.contains("--buddy-fixture"), active == nil { active = store.data.aiConversations.first?.id } }
     }
     private func newChat() { var snapshot = store.data; let id = AIConversationMutation.create(in: &snapshot); store.data = snapshot; if store.lastSaveError == nil { active = id } }
@@ -91,6 +91,7 @@ struct AIBuddyChatContent: View {
     @State private var confirmPhoto = false
     @State private var clearChat = false
     @State private var confirmSaveChat = false
+    @State private var showChatMenu = false
     @State private var moreMessages = false
     @State private var explicitDays: Int?
     private var chat: AIBuddyConversation? { store.data.aiConversations.first { $0.id == conversationID } }
@@ -126,7 +127,13 @@ struct AIBuddyChatContent: View {
                 ToolbarItem(placement: .cancellationAction) { Button(close == nil ? "Zurück" : "Schließen", systemImage: "chevron.left") { requestClose() }.accessibilityIdentifier("ai.chat.close") }
                 ToolbarItem(placement: .topBarTrailing) { if store.undoAvailable { Button("Letzte Eingabe rückgängig", systemImage: "arrow.uturn.backward") { inputHandle.finishEditing(); store.undoLastChange() }.accessibilityIdentifier("ai.undo") } }
                 ToolbarItem(placement: .topBarTrailing) { if let draft { Button(draft.step == 7 ? "Übersicht" : "Normal", systemImage: "slider.horizontal.3") { controller.cancel(); inputHandle.finishEditing(); route = .manual(draft) }.accessibilityIdentifier("ai.checkin.toolbar.manual") } }
-                ToolbarItem(placement: .topBarTrailing) { Menu { Button("KI-Einstellungen", systemImage: "slider.horizontal.3") { inputHandle.finishEditing(); route = .settings }; Button("Gespräch im Tagebuch speichern", systemImage: "book.closed") { confirmSaveChat = true }; Button("Gespräch löschen", systemImage: "trash", role: .destructive) { clearChat = true } } label: { Image(systemName: "ellipsis.circle") }.accessibilityIdentifier("ai.chat.menu") } }
+                ToolbarItem(placement: .topBarTrailing) { Button("Gesprächsaktionen", systemImage: "ellipsis.circle") { inputHandle.finishEditing(); showChatMenu = true }.accessibilityIdentifier("ai.chat.menu") } }
+            .confirmationDialog("Gesprächsaktionen", isPresented: $showChatMenu, titleVisibility: .visible) {
+                Button("KI-Einstellungen") { route = .settings }.accessibilityIdentifier("ai.chat.settings")
+                Button("Gespräch im Tagebuch speichern") { confirmSaveChat = true }.accessibilityIdentifier("ai.chat.journal")
+                Button("Gespräch löschen", role: .destructive) { clearChat = true }
+                Button("Abbrechen", role: .cancel) {}
+            }
             .sheet(item: $route) { sheetContent($0) }
             .alert("Eingabe behalten?", isPresented: $confirmExit) {
                 Button("Weiter schreiben", role: .cancel) {}
@@ -142,7 +149,7 @@ struct AIBuddyChatContent: View {
                 Button("Abbrechen", role: .cancel) {}
                 Button("Speichern") { var snapshot = store.data; AIConversationMutation.save(conversationID, in: &snapshot); store.data = snapshot }
             } message: { Text(chat?.savedNoteID == nil ? "Dein vollständiger Verlauf wird als bearbeitbarer Tagebucheintrag gespeichert." : "Der zuvor gespeicherte Tagebucheintrag wird mit dem vollständigen aktuellen Gespräch aktualisiert. Auch eigene Änderungen an diesem Eintrag werden dabei ersetzt.") }
-            .alert("Chatverlauf leeren?", isPresented: $clearChat) { Button("Abbrechen", role: .cancel) {}; Button("Leeren", role: .destructive) { controller.cancel(); var snapshot = store.data; AIConversationMutation.delete(conversationID, in: &snapshot); store.data = snapshot } } message: { Text("Gespeicherte Tagebucheinträge bleiben erhalten. Rückgängig ist zehn Minuten lang in der geöffneten App möglich.") }
+            .alert("Chatverlauf leeren?", isPresented: $clearChat) { Button("Abbrechen", role: .cancel) {}; Button("Leeren", role: .destructive) { controller.cancel(); var snapshot = store.data; AIConversationMutation.delete(conversationID, in: &snapshot); store.data = snapshot } } message: { Text("Gespeicherte Tagebucheinträge bleiben erhalten. Rückgängig ist zehn Sekunden lang in der geöffneten App möglich.") }
             .onAppear { store.visibleAIComposerIDs.insert(visibilityID); if !initialized { text = chat?.draftText ?? ""; initialized = true; controller.error = nil }; updateContext() }
             .onChange(of: text) { _, _ in updateContext(onlyIfRangeChanged: true) }
             .onDisappear { store.visibleAIComposerIDs.remove(visibilityID); if route == nil { inputHandle.finishEditing(); controller.cancel(); cleanupEmptyChat() } }
