@@ -57,6 +57,7 @@ struct BackupChecks {
         data.aiConversations[0].memory = "Familie und Pausen; eine Aufgabe nur vorgeschlagen"
         data.aiConversations[0].tags = ["Familie", "Erholung"]
         data.aiConversations[0].sessionID = routine.id
+        data.guidedCheckIns[0].conversationTranscript = "Du: Meine Schwester hilft."
         data.guidedCheckIns[0].satisfaction = 4
         data.aiMessages[0].reply?.memory = "Notiz"
         data.aiMessages[0].reply?.tags = ["Familie"]

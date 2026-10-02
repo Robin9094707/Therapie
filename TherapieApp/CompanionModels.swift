@@ -25,6 +25,7 @@ struct GuidedCheckIn: Codable, Equatable, Identifiable {
     var sessionID: UUID?
     var mood: Int?
     var batteryPercent: Int?
+    var conversationTranscript: String?
     var satisfaction: Int?
     var stress: Int?
     var sensoryLoad: Int?
@@ -228,6 +229,7 @@ enum GuidedCheckInMutation {
         clean.tags = AppHashtags.clean(entry.tags ?? [], known: AppHashtags.catalog(data))
         data.hashtagCatalog = AppHashtags.clean(AppHashtags.catalog(data) + (clean.tags ?? []))
         if complete {
+            if let chat = data.aiConversations.first(where: { $0.checkInID == clean.id }) { clean.conversationTranscript = BuddyInteraction.transcript(data.aiMessages.filter { $0.conversationID == chat.id }) }
             clean.isDraft = false
             let previous = data.guidedCheckIns.first { $0.id == clean.id }
             let previousIDs = Set(previous?.taskIDs ?? [])

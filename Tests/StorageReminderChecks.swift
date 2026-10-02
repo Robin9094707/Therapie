@@ -40,6 +40,7 @@ struct StorageReminderChecks {
         data.accentTheme = .purple; data.wellbeingPreferences.estimateBattery = true; data.wellbeingPreferences.hourlyDecline = 2
         data.aiSettings.speakReplies = true
         data.aiConversations[0].memory = "Familie und Pausen"; data.aiConversations[0].tags = ["Familie"]
+        data.guidedCheckIns[0].conversationTranscript = "Du: Meine Schwester hilft."
         data.guidedCheckIns[0].satisfaction = 4
         data.aiSettings.weeklyReviewEnabled = true
         data.aiSettings.lastWeeklyReview = Date(timeIntervalSince1970: 1_780_000_000)

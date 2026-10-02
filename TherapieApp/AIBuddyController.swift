@@ -26,14 +26,14 @@ import UIKit
         let days = AIBuddyContext.requestDays(question: clean, settings: settings, chosenDays: daysOverride ?? chat.contextDays)
         let history = store.data.aiMessages.filter { $0.conversationID == chatID }
         let intent = String(history.last(where: { $0.role == "user" })?.text.prefix(800) ?? "") + " " + clean
-        var context = AIBuddyContext.make(data: store.data, days: days, end: BuddyInteraction.window(question: clean, days: days), question: intent, clock: Date())
+        let context = AIBuddyContext.make(data: store.data, days: days, end: BuddyInteraction.window(question: clean, days: days), question: intent, clock: Date())
         let draft = chat.checkInID.flatMap { id in store.data.guidedCheckIns.first { $0.id == id && $0.isDraft } }
         var guide = draft.map(AICheckInGuide.instructions) ?? ""
         if let memory = chat.memory { guide += "\nKURZE GESPRÄCHSNOTIZ (kann unvollständig sein): " + String(memory.prefix(1800)) }
-        if let note = chat.noteContext, settings.includeJournal { context.text += "\nDIE NOTIZ ZUM GESPRÄCH: " + note.title + "\n" + String(note.text.prefix(2000)) }
+        if let note = chat.noteContext, settings.includeJournal { guide += "\nDIE NOTIZ ZUM GESPRÄCH: " + note.title + "\n" + String(note.text.prefix(2000)) }
         if settings.includeJournal, let sessionID = chat.sessionID {
             let notes = store.data.notes.filter { $0.sessionID == sessionID }
-            context.text += "\nNOTIZEN DIESER STUNDE:\n" + String(notes.map { $0.title + ": " + $0.text }.joined(separator: "\n").prefix(3000))
+            guide += "\nNOTIZEN DIESER STUNDE:\n" + String(notes.map { $0.title + ": " + $0.text }.joined(separator: "\n").prefix(2000))
         }
         // Keep sent user messages even when a request fails or is canceled. Retry the same
         // unanswered message without duplicating it; successful turns remain distinct.
@@ -120,7 +120,9 @@ extension AIBuddyController {
         guard store.lastSaveError == nil else { return }
         let success = await send("Erstelle meinen Wochenrückblick für die letzten 7 Tage: hilfreiche Momente, Belastungen, selbstberichtete Stimmung und Energie, offene Themen und einen kleinen nächsten Schritt. Keine actions, keine Diagnosen.", daysOverride: 7, conversationID: id)
         if success {
-            var saved = store.data; AIConversationMutation.save(id, in: &saved); saved.aiSettings.lastWeeklyReview = now; store.data = saved
+            var saved = store.data
+            if let message = saved.aiMessages.last(where: { $0.conversationID == id && $0.role == "assistant" }), let reply = message.reply { AIConversationMutation.saveSummary(id, title: reply.title, summary: reply.journalText, tags: ["Tagebuch", "Wochenrückblick"] + (reply.tags ?? []), in: &saved) }
+            saved.aiSettings.lastWeeklyReview = now; store.data = saved
         }
     }
 }

@@ -159,7 +159,8 @@ struct AIBuddyContext {
         let formatter = ISO8601DateFormatter()
         let requestTime = clock ?? end
         let intent = question.lowercased()
-        let broad = question.isEmpty || ["übersicht", "zusammen", "rückblick", "tag", "woche", "monat", "struktur"].contains(where: intent.contains)
+        let settingsIntent = ["einstellung", "design", "hauptfarbe", "app-farbe", "oberfläche"].contains(where: intent.contains)
+        let broad = question.isEmpty || ["übersicht", "zusammen", "rückblick", "heute", "gestern", "woche", "monat", "struktur"].contains(where: intent.contains)
         let words = intent.components(separatedBy: .alphanumerics.inverted).filter { $0.count > 3 }
         let records = ArchiveRecord.all(in: data).filter { $0.date >= start && $0.date <= end }.filter { record in
             if case .media = record { return false } // Binary media is strictly opt-in, outside automatic context.
@@ -174,7 +175,7 @@ struct AIBuddyContext {
             return lhs.date > rhs.date
         }
         var lines: [String] = [], characters = 0
-        for record in records.prefix(broad ? 60 : 12) {
+        for record in records.prefix(settingsIntent ? 0 : broad ? 60 : 12) {
             var details = record.subtitle
             if case .guided(let checkIn) = record {
                 let moodText: String
@@ -225,13 +226,13 @@ struct AIBuddyContext {
             session += ", begonnen " + formatter.string(from: current.startedAt)
         }
         var text = session + "\nZeitraum " + formatter.string(from: start) + " bis " + formatter.string(from: end)
-        text += ", \(days) Kalendertage. \(lines.count) Einträge, \(records.count - lines.count) aus Platzgründen nicht enthalten."
+        text += ", \(days) Kalendertage. __SENT__ Einträge, __OMITTED__ aus Platzgründen oder nach Relevanz nicht enthalten."
         text += " Selbstberichtete Tagesmittel: \(average) bei \(moods.count) Tagen mit Stimmung; Trend \(trend) auf Skala 1–5, keine Diagnose."
         text += " Nächste Therapie: " + next
-        text += "\nBEKANNTE HASHTAGS (Namen wiederverwenden): " + AppHashtags.catalog(data).prefix(80).joined(separator: ", ")
+        text += "\nBEKANNTE HASHTAGS (Namen wiederverwenden): " + String(AppHashtags.catalog(data).prefix(80).joined(separator: ", ").prefix(1500))
         text += "\nLOKALE ZEIT: " + requestTime.formatted(date: .complete, time: .shortened) + " · Zeitzone " + TimeZone.current.identifier
         text += "\nCHECK-IN-FENSTER (aktueller Stand, IDs für guidedCheckIn):\n"
-        for slot in DayCheckInPolicy.slots(data.companionSettings).filter({ $0.enabled }) {
+        for slot in DayCheckInPolicy.slots(data.companionSettings).filter({ $0.enabled }).prefix(12) {
             let existing = DayCheckInPolicy.existing(for: DayCheckInPolicy.entry(slot, at: requestTime), in: data)
             let state = existing.map { $0.isDraft ? "Entwurf fortsetzen" : "Bereits abgeschlossen; nur öffnen" } ?? (slot.contains(requestTime) ? "Jetzt verfügbar" : "Außerhalb des Zeitfensters")
             text += slot.id.uuidString + " | " + slot.title + " | " + slot.windowText + " | " + state + "\n"
@@ -248,9 +249,15 @@ struct AIBuddyContext {
         if question.isEmpty || ["einstellung", "design", "farbe", "kontext", "vorlesen", "oberfläche"].contains(where: intent.contains) {
             text += "\nEINSTELLUNGEN:\n" + (AIBuddySettingsChange.booleanKeys + ["ai.contextDays", "appearance.accent"]).map { $0 + " | " + AIBuddySettingsChange.value($0, data: data) }.joined(separator: "\n")
         }
-        text += "\nEINTRÄGE:\n" + lines.joined(separator: "\n")
-        text += "\nNative Bereiche: " + BuddyDestinations.catalogue
-        return .init(start: start, end: end, days: days, recordCount: lines.count, omittedCount: records.count - lines.count, text: text)
+        text = BuddyInteraction.completeLines(text, limit: question.isEmpty ? 7000 : 5000)
+        text += "\nNative Bereiche: " + BuddyDestinations.catalogue + "\nEINTRÄGE:\n"
+        var sent = 0
+        for line in lines {
+            guard text.count + line.count + 1 <= (question.isEmpty ? 25000 : 13500) else { break }
+            text += line + "\n"; sent += 1
+        }
+        text = text.replacingOccurrences(of: "__SENT__", with: String(sent)).replacingOccurrences(of: "__OMITTED__", with: String(records.count - sent))
+        return .init(start: start, end: end, days: days, recordCount: sent, omittedCount: records.count - sent, text: text)
     }
 }
 
@@ -497,6 +504,11 @@ struct BuddyQuickReply: Codable, Equatable, Identifiable {
     var valid: Bool { !title.isEmpty && title.count <= 40 && !text.isEmpty && text.count <= 600 }
 }
 enum BuddyInteraction {
+    static func completeLines(_ text: String, limit: Int) -> String {
+        var lines: [String] = [], count = 0
+        for line in text.components(separatedBy: "\n") { guard count + line.count + 1 <= limit else { break }; lines.append(line); count += line.count + 1 }
+        return lines.joined(separator: "\n") + (text.count > limit ? "\n[Weitere Kontextdaten aus Platzgründen ausgelassen.]" : "")
+    }
     static func withoutPinnedQuestion(_ text: String, step: Int) -> String {
         let result = text.replacingOccurrences(of: AICheckInGuide.questions[max(0, min(7, step))], with: "").trimmingCharacters(in: .whitespacesAndNewlines)
         return result.isEmpty ? "Deine Angaben sind angekommen. Die nächste Frage findest du oben; zur Übersicht kannst du jederzeit wechseln." : result

@@ -18,6 +18,7 @@ with zipfile.ZipFile(sys.argv[1]) as archive:
     assert data["aiConversations"][0]["memory"] == "Familie und Pausen"
     assert data["notes"][0]["conversationTranscript"].startswith("Du: Meine Schwester")
     assert data["guidedCheckIns"][0]["satisfaction"] == 4
+    assert data["guidedCheckIns"][0]["conversationTranscript"] == "Du: Meine Schwester hilft."
     assert data["aiSettings"]["weeklyReviewEnabled"] is True
     assert data["aiConversations"][0]["draftText"] == "Noch nicht gesendeter Gedanke"
     assert data["routines"][0]["repeatEveryWeeks"] == 2

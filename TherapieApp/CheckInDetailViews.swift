@@ -37,6 +37,8 @@ struct GuidedCheckInDetailView: View {
                             }
                         }
                         HashtagChips(tags: entry.tags ?? [])
+                        if let transcript = entry.conversationTranscript, !transcript.isEmpty { GlassCard { DisclosureGroup("Details · dein vollständiges Gespräch") { Text(transcript).font(.subheadline).textSelection(.enabled) } } }
+                        if let satisfaction = entry.satisfaction { GlassCard { LabeledContent("Zufriedenheit", value: "\(satisfaction)/5") } }
                         CheckInTextCard(title: "Dein Rückblick", symbol: "text.bubble", items: [("Rückblick", entry.summary), ("Kleiner Erfolg", entry.smallWin), ("Jetzt brauche ich", entry.nextNeed), ("Frage für die Therapie", entry.therapyQuestion)])
                         CheckInBatteryDetail(points: entry.energyPoints ?? [], legacyGives: entry.givesEnergy, legacyTakes: entry.takesEnergy)
                         if !entry.tasks.isEmpty {
