@@ -52,7 +52,7 @@ struct AIBuddyAction: Codable, Equatable, Identifiable {
     var tags: [String]?
     var date: Date? { dateISO.flatMap { ISO8601DateFormatter().date(from: $0) } }
     var valid: Bool {
-        guard title.count <= 160, text.count <= 6000, (dateISO == nil || date != nil), (moodPercent == nil || (0...100).contains(moodPercent!)), weekdays.allSatisfy({ (1...7).contains($0) }) else { return false }
+        guard (tags ?? []).count <= 15, (tags ?? []).allSatisfy({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.count <= 60 }), title.count <= 160, text.count <= 6000, (dateISO == nil || date != nil), (moodPercent == nil || (0...100).contains(moodPercent!)), weekdays.allSatisfy({ (1...7).contains($0) }) else { return false }
         if kind == .openScreen { return ["today", "insights", "therapy", "archive", "session", "routines", "appointments", "reminders"].contains(targetID ?? "") }
         if [.completeTask, .completeRoutine].contains(kind) { return !(targetID ?? "").isEmpty }
         if kind == .appointment || kind == .routine { return date != nil && !title.isEmpty }

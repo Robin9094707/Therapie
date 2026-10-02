@@ -34,6 +34,10 @@ struct StorageReminderChecks {
         data.companionSettings.alarmShowsActualTitles = true
         data.aiSettings.enabled = true; data.aiSettings.model = "gpt-5.6-luna"; data.aiSettings.contextDays = 14
         data.aiMessages = [AIBuddyMessage(role: "assistant", text: "Mein KI-Rückblick", reply: AIBuddyReply(title: "Meine Woche", message: "Ein ruhiger Moment", sections: [], actions: [], suggestedDays: 7))]
+        AIConversationMutation.migrate(&data)
+        data.aiConversations[0].contextDays = 14
+        data.hashtagCatalog = ["Familie"]
+        data.guidedCheckIns[0].tags = ["Familie"]
         data.therapyDiscussionAcknowledgedIDs = ["guided-discussed"]
         data.reminderPreferences.energyReviewEnabled = true
         data.notes = [TherapyNote(title: "Lesbare Notiz", text: "Meine wichtige Zeile\nzweite Zeile", tags: ["wichtig"], isImportant: true)]
@@ -100,6 +104,7 @@ struct StorageReminderChecks {
         try expect(try Data(contentsOf: prepared.directory.appendingPathComponent("Media/p.jpg")) == photo, "ZIP streams multiple attachment blocks")
         try expect(try Data(contentsOf: prepared.directory.appendingPathComponent("Recordings/empty.m4a")).isEmpty, "ZIP supports empty attachments")
         try expect(fm.fileExists(atPath: prepared.directory.appendingPathComponent("UEBERSICHT.md").path), "ZIP contains readable overview")
+        try expect(prepared.manifest.data.aiConversations[0].id == data.aiConversations[0].id && prepared.manifest.data.aiConversations[0].contextDays == 14 && prepared.manifest.data.guidedCheckIns[0].tags == ["Familie"], "Readable ZIP preserves linked chat, context and hashtags")
         try expect(prepared.manifest.data.dashboard == data.dashboard && prepared.manifest.data.archivePreferences == data.archivePreferences, "Readable ZIP restores personalization and archive settings")
         let reminderText = try String(contentsOf: prepared.directory.appendingPathComponent("Eintraege/Einstellungen/companionSettings.txt"), encoding: .utf8)
         try expect(reminderText.contains("Check-in-Erinnerungen"), "Reminder settings appear in readable mirror")

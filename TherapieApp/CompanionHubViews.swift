@@ -137,6 +137,7 @@ enum GuidedCheckInExport {
         for point in entry.energyPoints ?? [] { lines.append(point.direction.title + ": " + point.title + (point.note.isEmpty ? "" : " – " + point.note)) }
         for task in entry.tasks where !task.title.isEmpty { lines.append("Aufgabe (\(task.source)): \(task.title)\nKleiner Schritt: \(task.smallStep)\n\(task.details)") }
         if !entry.mediaIDs.isEmpty { lines.append("Fotos: \(entry.mediaIDs.count) · separat im Archiv teilen") }
+        if let tags = entry.tags, !tags.isEmpty { lines.append("Hashtags: " + tags.map { "#" + $0 }.joined(separator: " ")) }
         return lines.joined(separator: "\n\n")
     }
 }

@@ -45,6 +45,7 @@ enum AIBuddyMutation {
             snapshot.routineSnoozes.removeAll { $0.id == occurrence.id }
         case .openScreen: throw AIBuddyAPIError(message: "Navigation wird direkt in der App ausgeführt.")
         }
+        snapshot.hashtagCatalog = AppHashtags.catalog(snapshot)
         snapshot.aiMessages[message].appliedActionIDs.append(originalID)
         data = snapshot
     }

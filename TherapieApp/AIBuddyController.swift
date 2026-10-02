@@ -29,6 +29,20 @@ import UIKit
         let guide = draft.map(AICheckInGuide.instructions) ?? ""
         if let note = chat.noteContext, settings.includeJournal { context.text += "\nDIE NOTIZ ZUM GESPRÄCH: " + note.title + "\n" + String(note.text.prefix(6000)) }
         if let draft, draft.step >= 7 { error = "Deine Übersicht ist bereit. Bitte prüfe sie vor dem Abschließen."; return false }
+        // Keep sent user messages even when a request fails or is canceled. Retry the same
+        // unanswered message without duplicating it; successful turns remain distinct.
+        let userText = clean + (image == nil ? "" : "\n[Ein ausgewähltes Foto wurde mit ausdrücklicher Freigabe analysiert.]")
+        let userID: UUID
+        if let last = history.last, last.role == "user", last.text == userText { userID = last.id }
+        else {
+            let message = AIBuddyMessage(role: "user", text: userText, contextStart: context.start, contextEnd: context.end, conversationID: chatID)
+            var snapshot = store.data; snapshot.aiMessages.append(message)
+            if let index = snapshot.aiConversations.firstIndex(where: { $0.id == chatID }) { snapshot.aiConversations[index].updatedAt = Date(); if snapshot.aiConversations[index].title == "Neues Gespräch" { snapshot.aiConversations[index].title = String(clean.prefix(60)) } }
+            store.data = snapshot
+            if let failure = store.lastSaveError { error = failure; return false }
+            userID = message.id
+        }
+        let requestHistory = history.last?.id == userID ? Array(history.dropLast()) : history
         let identifier = UUID(); activeID = identifier
         busy = true; error = nil; pendingQuestion = clean
         let task = Task<AIBuddyResponse, Error> {
@@ -39,16 +53,15 @@ import UIKit
                 let reply = AIBuddyReply(title: "Dein Gedanke", message: message, sections: [], actions: [], checkIn: proposal)
                 return AIBuddyResponse(reply: reply)
             }
-            return try await AIBuddyAPI().answer(question: clean, context: context, history: history, settings: settings, key: key, imageJPEG: image, inSession: inSession, guide: guide)
+            return try await AIBuddyAPI().answer(question: clean, context: context, history: requestHistory, settings: settings, key: key, imageJPEG: image, inSession: inSession, guide: guide)
         }
         request = task
         defer { if activeID == identifier { busy = false; pendingQuestion = ""; request = nil; activeID = nil } }
         do {
             let result = try await task.value
             try Task.checkCancellation()
-            guard !task.isCancelled, activeID == identifier, store.data.aiSettings.enabled, store.data.aiConversations.contains(where: { $0.id == chatID }) else { return false }
+            guard !task.isCancelled, activeID == identifier, store.data.aiSettings.enabled, store.data.aiConversations.contains(where: { $0.id == chatID }), store.data.aiMessages.contains(where: { $0.id == userID }) else { return false }
             var snapshot = store.data
-            snapshot.aiMessages.append(AIBuddyMessage(role: "user", text: clean + (image == nil ? "" : "\n[Ein ausgewähltes Foto wurde mit ausdrücklicher Freigabe analysiert.]"), contextStart: context.start, contextEnd: context.end, conversationID: chatID))
             snapshot.aiMessages.append(AIBuddyMessage(role: "assistant", text: result.reply.journalText, reply: result.reply, contextStart: context.start, contextEnd: context.end, model: settings.model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, conversationID: chatID))
             if let index = snapshot.aiConversations.firstIndex(where: { $0.id == chatID }) {
                 snapshot.aiConversations[index].updatedAt = Date()

@@ -221,6 +221,8 @@ enum GuidedCheckInMutation {
             guard previous.map({ DayCheckInPolicy.sameBucket($0, entry, in: data) }) == true else { return false }
         }
         var clean = entry
+        clean.tags = AppHashtags.clean(entry.tags ?? [], known: AppHashtags.catalog(data))
+        data.hashtagCatalog = AppHashtags.clean(AppHashtags.catalog(data) + (clean.tags ?? []))
         if complete {
             clean.isDraft = false
             let previous = data.guidedCheckIns.first { $0.id == clean.id }
@@ -367,6 +369,7 @@ enum TherapyReport {
                 if let value = entry.sensoryLoad { lines.append("Reize: \(value)/5") }
                 if let value = entry.sleepHours { lines.append("Schlaf: \(value.formatted()) Stunden") }
                 for (label, value) in [("Rückblick", entry.summary), ("Energiegeber", entry.givesEnergy), ("Energienehmer", entry.takesEnergy), ("Erfolg", entry.smallWin), ("Bedürfnis", entry.nextNeed), ("Therapiefrage", entry.therapyQuestion)] where !value.isEmpty { lines.append(label + ": " + value) }
+                if let tags = entry.tags, !tags.isEmpty { lines.append("Hashtags: " + tags.map { "#" + $0 }.joined(separator: " ")) }
                 if options.includeMoodEntries, let value = entry.moodPercent { lines.append("Stimmungsbarometer: \(value)/100") }
                 for point in entry.energyPoints ?? [] { lines.append("\(point.direction.title): \(point.title) · \(point.impact)/5" + (point.note.isEmpty ? "" : " · " + point.note)) }
                 if !entry.mediaIDs.isEmpty { lines.append("\(entry.mediaIDs.count) verknüpfte Fotos · Bilddateien separat teilen") }

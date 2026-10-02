@@ -24,6 +24,7 @@ extension AppStore {
     func undoLastChange() {
         pruneUndo()
         guard let step = undoSteps.popLast() else { return }
+        aiController.cancel()
         // Preserve the live timer and OS ownership while restoring the actual records/settings.
         var restored = step.snapshot
         restored.currentSession = data.currentSession

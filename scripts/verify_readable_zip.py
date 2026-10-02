@@ -14,6 +14,12 @@ with zipfile.ZipFile(sys.argv[1]) as archive:
     assert data["schemaVersion"] == 11
     assert data["aiSettings"]["model"] == "gpt-5.6-luna"
     assert data["aiMessages"][0]["text"] == "Mein KI-Rückblick"
+    assert data["aiMessages"][0]["conversationID"] == data["aiConversations"][0]["id"]
+    assert data["aiConversations"][0]["contextDays"] == 14
+    assert data["guidedCheckIns"][0]["tags"] == ["Familie"]
+    assert data["hashtagCatalog"] == ["Familie"]
+    chat = data["aiConversations"][0]
+    assert f"Eintraege/aiConversations/{chat['id'].upper()}.txt" in names
     assert data["schedule"]["recurrence"]["interval"] == 2
     assert data["therapyDiscussionAcknowledgedIDs"] == ["guided-discussed"]
     assert "apiKey" not in json.dumps(data)

@@ -75,7 +75,7 @@ enum ArchiveRecord: Identifiable {
         case .goal(let value): [value.status.rawValue, value.smallStep, value.measure].joined(separator: " · ")
         case .weeklyEnergy(let value): (value.gives.map(\.title) + value.takes.map(\.title) + [value.note, value.therapyQuestion]).joined(separator: " · ")
         case .routineLog(let value): (value.outcome == .done ? "Erledigt" : "Ausgelassen") + " · " + (value.timeTitle ?? "") + " · " + value.note
-        case .guided(let value): [value.summary, value.smallWin, value.therapyQuestion].joined(separator: " · ")
+        case .guided(let value): ([value.summary, value.smallWin, value.therapyQuestion] + (value.tags ?? [])).joined(separator: " · ")
         }
     }
     var symbol: String {

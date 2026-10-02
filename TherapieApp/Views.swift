@@ -425,6 +425,7 @@ struct MainTabView: View {
 struct DashboardView: View {
     @EnvironmentObject private var store: AppStore
     @State private var showNote = false
+    @State private var showAI = false
     @State private var openedNoteFixture = false
     @State private var showEnergy = false
     @State private var showReflection = false
@@ -474,6 +475,7 @@ struct DashboardView: View {
                 }
             }
             .onAppear { if !openedNoteFixture && ProcessInfo.processInfo.arguments.contains("--show-note") { openedNoteFixture = true; showNote = true } }
+            .sheet(isPresented: $showAI) { AIBuddyEntryView() }
             .sheet(isPresented: $showNote) {
                 AddNoteView()
                     .presentationDetents([.large])
@@ -520,6 +522,7 @@ struct DashboardView: View {
                 columns: [GridItem(.adaptive(minimum: 140), spacing: 12)],
                 spacing: 12
             ) {
+                if store.data.aiSettings.enabled { QuickActionButton(title: "Mit KI", subtitle: "Gemeinsam festhalten", icon: "sparkles") { showAI = true } }
                 QuickActionButton(title: "Notiz", subtitle: "Gedanken", icon: "square.and.pencil") {
                     showNote = true
                 }

@@ -13,7 +13,7 @@ struct AIBuddyView: View {
             LazyVStack(alignment: .leading, spacing: 16) {
                 GlassCard(emphasized: true) {
                     VStack(alignment: .leading, spacing: 12) {
-                        SectionHeader(title: "Deine Gespräche", icon: "bubble.left.and.bubble.right", subtitle: "Ein eigener Raum für jeden Gedanken. Deine Chats bleiben auf diesem iPhone und in deinen Backups.")
+                        SectionHeader(title: "Deine Gespräche", icon: "bubble.left.and.bubble.right", subtitle: "Ein eigener Raum für jeden Gedanken. Deine Chats werden hier und in deinen Backups gespeichert. Beim Senden wird der angezeigte Kontext an OpenAI übertragen.")
                         if store.data.aiSettings.enabled {
                             Button("Neues Gespräch", systemImage: "square.and.pencil") { newChat() }.buttonStyle(.borderedProminent).accessibilityIdentifier("ai.new.chat")
                             NavigationLink { TherapyJournalView() } label: { Label("Therapietagebuch", systemImage: "book.closed") }
@@ -22,7 +22,7 @@ struct AIBuddyView: View {
                 }
                 ForEach(store.data.aiConversations.sorted { $0.updatedAt > $1.updatedAt }) { chat in
                     NavigationLink { AIBuddyChatContent(controller: store.aiController, inSession: inSession, conversationID: chat.id) } label: {
-                        GlassCard { HStack { Image(systemName: chat.checkInID == nil ? "bubble.left.and.bubble.right.fill" : "sparkles").foregroundStyle(.indigo); VStack(alignment: .leading, spacing: 6) { Text(chat.title).font(.headline); Text(chat.updatedAt.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary) }; Spacer(); Image(systemName: "chevron.right").font(.caption) } }
+                        GlassCard { HStack { Image(systemName: chat.checkInID == nil ? "bubble.left.and.bubble.right.fill" : "sparkles").foregroundStyle(.indigo); VStack(alignment: .leading, spacing: 6) { Text(chat.title).font(.headline).lineLimit(2); Text(chat.updatedAt.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary) }; Spacer(); Image(systemName: "chevron.right").font(.caption) } }
                     }.buttonStyle(.plain).contextMenu { Button("Gespräch löschen", systemImage: "trash", role: .destructive) { deleting = chat } }.accessibilityIdentifier("ai.chat." + chat.id.uuidString)
                 }
             }
@@ -81,6 +81,7 @@ struct AIBuddyChatContent: View {
     @State private var confirmPhoto = false
     @State private var voice = false
     @State private var clearChat = false
+    @State private var confirmSaveChat = false
     @State private var moreMessages = false
     @State private var explicitDays: Int?
     @State private var navigation: String?
@@ -95,15 +96,13 @@ struct AIBuddyChatContent: View {
                 if chat == nil { ContentUnavailableView("Gespräch gelöscht", systemImage: "bubble.left.and.bubble.right") }
                 else if messages.isEmpty { introduction }
                 if let draft { guideHeader(draft) }
-                if store.data.aiSettings.enabled {
-                    DisclosureGroup("Kontext für deine nächste Nachricht") { contextCard }
+                if store.data.aiSettings.enabled { DisclosureGroup("Kontext für deine nächste Nachricht") { contextCard } }
                     ForEach(Array(moreMessages ? messages : Array(messages.suffix(40)))) { message in messageCard(message).id(message.id) }
                     if messages.count > 40 && !moreMessages { Button("Frühere Nachrichten anzeigen") { moreMessages = true } }
                     if controller.busy {
                         GlassCard { VStack(alignment: .leading, spacing: 8) { Text(controller.pendingQuestion).font(.subheadline); ProgressView("Dein Begleiter denkt nach …"); Button("Anfrage abbrechen") { controller.cancel() } } }
                     }
                     if let error = controller.error { GlassCard { Text(error).font(.subheadline).foregroundStyle(.orange).textSelection(.enabled) } }
-                }
             }
         }.onChange(of: messages.count) { _, _ in
             if let id = messages.last?.id { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(id, anchor: .bottom) } }
@@ -111,7 +110,9 @@ struct AIBuddyChatContent: View {
         }
         }.navigationTitle(chat?.title ?? "Gespräch").navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .bottom) { if store.data.aiSettings.enabled && chat != nil { composer.padding(.horizontal, 12).padding(.vertical, 8).background(.regularMaterial) } }
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Menu { Button("KI-Einstellungen", systemImage: "slider.horizontal.3") { settings = true }; Button("Gespräch im Tagebuch speichern", systemImage: "book.closed") { var snapshot = store.data; AIConversationMutation.save(conversationID, in: &snapshot); store.data = snapshot }; Button("Gespräch löschen", systemImage: "trash", role: .destructive) { clearChat = true } } label: { Image(systemName: "ellipsis.circle") } } }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) { if let draft { Button(draft.step == 7 ? "Übersicht" : "Normal", systemImage: "slider.horizontal.3") { controller.cancel(); composerFocused = false; manual = draft }.accessibilityIdentifier("ai.checkin.toolbar.manual") } }
+                ToolbarItem(placement: .topBarTrailing) { Menu { Button("KI-Einstellungen", systemImage: "slider.horizontal.3") { settings = true }; Button("Gespräch im Tagebuch speichern", systemImage: "book.closed") { confirmSaveChat = true }; Button("Gespräch löschen", systemImage: "trash", role: .destructive) { clearChat = true } } label: { Image(systemName: "ellipsis.circle") } } }
             .sheet(isPresented: $settings) { AIBuddySettingsView() }
             .sheet(item: $guided) { GuidedCheckInDestination(entry: $0) }
             .sheet(item: $manual) { GuidedCheckInView(entry: $0) }
@@ -123,8 +124,12 @@ struct AIBuddyChatContent: View {
                 Button("Abbrechen", role: .cancel) { photo = nil; image = nil }
                 Button("Für nächste Nachricht vorbereiten") { Task { await preparePhoto() } }
             } message: { Text("Das Foto wird auf höchstens 1.024 Pixel verkleinert und beim nächsten Senden hochgeladen. Es kann persönliche Informationen enthalten. Die Bildanalyse verursacht zusätzliche API-Kosten. Andere Archivbilder werden nicht übertragen.") }
+            .alert("Gespräch im Tagebuch speichern?", isPresented: $confirmSaveChat) {
+                Button("Abbrechen", role: .cancel) {}
+                Button("Speichern") { var snapshot = store.data; AIConversationMutation.save(conversationID, in: &snapshot); store.data = snapshot }
+            } message: { Text(chat?.savedNoteID == nil ? "Dein vollständiger Verlauf wird als bearbeitbarer Tagebucheintrag gespeichert." : "Der zuvor gespeicherte Tagebucheintrag wird mit dem vollständigen aktuellen Gespräch aktualisiert. Auch eigene Änderungen an diesem Eintrag werden dabei ersetzt.") }
             .alert("Chatverlauf leeren?", isPresented: $clearChat) { Button("Abbrechen", role: .cancel) {}; Button("Leeren", role: .destructive) { controller.cancel(); var snapshot = store.data; AIConversationMutation.delete(conversationID, in: &snapshot); store.data = snapshot } } message: { Text("Gespeicherte Tagebucheinträge bleiben erhalten. Rückgängig ist zehn Minuten lang in der geöffneten App möglich.") }
-            .onAppear { updateContext() }
+            .onAppear { controller.error = nil; updateContext() }
             .onDisappear { controller.cancel() }
             .onChange(of: store.data.aiSettings.enabled) { _, enabled in if !enabled { controller.cancel(); image = nil; photo = nil } }
     }
@@ -218,6 +223,7 @@ struct AIBuddyChatContent: View {
         Task { @MainActor in
             await Task.yield()
             let succeeded = await controller.send(question, image: picture, inSession: inSession, daysOverride: explicitDays, conversationID: conversationID)
+            updateContext()
             if succeeded { if text == question { text = "" }; image = nil; photo = nil }
         }
     }

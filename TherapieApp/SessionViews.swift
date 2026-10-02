@@ -20,6 +20,7 @@ struct SessionConductorContent: View {
     @State private var showDelete = false
     @State private var finish = false
     @State private var showPreferences = false
+    @State private var showAI = false
 
     var body: some View {
         TherapyScreen {
@@ -27,7 +28,7 @@ struct SessionConductorContent: View {
                 if let session = store.data.currentSession {
                     SwiftUI.TimelineView(.periodic(from: .now, by: 1)) { context in activeCard(session, now: context.date) }
                     TherapyDiscussionCard(alwaysVisible: true)
-                    if store.data.aiSettings.enabled { NavigationLink { AIBuddyView(inSession: true) } label: { Label("KI-Begleiter für diese Stunde", systemImage: "sparkles") }.buttonStyle(.bordered) }
+                    if store.data.aiSettings.enabled { Button { showAI = true } label: { Label("KI-Begleiter für diese Stunde", systemImage: "sparkles") }.buttonStyle(.bordered) }
                     GlassCard {
                         VStack(alignment: .leading, spacing: 10) {
                             Label("Während der Stunde", systemImage: "square.and.pencil").font(.headline)
@@ -61,6 +62,7 @@ struct SessionConductorContent: View {
         .sheet(item: $templateDraft) { SessionTemplateEditorView(template: $0) }
         .sheet(item: $noteDraft) { TherapyNoteEditorView(note: $0) }
         .sheet(item: $historyDraft) { SessionHistoryEditorView(session: $0) }
+        .sheet(isPresented: $showAI) { AIBuddyEntryView() }
         .sheet(isPresented: $showPreferences) { NavigationStack { SessionPreferencesView(controller: controller) } }
         .alert("Stunde vorzeitig beenden?", isPresented: $finish) {
             Button("Weiterlaufen lassen", role: .cancel) {}

@@ -441,12 +441,17 @@ final class AppStore: ObservableObject {
         clean.mediaIDs = Array(Set(clean.mediaIDs ?? [])).sorted { $0.uuidString < $1.uuidString }
         var snapshot = data
         snapshot.notes.removeAll { $0.id == note.id }
+        clean.tags = AppHashtags.clean(clean.tags, known: AppHashtags.catalog(data))
+        snapshot.hashtagCatalog = AppHashtags.catalog(data)
         snapshot.notes.insert(clean, at: 0)
+        snapshot.hashtagCatalog = AppHashtags.catalog(snapshot)
         data = snapshot
     }
     func saveMediaDetails(_ item: MediaItem) {
         guard let i = data.media.firstIndex(where: { $0.id == item.id }) else { return }
-        data.media[i] = item
+        var snapshot = data
+        var clean = item; clean.tags = AppHashtags.clean(item.tags, known: AppHashtags.catalog(snapshot))
+        snapshot.media[i] = clean; snapshot.hashtagCatalog = AppHashtags.catalog(snapshot); data = snapshot
     }
     func saveSessionTemplate(_ template: TherapySessionTemplate) {
         guard template.isValid else { return }
