@@ -27,7 +27,7 @@ struct PersonalizationChecks {
         var legacy = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
         legacy["schemaVersion"] = 8; legacy.removeValue(forKey: "dashboard"); legacy.removeValue(forKey: "archivePreferences")
         let migrated = try decoder.decode(AppData.self, from: JSONSerialization.data(withJSONObject: legacy))
-        try expect(migrated.schemaVersion == 10 && migrated.dashboard == DashboardPreferences(), "Schema 8 receives safe defaults")
+        try expect(migrated.schemaVersion == 11 && migrated.dashboard == DashboardPreferences(), "Schema 8 receives safe defaults")
         try expect(migrated.archivePreferences == ArchivePreferences(), "Legacy archive defaults")
         try expect(try decoder.decode(DashboardPreferences.self, from: Data("{}".utf8)) == DashboardPreferences(), "Partial settings migrate")
         legacy["schemaVersion"] = 999

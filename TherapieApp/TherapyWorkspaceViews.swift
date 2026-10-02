@@ -148,6 +148,7 @@ struct GoalEditorView: View {
 
 struct TherapyNoteEditorView: View {
     @EnvironmentObject private var store: AppStore
+    @State private var showAI = false
     @State private var note: TherapyNote
     @State private var tags: String
     @State private var initial: TherapyNote
@@ -163,7 +164,7 @@ struct TherapyNoteEditorView: View {
         TherapyEditorSheet(title: note.author == NoteAuthor.therapist.rawValue ? "Beitrag für die Therapie" : "Therapie-Notiz", dirty: note != initial || tags != initial.tags.joined(separator: ", "), canSave: canSave && !importing, save: {
             var clean = note
             if clean.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { clean.title = "Notiz" }
-            clean.tags = tags.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+            clean.tags = AppHashtags.clean(tags.split(separator: ",").map(String.init), known: AppHashtags.catalog(store.data))
             store.saveNote(clean)
         }) {
             Section("Festhalten") {
@@ -177,6 +178,7 @@ struct TherapyNoteEditorView: View {
                         Button("Checkliste", systemImage: "checklist") { note.text += (note.text.isEmpty ? "" : "\n") + "☐ " }
                     }.buttonStyle(.bordered)
                 }
+                if store.data.aiSettings.enabled { Button("Mit KI schreiben & sortieren", systemImage: "sparkles") { dismissKeyboard(); showAI = true }.accessibilityIdentifier("note.ai") }
                 Toggle("Wichtig · oben anheften", isOn: Binding(get: { note.isImportant ?? false }, set: { note.isImportant = $0 }))
                 Picker("Verfasst von", selection: Binding(get: { note.author ?? NoteAuthor.me.rawValue }, set: { note.author = $0 })) {
                     ForEach(NoteAuthor.allCases) { Text($0.rawValue).tag($0.rawValue) }
@@ -189,11 +191,14 @@ struct TherapyNoteEditorView: View {
                 Picker("Bereich", selection: Binding(get: { note.category ?? TherapyCategory.other.rawValue }, set: { note.category = $0 })) {
                     ForEach(TherapyCategory.allCases) { Text($0.rawValue).tag($0.rawValue) }
                 }
-                TextField("Tags, mit Komma trennen", text: $tags)
+                TextField("Hashtags, mit Komma trennen", text: $tags)
+                HashtagChips(tags: AppHashtags.clean(tags.split(separator: ",").map(String.init)))
+                ScrollView(.horizontal) { HStack { ForEach(AppHashtags.catalog(store.data).prefix(20), id: \.self) { tag in Button("#" + tag) { let all = AppHashtags.clean(tags.split(separator: ",").map(String.init) + [tag]); tags = all.joined(separator: ", ") }.buttonStyle(.bordered) } } }
             }
         }
         .accessibilityIdentifier("note.editor")
         .presentationDetents([.large])
+        .sheet(isPresented: $showAI) { AIBuddyEntryView(note: note, onNoteProposal: { proposal in note = proposal; tags = proposal.tags.joined(separator: ", "); showAI = false }) }
         .sheet(item: $attachment) { route in
             switch route {
             case .record: AudioRecordingView(onSaved: link)

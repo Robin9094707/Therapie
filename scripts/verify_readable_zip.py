@@ -11,7 +11,7 @@ with zipfile.ZipFile(sys.argv[1]) as archive:
     data = json.loads(archive.read("therapy-data.json"))
     manifest = json.loads(archive.read("manifest.json"))
     assert data == manifest["data"]
-    assert data["schemaVersion"] == 10
+    assert data["schemaVersion"] == 11
     assert data["aiSettings"]["model"] == "gpt-5.6-luna"
     assert data["aiMessages"][0]["text"] == "Mein KI-Rückblick"
     assert data["schedule"]["recurrence"]["interval"] == 2

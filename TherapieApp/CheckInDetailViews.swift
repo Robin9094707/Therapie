@@ -3,9 +3,11 @@ import QuickLook
 
 /// Only new entries and unfinished drafts start in the editor.
 struct GuidedCheckInDestination: View {
+    @EnvironmentObject private var store: AppStore
     let entry: GuidedCheckIn
     var body: some View {
-        if entry.isDraft { GuidedCheckInView(entry: entry) }
+        if entry.isDraft && store.data.aiSettings.enabled && store.data.aiSettings.preferGuidedCheckIns { AIBuddyEntryView(checkIn: DayCheckInPolicy.reopen(entry, in: store.data)) }
+        else if entry.isDraft { GuidedCheckInView(entry: entry) }
         else { GuidedCheckInDetailView(entryID: entry.id) }
     }
 }
@@ -29,6 +31,7 @@ struct GuidedCheckInDetailView: View {
                                 CheckInMetricGrid(mood: entry.moodPercent.map { "\($0)/100" } ?? entry.mood.map { "\($0)/5" }, battery: entry.batteryPercent.map { "\($0) %" }, stress: entry.stress, sensory: entry.sensoryLoad, sleep: entry.sleepHours)
                             }
                         }
+                        HashtagChips(tags: entry.tags ?? [])
                         CheckInTextCard(title: "Dein Rückblick", symbol: "text.bubble", items: [("Rückblick", entry.summary), ("Kleiner Erfolg", entry.smallWin), ("Jetzt brauche ich", entry.nextNeed), ("Frage für die Therapie", entry.therapyQuestion)])
                         CheckInBatteryDetail(points: entry.energyPoints ?? [], legacyGives: entry.givesEnergy, legacyTakes: entry.takesEnergy)
                         if !entry.tasks.isEmpty {

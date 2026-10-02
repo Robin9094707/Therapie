@@ -3,6 +3,7 @@ import Foundation
 enum TherapyWidgetSnapshotBuilder {
     static func make(data: AppData, now: Date = Date(), calendar: Calendar = .current) -> TherapyWidgetSnapshot {
         var result = TherapyWidgetSnapshot(generatedAt: now, configured: data.profile.onboardingCompleted)
+        result.showsPersonalTitles = data.dashboard.showWidgetTitles
         let privateTitles = !data.dashboard.showWidgetTitles
         var cursor = now
         for _ in 0..<8 {

@@ -48,6 +48,10 @@ struct BackupChecks {
         data.companionSettings = CompanionSettings(vacationUntil: Date(), privateRoutineTitles: false, offerTherapyCheckIn: true, checkInReminders: [CheckInReminder(kind: .morning, time: RoutineTime(weekdays: [2, 3, 4, 5, 6], hour: 6, minute: 30, weekendHour: 9, weekendMinute: 0))])
         data.aiSettings.enabled = true; data.aiSettings.model = "gpt-6-luna"; data.aiSettings.contextDays = 14; data.aiSettings.allowVoiceUploads = true
         data.aiMessages = [AIBuddyMessage(role: "assistant", text: "Mein Rückblick", reply: AIBuddyReply(title: "Meine Woche", message: "Eine gute Pause", sections: [], actions: [AIBuddyAction(kind: .note, title: "Gedanke", text: "Gut", weekdays: [])], suggestedDays: 14))]
+        AIConversationMutation.migrate(&data)
+        data.aiConversations[0].contextDays = 14
+        data.hashtagCatalog = ["Familie", "Technik"]
+        data.guidedCheckIns[0].tags = ["Familie"]
         data.therapyDiscussionAcknowledgedIDs = ["guided-discussed"]
         data.schedule.recurrence = TherapyRecurrence(interval: 2, additionalWeeklySlots: [TherapyWeeklySlot(weekday: 5, hour: 10)])
         data.schedule.extraAppointments = [TherapyExtraAppointment(title: "Zusatzgespräch")]
@@ -114,6 +118,7 @@ struct BackupChecks {
         defer { prepared.discard() }
         try expect(try json(prepared.manifest.data) == json(data.portableSnapshot), "All AppData fields round-trip")
         try expect(prepared.manifest.data.dashboard == data.dashboard && prepared.manifest.data.archivePreferences == data.archivePreferences, "Encrypted restore retains cards, pins and archive settings")
+        try expect(prepared.manifest.data.aiConversations[0].id == data.aiConversations[0].id && prepared.manifest.data.aiConversations[0].contextDays == 14 && prepared.manifest.data.guidedCheckIns[0].tags == ["Familie"] && prepared.manifest.data.hashtagCatalog == data.hashtagCatalog, "Encrypted backup restores linked chats, context and hashtags")
         var noCompanion = prepared.manifest
         noCompanion.data.guidedCheckIns = []; noCompanion.data.routines = []; noCompanion.data.routineCompletions = []; noCompanion.data.routineSnoozes = []
         try expect(prepared.manifest.entryCount - noCompanion.entryCount == data.guidedCheckIns.count + data.routines.count + data.routineCompletions.count + data.routineSnoozes.count, "Backup overview counts all companion records")
@@ -195,10 +200,10 @@ struct BackupChecks {
         prefs.apply(defaults)
         try expect(PortablePreferences.capture(defaults) == prefs, "Appearance, calm, haptics and confetti restored")
         var oldJSON = try JSONSerialization.jsonObject(with: BackupArchive.encoder().encode(data)) as! [String: Any]
-        for version in 1...9 {
+        for version in 1...10 {
             oldJSON["schemaVersion"] = version
             let migrated = try BackupArchive.decoder().decode(AppData.self, from: JSONSerialization.data(withJSONObject: oldJSON))
-            try expect(migrated.schemaVersion == 10 && migrated.notes.count == 1 && migrated.media[0].attachmentOmitted == nil, "Schema \(version) migrates for backups")
+            try expect(migrated.schemaVersion == 11 && migrated.notes.count == 1 && migrated.media[0].attachmentOmitted == nil, "Schema \(version) migrates for backups")
         }
         oldJSON["schemaVersion"] = 8; oldJSON.removeValue(forKey: "dashboard"); oldJSON.removeValue(forKey: "archivePreferences")
         let oldWithoutSettings = try BackupArchive.decoder().decode(AppData.self, from: JSONSerialization.data(withJSONObject: oldJSON))

@@ -1,3 +1,12 @@
+## Update 3009.0.0 · KI im Alltag
+
+- Getrennte lokale Chats: neu beginnen, öffnen, löschen und ganze Gespräche im Tagebuch speichern. Bisheriger Verlauf wird in einen Chat übernommen; Schema 11 und vollständige verschlüsselte/lesbare Backups.
+- Check-ins optional standardmäßig KI-geführt: die acht bestehenden Fragebereiche, strukturierte Entwürfe, persönliche Formulierungen, jederzeit normal fortsetzen und erst nach Prüfung abschließen. Aufgaben entstehen ausschließlich beim bestätigten Abschluss.
+- Moderne Chatblasen und feste Nachrichtenleiste über der Tastatur; Eingabe bleibt bei Fehlern erhalten. Kontext aus der Nachricht oder 1–90 Tage per Slider, sichtbare Datenbegrenzung, getrennte Chat-Historien.
+- KI direkt in Heute, Check-ins, Notizeditor und Therapiebegleitung. Notizvorschläge werden in den bearbeitbaren Entwurf übernommen.
+- Gemeinsame Hashtags für Notizen, Materialien und Check-ins; anklickbare Archivübersicht, bekannte Namen im KI-Kontext.
+- Widgets redigieren einzelne persönliche Inhalte statt der gesamten Ansicht. Fehlender gemeinsamer Zugriff zeigt einen konkreten Einrichtungshinweis. Der Widget-Zugriff benötigt weiterhin korrekt signierte App-Group-Entitlements; manuelle Konfiguration bleibt verfügbar.
+
 ## Update 3008.0.0 · Dein Begleiter, deine Gedanken
 
 - Vier Standard-Tagesfenster: morgens, mittags, abends und nachts. Eigene Fenster und zusätzliche Einträge sind konfigurierbar. Bereits vorhandene Entwürfe/Einträge werden wieder geöffnet. Eine zentrale Speicherprüfung verhindert doppelte Einträge; alte Duplikate bleiben bearbeitbar.

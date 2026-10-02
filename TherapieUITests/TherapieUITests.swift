@@ -284,6 +284,57 @@ final class TherapieUITests: XCTestCase {
     }
 
     @MainActor
+    func testChatSendWithKeyboardNewChatAndReopen() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--show-dashboard", "--buddy-network-fixture"]
+        app.launch()
+        XCTAssertTrue(app.buttons["ai.new.chat"].waitForExistence(timeout: 25))
+        app.buttons["ai.new.chat"].tap()
+        let input = app.textFields["ai.composer"].firstMatch
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.tap(); input.typeText("Meine Schwester hilft mir heute.")
+        XCTAssertTrue(app.keyboards.firstMatch.exists)
+        capture("Chat-Nachricht mit geöffneter Tastatur")
+        app.buttons["ai.send"].tap()
+        XCTAssertTrue(app.staticTexts["Deine Nachricht ist angekommen. Möchtest du sie im Tagebuch festhalten?"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["ai.send"].exists, "Fixed composer survives response")
+        input.tap(); input.typeText("Ein zweiter Gedanke.")
+        app.buttons["ai.send"].tap()
+        XCTAssertTrue(app.staticTexts["Ein zweiter Gedanke."].waitForExistence(timeout: 10))
+        capture("Chatblasen nach zwei echten Sendevorgängen")
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.buttons["ai.new.chat"].waitForExistence(timeout: 10))
+        app.buttons["ai.new.chat"].tap()
+        XCTAssertFalse(app.staticTexts["Ein zweiter Gedanke."].exists, "New chat does not leak previous history")
+        app.navigationBars.buttons.firstMatch.tap()
+        let saved = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'ai.chat.'")).allElementsBoundByIndex
+        XCTAssertEqual(saved.count, 2)
+    }
+
+    @MainActor
+    func testGuidedAIKeepsDraftWhenSwitchingToNormal() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--show-dashboard", "--buddy-network-fixture", "--buddy-guided-fixture"]
+        app.launch()
+        let input = app.textFields["ai.composer"].firstMatch
+        XCTAssertTrue(input.waitForExistence(timeout: 25))
+        input.tap(); input.typeText("Meine Schwester gibt mir Sicherheit.")
+        app.buttons["ai.send"].tap()
+        XCTAssertTrue(app.staticTexts["KI-geführter Check-in · 2 / 8"].waitForExistence(timeout: 10))
+        capture("KI-geführter Check-in mit gespeichertem Entwurf")
+        let manual = app.buttons["ai.checkin.manual"]
+        for _ in 0..<5 where !manual.isHittable { app.swipeDown() }
+        manual.tap()
+        XCTAssertTrue(app.staticTexts["checkin.step"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.staticTexts["checkin.step"].label, "2 / 8")
+        app.buttons["Zurück"].tap()
+        let summary = app.textFields["Ein Gedanke zum Einstieg"].firstMatch
+        XCTAssertTrue(summary.waitForExistence(timeout: 10))
+        XCTAssertEqual(summary.value as? String, "Meine Schwester gibt mir Sicherheit.")
+        capture("Normaler Check-in behält die KI-Antwort")
+    }
+
+    @MainActor
     private func capture(_ name: String) {
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         attachment.name = name

@@ -26,6 +26,8 @@ struct AIBuddySettingsView: View {
             Form {
                 Section("Optional aktivieren") {
                     Toggle("KI-Begleiter verwenden", isOn: $store.data.aiSettings.enabled)
+                    Toggle("Check-ins standardmäßig mit KI führen", isOn: $store.data.aiSettings.preferGuidedCheckIns)
+                    Text("Du kannst jederzeit zum normalen Check-in wechseln. Der Entwurf und das Gespräch bleiben erhalten.").font(.caption).foregroundStyle(.secondary)
                     Text("Beim Senden werden deine Nachricht und der angezeigte Textzeitraum an OpenAI übertragen. Aktuelle offene Aufgaben, Routinen und Gesprächspunkte können zusätzlich enthalten sein. Keine automatischen Anfragen im Hintergrund. Die OpenAI-API wird getrennt von einem ChatGPT-Abo abgerechnet.").font(.caption).foregroundStyle(.secondary)
                 }
                 Section("Persönlicher API-Schlüssel") {

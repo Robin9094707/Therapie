@@ -8,7 +8,7 @@ enum AIBuddyMutation {
         let date = action.date ?? now
         switch action.kind {
         case .note:
-            snapshot.notes.insert(TherapyNote(createdAt: min(date, now), title: title.isEmpty ? "Mein Therapietagebuch" : title, text: text, tags: ["Tagebuch", "KI-Begleiter"], sessionID: snapshot.currentSession?.id, category: "Therapietagebuch"), at: 0)
+            snapshot.notes.insert(TherapyNote(createdAt: min(date, now), title: title.isEmpty ? "Mein Therapietagebuch" : title, text: text, tags: AppHashtags.clean(["Tagebuch", "KI-Begleiter"] + (action.tags ?? []), known: AppHashtags.catalog(snapshot)), sessionID: snapshot.currentSession?.id, category: "Therapietagebuch"), at: 0)
         case .mood:
             guard let percent = action.moodPercent else { throw AIBuddyAPIError(message: "Bitte wähle deine Stimmung selbst, bevor du speicherst.") }
             var entry = MoodCheckIn(date: min(date, now), mood: MoodBarometer.score(percent), note: text, moodPercent: percent)
@@ -31,7 +31,7 @@ enum AIBuddyMutation {
         case .goal:
             snapshot.therapyGoals.insert(TherapyGoal(title: title, why: text, smallStep: text, dueDate: action.date), at: 0)
         case .checkIn:
-            var entry = GuidedCheckIn(date: min(date, now), summary: text, customTitle: title.isEmpty ? nil : title)
+            var entry = GuidedCheckIn(date: min(date, now), summary: text, tags: AppHashtags.clean(action.tags ?? [], known: AppHashtags.catalog(snapshot)), customTitle: title.isEmpty ? nil : title)
             entry.moodPercent = action.moodPercent; entry.mood = action.moodPercent.map(MoodBarometer.score)
             guard GuidedCheckInMutation.apply(entry, complete: false, to: &snapshot) else { throw AIBuddyAPIError(message: "Heute gibt es schon einen freien Check-in. Öffne ihn im Check-in-Bereich zum Bearbeiten.") }
         case .reflection:

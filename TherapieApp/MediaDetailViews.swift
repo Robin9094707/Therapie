@@ -62,7 +62,7 @@ struct TherapyMediaDetailView: View {
                                 Text(item.createdAt.formatted(date: .complete, time: .shortened)).font(.subheadline).foregroundStyle(.secondary)
                                 if !item.note.isEmpty { Text(item.note).textSelection(.enabled) }
                                 if let source = item.source, !source.isEmpty { Text("Quelle: " + source).font(.caption).foregroundStyle(.secondary) }
-                                if !item.tags.isEmpty { Text(item.tags.map { "#" + $0 }.joined(separator: " ")).font(.caption).foregroundStyle(.secondary) }
+                                HashtagChips(tags: item.tags)
                             }
                         }
                         if let url = availableURL(item) {
@@ -116,6 +116,7 @@ struct TherapyNoteDetailView: View {
                             VStack(alignment: .leading, spacing: 12) {
                                 Label(note.title, systemImage: note.isImportant == true ? "pin.fill" : "note.text").font(.system(.title2, design: .rounded, weight: .bold))
                                 Text(note.createdAt.formatted(date: .complete, time: .shortened)).font(.caption).foregroundStyle(.secondary)
+                                HashtagChips(tags: note.tags)
                                 if let author = note.author { Text(author).font(.caption).foregroundStyle(.secondary) }
                                 if !note.text.isEmpty { Text(note.text).textSelection(.enabled).accessibilityIdentifier("note.detail.text") }
                             }

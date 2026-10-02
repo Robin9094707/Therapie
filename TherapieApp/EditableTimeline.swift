@@ -205,6 +205,7 @@ struct ArchiveTimelineCard: View {
                     } label: { Image(systemName: pinned ? "pin.fill" : "pin").frame(width: 32, height: 44) }
                         .accessibilityLabel(pinned ? "Von Heute lösen" : "Auf Heute anpinnen")
                 }
+                HashtagChips(tags: AppHashtags.tags(record))
                 HStack {
                     Button("Übersicht öffnen", systemImage: "arrow.up.right.square", action: open)
                     Spacer()

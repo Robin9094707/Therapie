@@ -43,12 +43,14 @@ command = ['xcodebuild', '-project', 'Therapie.xcodeproj', '-scheme', 'TherapieA
            '-only-testing:TherapieUITests/TherapieUITests/testTherapyCancellationAndRestore',
            '-only-testing:TherapieUITests/TherapieUITests/testTodayCustomizationRoutineConfirmationAndArchiveFilters',
            '-only-testing:TherapieUITests/TherapieUITests/testAIBuddyNativeActionsAndJournal',
+           '-only-testing:TherapieUITests/TherapieUITests/testChatSendWithKeyboardNewChatAndReopen',
+           '-only-testing:TherapieUITests/TherapieUITests/testGuidedAIKeepsDraftWhenSwitchingToNormal',
            'CODE_SIGNING_ALLOWED=NO', 'test']
 print('Testing saved overview and real task removal on', phone['name'], flush=True)
 with (output / 'test.log').open('w') as log:
     process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
     try:
-        code = process.wait(timeout=900)
+        code = process.wait(timeout=1200)
     except subprocess.TimeoutExpired:
         process.terminate()
         try:

@@ -5,7 +5,58 @@ import UIKit
 struct AIBuddyView: View {
     @EnvironmentObject private var store: AppStore
     var inSession = false
-    var body: some View { AIBuddyChatContent(controller: store.aiController, inSession: inSession) }
+    @State private var settings = false
+    @State private var active: UUID?
+    @State private var deleting: AIBuddyConversation?
+    var body: some View {
+        TherapyScreen {
+            LazyVStack(alignment: .leading, spacing: 16) {
+                GlassCard(emphasized: true) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        SectionHeader(title: "Deine Gespräche", icon: "bubble.left.and.bubble.right", subtitle: "Ein eigener Raum für jeden Gedanken. Deine Chats bleiben auf diesem iPhone und in deinen Backups.")
+                        if store.data.aiSettings.enabled {
+                            Button("Neues Gespräch", systemImage: "square.and.pencil") { newChat() }.buttonStyle(.borderedProminent).accessibilityIdentifier("ai.new.chat")
+                            NavigationLink { TherapyJournalView() } label: { Label("Therapietagebuch", systemImage: "book.closed") }
+                        } else { Button("KI einrichten", systemImage: "key") { settings = true } }
+                    }
+                }
+                ForEach(store.data.aiConversations.sorted { $0.updatedAt > $1.updatedAt }) { chat in
+                    NavigationLink { AIBuddyChatContent(controller: store.aiController, inSession: inSession, conversationID: chat.id) } label: {
+                        GlassCard { HStack { Image(systemName: chat.checkInID == nil ? "bubble.left.and.bubble.right.fill" : "sparkles").foregroundStyle(.indigo); VStack(alignment: .leading, spacing: 6) { Text(chat.title).font(.headline); Text(chat.updatedAt.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary) }; Spacer(); Image(systemName: "chevron.right").font(.caption) } }
+                    }.buttonStyle(.plain).contextMenu { Button("Gespräch löschen", systemImage: "trash", role: .destructive) { deleting = chat } }.accessibilityIdentifier("ai.chat." + chat.id.uuidString)
+                }
+            }
+        }.navigationTitle("KI-Begleiter")
+            .navigationDestination(isPresented: Binding(get: { active != nil }, set: { if !$0 { active = nil } })) { if let active { AIBuddyChatContent(controller: store.aiController, inSession: inSession, conversationID: active) } }
+            .sheet(isPresented: $settings) { AIBuddySettingsView() }
+            .alert("Gespräch löschen?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
+                Button("Abbrechen", role: .cancel) { deleting = nil }
+                Button("Löschen", role: .destructive) { if let deleting { store.aiController.cancel(); var snapshot = store.data; AIConversationMutation.delete(deleting.id, in: &snapshot); store.data = snapshot }; deleting = nil }
+            } message: { Text("Gespeicherte Tagebucheinträge und Check-ins bleiben erhalten. Rückgängig ist zehn Minuten lang in der geöffneten App möglich.") }
+            .onAppear { if ProcessInfo.processInfo.arguments.contains("--buddy-fixture"), active == nil { active = store.data.aiConversations.first?.id } }
+    }
+    private func newChat() { var snapshot = store.data; let id = AIConversationMutation.create(in: &snapshot); store.data = snapshot; if store.lastSaveError == nil { active = id } }
+}
+/// A contextual entry point used from notes, the home screen and check-ins.
+struct AIBuddyEntryView: View {
+    @EnvironmentObject private var store: AppStore
+    @Environment(\.dismiss) private var dismiss
+    var checkIn: GuidedCheckIn? = nil
+    var note: TherapyNote? = nil
+    var onNoteProposal: ((TherapyNote) -> Void)? = nil
+    @State private var conversationID: UUID?
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let conversationID { AIBuddyChatContent(controller: store.aiController, inSession: store.data.currentSession != nil, conversationID: conversationID, onNoteProposal: onNoteProposal) }
+                else { ProgressView("Gespräch vorbereiten …") }
+            }.toolbar { ToolbarItem(placement: .cancellationAction) { Button("Schließen") { store.aiController.cancel(); dismiss() } } }
+        }.onAppear {
+            guard conversationID == nil else { return }
+            var snapshot = store.data; let id = AIConversationMutation.create(in: &snapshot, checkIn: checkIn, note: note); store.data = snapshot
+            if store.lastSaveError == nil { conversationID = id }
+        }
+    }
 }
 private struct AIBuddyReviewRoute: Identifiable {
     var id: String { messageID.uuidString + action.id }
@@ -16,6 +67,12 @@ struct AIBuddyChatContent: View {
     @EnvironmentObject private var store: AppStore
     @ObservedObject var controller: AIBuddyController
     var inSession: Bool
+    var conversationID: UUID
+    var onNoteProposal: ((TherapyNote) -> Void)? = nil
+    @FocusState private var composerFocused: Bool
+    @State private var manual: GuidedCheckIn?
+    @State private var guided: GuidedCheckIn?
+    @State private var previewContext: AIBuddyContext?
     @State private var text = ""
     @State private var settings = false
     @State private var review: AIBuddyReviewRoute?
@@ -27,25 +84,37 @@ struct AIBuddyChatContent: View {
     @State private var moreMessages = false
     @State private var explicitDays: Int?
     @State private var navigation: String?
-    private var context: AIBuddyContext { AIBuddyContext.make(data: store.data, days: explicitDays ?? AIBuddyContext.resolvedDays(question: text, settings: store.data.aiSettings)) }
+    private var chat: AIBuddyConversation? { store.data.aiConversations.first { $0.id == conversationID } }
+    private var messages: [AIBuddyMessage] { store.data.aiMessages.filter { $0.conversationID == conversationID } }
+    private var draft: GuidedCheckIn? { chat?.checkInID.flatMap { id in store.data.guidedCheckIns.first { $0.id == id && $0.isDraft } } }
+    private var context: AIBuddyContext { previewContext ?? AIBuddyContext(start: Date(), end: Date(), days: 7, recordCount: 0, omittedCount: 0, text: "") }
     var body: some View {
+        ScrollViewReader { proxy in
         TherapyScreen {
             LazyVStack(alignment: .leading, spacing: 16) {
-                introduction
+                if chat == nil { ContentUnavailableView("Gespräch gelöscht", systemImage: "bubble.left.and.bubble.right") }
+                else if messages.isEmpty { introduction }
+                if let draft { guideHeader(draft) }
                 if store.data.aiSettings.enabled {
-                    contextCard
-                    ForEach(Array(moreMessages ? store.data.aiMessages : Array(store.data.aiMessages.suffix(40)))) { message in messageCard(message) }
-                    if store.data.aiMessages.count > 40 && !moreMessages { Button("Frühere Nachrichten anzeigen") { moreMessages = true } }
+                    DisclosureGroup("Kontext für deine nächste Nachricht") { contextCard }
+                    ForEach(Array(moreMessages ? messages : Array(messages.suffix(40)))) { message in messageCard(message).id(message.id) }
+                    if messages.count > 40 && !moreMessages { Button("Frühere Nachrichten anzeigen") { moreMessages = true } }
                     if controller.busy {
                         GlassCard { VStack(alignment: .leading, spacing: 8) { Text(controller.pendingQuestion).font(.subheadline); ProgressView("Dein Begleiter denkt nach …"); Button("Anfrage abbrechen") { controller.cancel() } } }
                     }
                     if let error = controller.error { GlassCard { Text(error).font(.subheadline).foregroundStyle(.orange).textSelection(.enabled) } }
-                    composer
                 }
             }
-        }.navigationTitle("KI-Begleiter").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Menu { Button("KI-Einstellungen", systemImage: "slider.horizontal.3") { settings = true }; Button("Chat leeren", systemImage: "trash", role: .destructive) { clearChat = true } } label: { Image(systemName: "ellipsis.circle") } } }
+        }.onChange(of: messages.count) { _, _ in
+            if let id = messages.last?.id { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(id, anchor: .bottom) } }
+            updateContext()
+        }
+        }.navigationTitle(chat?.title ?? "Gespräch").navigationBarTitleDisplayMode(.inline)
+            .safeAreaInset(edge: .bottom) { if store.data.aiSettings.enabled && chat != nil { composer.padding(.horizontal, 12).padding(.vertical, 8).background(.regularMaterial) } }
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Menu { Button("KI-Einstellungen", systemImage: "slider.horizontal.3") { settings = true }; Button("Gespräch im Tagebuch speichern", systemImage: "book.closed") { var snapshot = store.data; AIConversationMutation.save(conversationID, in: &snapshot); store.data = snapshot }; Button("Gespräch löschen", systemImage: "trash", role: .destructive) { clearChat = true } } label: { Image(systemName: "ellipsis.circle") } } }
             .sheet(isPresented: $settings) { AIBuddySettingsView() }
+            .sheet(item: $guided) { GuidedCheckInDestination(entry: $0) }
+            .sheet(item: $manual) { GuidedCheckInView(entry: $0) }
             .sheet(item: $review) { AIBuddyActionReviewView(action: $0.action, messageID: $0.messageID) }
             .sheet(isPresented: $voice) { AIBuddyVoiceView { transcript in text = transcript } }
             .sheet(isPresented: Binding(get: { navigation != nil }, set: { if !$0 { navigation = nil } })) { NavigationStack { destination(navigation ?? "today").toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { navigation = nil } } } } }
@@ -54,7 +123,9 @@ struct AIBuddyChatContent: View {
                 Button("Abbrechen", role: .cancel) { photo = nil; image = nil }
                 Button("Für nächste Nachricht vorbereiten") { Task { await preparePhoto() } }
             } message: { Text("Das Foto wird auf höchstens 1.024 Pixel verkleinert und beim nächsten Senden hochgeladen. Es kann persönliche Informationen enthalten. Die Bildanalyse verursacht zusätzliche API-Kosten. Andere Archivbilder werden nicht übertragen.") }
-            .alert("Chatverlauf leeren?", isPresented: $clearChat) { Button("Abbrechen", role: .cancel) {}; Button("Leeren", role: .destructive) { controller.cancel(); store.data.aiMessages = [] } } message: { Text("Gespeicherte Tagebucheinträge bleiben erhalten. Rückgängig ist zehn Minuten lang in der geöffneten App möglich.") }
+            .alert("Chatverlauf leeren?", isPresented: $clearChat) { Button("Abbrechen", role: .cancel) {}; Button("Leeren", role: .destructive) { controller.cancel(); var snapshot = store.data; AIConversationMutation.delete(conversationID, in: &snapshot); store.data = snapshot } } message: { Text("Gespeicherte Tagebucheinträge bleiben erhalten. Rückgängig ist zehn Minuten lang in der geöffneten App möglich.") }
+            .onAppear { updateContext() }
+            .onDisappear { controller.cancel() }
             .onChange(of: store.data.aiSettings.enabled) { _, enabled in if !enabled { controller.cancel(); image = nil; photo = nil } }
     }
     private var introduction: some View {
@@ -78,7 +149,7 @@ struct AIBuddyChatContent: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 8) {
                 Label("Dein sichtbarer Datenzeitraum", systemImage: "calendar").font(.subheadline.bold())
-                let selection = Binding<Int>(get: { explicitDays ?? 0 }, set: { explicitDays = $0 == 0 ? nil : $0 })
+                let selection = Binding<Int>(get: { explicitDays ?? 0 }, set: { setDays($0 == 0 ? nil : $0); persistDays() })
                 Picker("Kontext", selection: selection) { Text("Aus Frage / Standard").tag(0); Text("Heute").tag(1); Text("7 Tage").tag(7); Text("30 Tage").tag(30); Text("90 Tage").tag(90) }
                 Text(context.start.formatted(date: .abbreviated, time: .omitted) + " – " + context.end.formatted(date: .abbreviated, time: .omitted) + " · \(context.recordCount) Text-Einträge").font(.caption).foregroundStyle(.secondary)
                 if context.omittedCount > 0 { Text("\(context.omittedCount) Einträge werden wegen des Textlimits ausgelassen; neuere haben Vorrang.").font(.caption).foregroundStyle(.secondary) }
@@ -87,7 +158,8 @@ struct AIBuddyChatContent: View {
         }
     }
     private func messageCard(_ message: AIBuddyMessage) -> some View {
-        GlassCard(emphasized: message.role == "assistant") {
+        HStack {
+            if message.role == "user" { Spacer(minLength: 36) }
             VStack(alignment: .leading, spacing: 12) {
                 Label(message.role == "user" ? "Du" : "Dein Begleiter", systemImage: message.role == "user" ? "person.crop.circle" : "sparkles").font(.caption.bold()).foregroundStyle(.secondary)
                 if let reply = message.reply {
@@ -101,13 +173,25 @@ struct AIBuddyChatContent: View {
                             else { review = .init(messageID: message.id, action: action) }
                         } label: { Label(applied ? "Gespeichert · " + action.kind.label : action.kind.label + (action.title.isEmpty ? "" : ": " + AIBuddyText.plain(action.title)), systemImage: applied ? "checkmark.circle.fill" : action.kind.symbol).frame(maxWidth: .infinity, alignment: .leading) }.buttonStyle(.bordered).disabled(applied).accessibilityIdentifier("ai.action." + action.kind.rawValue)
                     }
-                    if let days = reply.suggestedDays { Button("Für nächste Frage \(days) Tage berücksichtigen") { explicitDays = days }.font(.subheadline) }
+                    if let days = reply.suggestedDays { Text("Mehr Kontext? Vorschlag: \(days) Tage").font(.caption) }
+                    if message.id == messages.last?.id {
+                        VStack(alignment: .leading) {
+                            Text("Für die nächste Nachricht: \(explicitDays ?? chat?.contextDays ?? store.data.aiSettings.contextDays) Tage").font(.caption)
+                            Slider(value: Binding(get: { Double(explicitDays ?? chat?.contextDays ?? store.data.aiSettings.contextDays) }, set: { setDays(Int($0)) }), in: 1...90, step: 1, onEditingChanged: { editing in if !editing { persistDays(); updateContext() } }).accessibilityLabel("Kontext in Tagen")
+                            Button("Zeitraum wieder aus Nachricht erkennen") { setDays(nil); persistDays(); updateContext() }.font(.caption)
+                        }
+                        if draft == nil { Button("KI-geführten Check-in beginnen", systemImage: "sparkles") { startCheckIn() }.buttonStyle(.bordered) }
+                        if let note = chat?.noteContext, let onNoteProposal {
+                            Button("Textvorschlag in meine Notiz übernehmen", systemImage: "pencil") { var proposal = note; proposal.title = AIBuddyText.plain(reply.title); proposal.text = reply.journalText; proposal.tags = AppHashtags.clean(reply.actions.flatMap { $0.tags ?? [] } + note.tags, known: AppHashtags.catalog(store.data)); onNoteProposal(proposal) }.buttonStyle(.bordered)
+                        }
+                    }
                     Button(message.savedNoteID == nil ? "Rückblick im Tagebuch speichern" : "Im Tagebuch gespeichert", systemImage: "book.closed") { controller.saveReply(message) }.buttonStyle(.bordered).disabled(message.savedNoteID != nil).accessibilityIdentifier("ai.save.summary")
                     if let start = message.contextStart, let end = message.contextEnd { Text("Kontext " + start.formatted(date: .abbreviated, time: .omitted) + " – " + end.formatted(date: .abbreviated, time: .omitted)).font(.caption2).foregroundStyle(.secondary) }
                     if let input = message.inputTokens, let output = message.outputTokens { Text("\(message.model ?? "OpenAI") · letzte Antwort: \(input) Eingabe- / \(output) Ausgabetokens. Eventuelle Wiederholungen kommen hinzu.").font(.caption2).foregroundStyle(.secondary) }
                 } else { Text(message.text).font(.subheadline).textSelection(.enabled) }
                 Text(message.date.formatted(date: .abbreviated, time: .shortened)).font(.caption2).foregroundStyle(.secondary)
-            }
+            }.padding(16).background(message.role == "user" ? Color.indigo.opacity(0.14) : Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 22))
+            if message.role != "user" { Spacer(minLength: 16) }
         }
     }
     private func formatted(_ value: String) -> some View {
@@ -115,18 +199,53 @@ struct AIBuddyChatContent: View {
         return Text(text).font(.subheadline).textSelection(.enabled)
     }
     private var composer: some View {
-        GlassCard {
+        VStack(alignment: .leading, spacing: 6) {
+            if image != nil { HStack { Label("Foto vorbereitet", systemImage: "photo"); Spacer(); Button("Entfernen") { image = nil; photo = nil } }.font(.caption) }
+            HStack(alignment: .bottom, spacing: 10) {
+                if store.data.aiSettings.allowVoiceUploads { Button { composerFocused = false; voice = true } label: { Image(systemName: "mic") }.accessibilityLabel("Einsprechen").frame(minWidth: 44, minHeight: 44) }
+                if store.data.aiSettings.allowPhotoUploads { PhotosPicker(selection: $photo, matching: .images) { Image(systemName: "photo") }.accessibilityLabel("Foto auswählen").frame(minWidth: 44, minHeight: 44) }
+                TextField("Nachricht …", text: $text, axis: .vertical).lineLimit(1...5).focused($composerFocused).padding(12).background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 22)).accessibilityIdentifier("ai.composer")
+                Button { send() } label: { Image(systemName: "arrow.up.circle.fill").font(.system(size: 36)).foregroundStyle(.indigo) }.accessibilityLabel("Senden").disabled(controller.busy || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || text.count > 5000 || draft?.step == 7).accessibilityIdentifier("ai.send")
+            }
+            if text.count > 4800 { Text("\(text.count) / 5.000 Zeichen").font(.caption).foregroundStyle(.secondary) }
+        }
+    }
+    private func send() {
+        guard !controller.busy else { return }
+        let question = text, picture = image
+        composerFocused = false
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        Task { @MainActor in
+            await Task.yield()
+            let succeeded = await controller.send(question, image: picture, inSession: inSession, daysOverride: explicitDays, conversationID: conversationID)
+            if succeeded { if text == question { text = "" }; image = nil; photo = nil }
+        }
+    }
+    private func setDays(_ days: Int?) {
+        explicitDays = days
+    }
+    private func persistDays() {
+        guard let index = store.data.aiConversations.firstIndex(where: { $0.id == conversationID }) else { return }
+        store.data.aiConversations[index].contextDays = explicitDays
+    }
+    private func updateContext() { previewContext = AIBuddyContext.make(data: store.data, days: explicitDays ?? chat?.contextDays ?? store.data.aiSettings.contextDays) }
+    private func startCheckIn() {
+        let entry = GuidedCheckIn(kind: .free)
+        // A separate linked conversation keeps the guided questions out of the current discussion.
+        guided = DayCheckInPolicy.reopen(entry, in: store.data)
+    }
+    private func guideHeader(_ entry: GuidedCheckIn) -> some View {
+        GlassCard(emphasized: true) {
             VStack(alignment: .leading, spacing: 12) {
-                TherapyInputField(title: "Deine Nachricht", prompt: "Wie geht es dir? Was möchtest du festhalten?", text: $text).accessibilityIdentifier("ai.composer")
-                if image != nil { HStack { Label("Ein Foto für diese Nachricht vorbereitet", systemImage: "photo"); Spacer(); Button("Entfernen") { image = nil; photo = nil } }.font(.caption) }
+                Label("KI-geführter Check-in · \(entry.step + 1) / 8", systemImage: "sparkles").font(.headline)
+                ProgressView(value: Double(entry.step + 1), total: 8)
+                Text(AICheckInGuide.questions[max(0, min(7, entry.step))]).font(.subheadline)
                 HStack {
-                    if store.data.aiSettings.allowVoiceUploads { Button("Einsprechen", systemImage: "mic") { voice = true }.buttonStyle(.bordered) }
-                    if store.data.aiSettings.allowPhotoUploads { PhotosPicker(selection: $photo, matching: .images) { Label("Foto", systemImage: "photo") }.buttonStyle(.bordered) }
-                    Spacer()
-                    Button("Senden", systemImage: "arrow.up.circle.fill") { Task { let succeeded = await controller.send(text, image: image, inSession: inSession, daysOverride: explicitDays); if succeeded { text = ""; image = nil; photo = nil } } }.buttonStyle(.borderedProminent).disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || text.count > 5000).accessibilityIdentifier("ai.send")
-                }
-                Text("Änderungen entstehen erst nach deinem Speichern. KI-Vorschläge für Stimmung, Datum und Inhalt kannst du vorher korrigieren.").font(.caption2).foregroundStyle(.secondary)
-            }.disabled(controller.busy)
+                    Button(entry.step == 7 ? "Übersicht prüfen & abschließen" : "Normal fortsetzen", systemImage: "slider.horizontal.3") { controller.cancel(); composerFocused = false; manual = entry }.accessibilityIdentifier("ai.checkin.manual")
+                    if entry.step < 7 { Button("Überspringen") { controller.cancel(); var snapshot = store.data; var next = entry; next.step += 1; _ = GuidedCheckInMutation.apply(next, complete: false, to: &snapshot); snapshot.aiMessages.append(AIBuddyMessage(role: "assistant", text: AICheckInGuide.questions[next.step], conversationID: conversationID)); store.data = snapshot } }
+                }.buttonStyle(.bordered)
+                HashtagChips(tags: entry.tags ?? [])
+            }
         }
     }
     private func preparePhoto() async {
@@ -177,6 +296,7 @@ struct AIBuddyActionReviewView: View {
                     if completion { Text("Bestätige nur, wenn du diese Aufgabe oder Routine wirklich erledigt hast.").font(.headline) }
                     TherapyInputField(title: "Überschrift", multiline: false, text: $action.title)
                     TherapyInputField(title: "Text", text: $action.text)
+                    HashtagEditor(tags: Binding(get: { action.tags ?? [] }, set: { action.tags = $0 }))
                 }
                 if !completion {
                     Section("Datum & Einordnung") {

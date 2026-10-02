@@ -45,6 +45,7 @@ struct GuidedCheckInView: View {
     @State private var importing = false
     @State private var error: String?
     @State private var showExit = false
+    @State private var showAI = false
     private let titles = ["Ankommen", "Deine Stimmung", "Dein Energie-Akku", "Reize & Erholung", "Dein Rückblick", "Deine nächsten Schritte", "Für deine Therapie", "Alles in deinem Tempo"]
     private var step: Int { max(0, min(7, entry.step)) }
     var body: some View {
@@ -65,11 +66,13 @@ struct GuidedCheckInView: View {
             .navigationTitle("Check-in").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Schließen") { if entry.isDraft { persistDraft(); if store.lastSaveError == nil { dismiss() } } else { showExit = true } } }
+                ToolbarItem(placement: .topBarTrailing) { if entry.isDraft && store.data.aiSettings.enabled { Button("Mit KI fortsetzen", systemImage: "sparkles") { persistDraft(); if store.lastSaveError == nil { showAI = true } } } }
                 ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Tastatur schließen") { dismissKeyboard() }.accessibilityIdentifier("checkin.keyboard.done") }
             }
             .safeAreaInset(edge: .bottom) { footer.padding(16).background(.regularMaterial) }
             .alert("Bearbeitung beenden?", isPresented: $showExit) { Button("Weiter bearbeiten", role: .cancel) {}; Button("Änderungen verwerfen", role: .destructive) { dismiss() } } message: { Text("Änderungen am abgeschlossenen Check-in werden erst beim abschließenden Speichern übernommen. Neu importierte Fotos bleiben als Materialien im Archiv.") }
             .onAppear { battery = entry.batteryPercent ?? 50; moodDial = entry.moodPercent ?? ((entry.mood ?? 3) - 1) * 25 }
+            .sheet(isPresented: $showAI, onDismiss: { if let saved = store.data.guidedCheckIns.first(where: { $0.id == entry.id }) { entry = saved; battery = entry.batteryPercent ?? 50; moodDial = entry.moodPercent ?? 50 } }) { AIBuddyEntryView(checkIn: entry) }
             .sheet(item: $pointDraft) { point in CheckInKeywordEditor(point: point) { value in var all = entry.energyPoints ?? []; all.removeAll { $0.id == value.id }; all.append(value); entry.energyPoints = all } }
             .onChange(of: selection) { _, value in if let value { Task { await addPhoto(value) } } }
         }
@@ -127,6 +130,7 @@ struct GuidedCheckInView: View {
             }
             Text("Fotos bleiben auch als einzelne Materialien im Archiv erhalten. Deine Einträge werden nicht automatisch versendet.").font(.footnote).foregroundStyle(.secondary)
         default:
+            HashtagEditor(tags: Binding(get: { entry.tags ?? [] }, set: { entry.tags = $0 }))
             GuidedCheckInSummary(entry: entry)
             Text("Beim Abschließen speicherst du deinen Check-in und neue Wochenaufgaben. Die Zusammenfassung kannst du anschließend teilen.").font(.footnote).foregroundStyle(.secondary)
         }

@@ -467,6 +467,9 @@ struct DashboardView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button("Heute gestalten", systemImage: "slider.horizontal.3") { customize = true }.accessibilityIdentifier("today.customize") }
                 ToolbarItem(placement: .topBarTrailing) {
+                    if store.data.aiSettings.enabled { NavigationLink { AIBuddyView() } label: { Label("KI-Begleiter", systemImage: "sparkles") }.accessibilityIdentifier("today.ai") }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink { TasksView() } label: { Label("Aufgaben", systemImage: "checklist") }
                 }
             }

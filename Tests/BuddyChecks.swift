@@ -143,6 +143,50 @@ final class BuddyMockProtocol: URLProtocol {
         let beforeRequests = BuddyMockProtocol.requests.count
         do { _ = try await api.answer(question: "Aus", context: context, history: [], settings: disabled, key: "fake-test-key"); throw Failure.assertion("Disabled API sent") } catch is AIBuddyAPIError { count += 1 }
         try expect(BuddyMockProtocol.requests.count == beforeRequests, "Disabled AI sends no network request")
+        var chats = AppData()
+        chats.notes = [TherapyNote(title: "Alt", text: "", tags: ["Familie"])]
+        chats.aiMessages = [AIBuddyMessage(role: "user", text: "Bisheriger Gedanke")]
+        let oldID = chats.aiMessages[0].id
+        AIConversationMutation.migrate(&chats)
+        try expect(chats.aiConversations.count == 1 && chats.aiConversations[0].id == oldID && chats.aiMessages[0].conversationID == oldID, "Legacy chat retains every message and deterministic identity")
+        AIConversationMutation.migrate(&chats)
+        try expect(chats.aiConversations.count == 1, "Chat migration is idempotent")
+        let newID = AIConversationMutation.create(in: &chats)
+        chats.aiMessages.append(AIBuddyMessage(role: "user", text: "Separates Thema", conversationID: newID))
+        try expect(chats.aiMessages.filter { $0.conversationID == oldID }.count == 1, "Conversation history stays isolated")
+        AIConversationMutation.save(newID, in: &chats)
+        let savedID = chats.aiConversations.first { $0.id == newID }!.savedNoteID!
+        AIConversationMutation.save(newID, in: &chats)
+        try expect(chats.notes.filter { $0.id == savedID }.count == 1, "Saving conversation twice updates one diary note")
+        chats.aiMessages.append(AIBuddyMessage(role: "assistant", text: "Antwort", conversationID: newID))
+        AIConversationMutation.save(newID, in: &chats)
+        try expect(chats.notes.first { $0.id == savedID }!.text.contains("Antwort") && !chats.notes.first { $0.id == savedID }!.text.contains("Bisheriger Gedanke"), "Conversation export includes full own transcript, no other chat")
+        AIConversationMutation.delete(newID, in: &chats)
+        try expect(chats.aiMessages.count == 1 && chats.aiMessages[0].id == oldID && chats.notes.contains { $0.id == savedID }, "Deleting a chat preserves other chats and saved diary")
+        try expect(AppHashtags.clean(["#familie", "Familie", "  Technik  "], known: ["Familie"]) == ["Familie", "Technik"], "Canonical hashtags reuse existing names")
+        var draft = GuidedCheckIn(kind: .morning)
+        let conversation = AIConversationMutation.create(in: &chats, checkIn: draft)
+        try expect(AIConversationMutation.create(in: &chats, checkIn: draft) == conversation && chats.guidedCheckIns.count == 1, "Guided chat reopens same saved draft")
+        let proposal = AIBuddyCheckInProposal(moodPercent: 80, batteryPercent: 0, stress: 2, sensoryLoad: 3, sleepHours: 7.5, summary: "Meine Schwester", givesEnergy: "Musik", takesEnergy: "Lärm", smallWin: "Pause gemacht", nextNeed: "Ruhe", therapyQuestion: "Grenzen", tasks: ["Tee trinken"], tags: ["familie"])
+        for step in 0..<7 {
+            draft.step = step
+            try expect(AICheckInGuide.apply(proposal, to: &draft, known: ["Familie"]) && draft.step == step + 1, "Guide persists standard question step \(step)")
+            _ = GuidedCheckInMutation.apply(draft, complete: false, to: &chats)
+            try expect(chats.weeklyTasks.isEmpty, "Guided draft never creates tasks before confirmation")
+        }
+        try expect(draft.moodPercent == 80 && draft.batteryPercent == 0 && draft.sleepHours == 7.5 && draft.therapyQuestion == "Grenzen" && draft.tags == ["Familie"], "Structured guide preserves zero, fields and canonical tags")
+        try expect(GuidedCheckInMutation.apply(draft, complete: true, to: &chats) && chats.weeklyTasks.count == 1, "Confirmed guided overview creates one normal task")
+        let completed = chats.guidedCheckIns[0]
+        var noEdit = completed
+        try expect(!AICheckInGuide.apply(proposal, to: &noEdit, known: []) && noEdit == completed, "AI cannot rewrite completed check-ins")
+        var invalidDraft = GuidedCheckIn()
+        try expect(!AICheckInGuide.apply(AIBuddyCheckInProposal(moodPercent: 101), to: &invalidDraft, known: []) && invalidDraft.step == 0, "Invalid structured values leave draft untouched")
+        let restoredChats = try dec.decode(AppData.self, from: enc.encode(chats))
+        try expect(restoredChats.aiConversations.map(\.id) == chats.aiConversations.map(\.id) && restoredChats.guidedCheckIns[0].tags == ["Familie"], "Schema 11 chat links and check-in tags round-trip")
+        try expect(AIBuddyContext.resolvedDays(question: "Heute vergleiche die letzten 14 Tage", settings: chats.aiSettings) == 14, "Explicit numeric period overrides incidental today")
+        let strict = AIBuddyAPI.schema["properties"] as! [String: Any]
+        let guideSchema = strict["checkIn"] as! [String: Any]
+        try expect(guideSchema["additionalProperties"] as? Bool == false && (guideSchema["required"] as! [String]).count == 13, "Structured check-in schema requires every nullable field")
         print("Passed \(count) duplicate, flexible recurrence, therapy discussion, alarm lifecycle, AI privacy/action and offline network checks.")
     }
 }

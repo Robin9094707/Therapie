@@ -29,7 +29,7 @@ enum ReadableBackup {
         return String(path.dropFirst(prefix.count))
     }
     static let labels: [String: String] = [
-        "aiSettings": "KI-Einstellungen", "aiMessages": "KI-Gespraeche", "therapyDiscussionAcknowledgedIDs": "Besprochene Gespraechspunkte",
+        "aiConversations": "KI-Chats", "hashtagCatalog": "Hashtags", "aiSettings": "KI-Einstellungen", "aiMessages": "KI-Gespraeche", "therapyDiscussionAcknowledgedIDs": "Besprochene Gespraechspunkte",
         "recurrence": "Therapie-Rhythmus", "extraAppointments": "Einzelne Zusatztermine", "additionalWeeklySlots": "Weitere Wochentermine", "unit": "Intervall-Einheit", "interval": "Intervall", "anchor": "Startdatum", "exactTime": "Absage gilt nur fuer diese Uhrzeit",
         "allowMultipleCheckInsPerSlot": "Zusaetzliche Check-ins pro Zeitfenster erlauben", "alarmShowsActualTitles": "Echte Routine-Titel in AlarmKit",
         "model": "KI-Modell", "transcriptionModel": "Transkriptionsmodell", "contextDays": "Standard-Kontext in Tagen", "automaticRange": "Zeitraum aus Frage erkennen", "includeJournal": "Tagebuch einbeziehen", "allowPhotoUploads": "Ausgewaehlte Foto-Uploads erlauben", "allowVoiceUploads": "Sprachnachrichten-Uploads erlauben", "contextStart": "Kontext ab", "contextEnd": "Kontext bis", "inputTokens": "Eingabetokens der letzten Antwort", "outputTokens": "Ausgabetokens der letzten Antwort", "appliedActionIDs": "Bereits gespeicherte Vorschlaege", "savedNoteID": "Gespeicherter Rueckblick", "reply": "KI-Antwort", "sections": "Abschnitte", "heading": "Ueberschrift", "actions": "Native App-Vorschlaege", "suggestedDays": "Vorgeschlagener Kontext in Tagen", "role": "Gesprächsrolle",

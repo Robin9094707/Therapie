@@ -7,7 +7,7 @@ struct TherapyHomeEntry: TimelineEntry {
     var manual = false
 }
 struct TherapyHomeProvider: AppIntentTimelineProvider {
-    func placeholder(in context: Context) -> TherapyHomeEntry { TherapyHomeEntry(date: .now, snapshot: .init()) }
+    func placeholder(in context: Context) -> TherapyHomeEntry { TherapyHomeEntry(date: .now, snapshot: preview()) }
     func snapshot(for configuration: TherapyWidgetOptions, in context: Context) async -> TherapyHomeEntry {
         TherapyHomeEntry(date: .now, snapshot: context.isPreview ? preview() : read(configuration), manual: configuration.source == .manual)
     }
@@ -23,10 +23,10 @@ struct TherapyHomeProvider: AppIntentTimelineProvider {
     }
     private func read(_ configuration: TherapyWidgetOptions) -> TherapyWidgetSnapshot {
         if let manual = configuration.snapshot(at: Date()) { return manual }
-        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: TherapyWidgetSnapshot.appGroup),
-              let raw = try? Data(contentsOf: container.appendingPathComponent(TherapyWidgetSnapshot.fileName)) else { return .init() }
+        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: TherapyWidgetSnapshot.appGroup) else { return TherapyWidgetSnapshot(cacheProblem: "Gemeinsamer App-Zugriff fehlt. App mit Widget-Berechtigung signieren oder Widget manuell einstellen.") }
+        guard let raw = try? Data(contentsOf: container.appendingPathComponent(TherapyWidgetSnapshot.fileName)) else { return TherapyWidgetSnapshot(cacheProblem: "App einmal öffnen, damit deine Übersicht bereitsteht.") }
         let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
-        var snapshot = (try? decoder.decode(TherapyWidgetSnapshot.self, from: raw)) ?? .init()
+        var snapshot = (try? decoder.decode(TherapyWidgetSnapshot.self, from: raw)) ?? TherapyWidgetSnapshot(cacheProblem: "Widget-Daten nicht lesbar. App öffnen und Übersicht aktualisieren.")
         if let filter = configuration.filter?.trimmingCharacters(in: .whitespacesAndNewlines), !filter.isEmpty { snapshot.reminders = snapshot.reminders.filter { $0.title.localizedCaseInsensitiveContains(filter) } }
         return snapshot
     }
@@ -95,7 +95,7 @@ struct TherapyHomeWidgetView: View {
             Label(category.title, systemImage: category.symbol).font(compact ? .caption.bold() : .subheadline.bold()).foregroundStyle(.indigo).lineLimit(1)
             if !entry.snapshot.configured {
                 Text("Widget einrichten").font(.headline)
-                if !compact { Text("Gedrückt halten → Widget bearbeiten. App-Daten benötigen gemeinsamen Zugriff; ein manueller Termin ist ebenfalls möglich.").font(.caption).foregroundStyle(.secondary) }
+                if !compact { Text(entry.snapshot.cacheProblem ?? "Gedrückt halten → Widget bearbeiten. Ein manueller Termin ist ebenfalls möglich.").font(.caption).foregroundStyle(.secondary) }
             } else {
                 switch category {
                 case .appointment: appointment
@@ -111,12 +111,12 @@ struct TherapyHomeWidgetView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .widgetURL(URL(string: entry.snapshot.configured ? category.route : "therapie://widgetsetup"))
-        .privacySensitive()
+
     }
     @ViewBuilder private var appointment: some View {
         if let date = entry.snapshot.appointment(after: entry.date) {
-            Text(date, format: .dateTime.weekday(.wide).day().month(.abbreviated)).font(compact ? .caption : .headline).lineLimit(2)
-            Text(date, style: .time).font(compact ? .caption.monospacedDigit() : .title2.monospacedDigit().bold())
+            Text(date, format: .dateTime.weekday(.wide).day().month(.abbreviated)).privacySensitive().font(compact ? .caption : .headline).lineLimit(2)
+            Text(date, style: .time).privacySensitive().font(compact ? .caption.monospacedDigit() : .title2.monospacedDigit().bold())
         } else { Text("Termin in der App prüfen").font(.caption).foregroundStyle(.secondary) }
     }
     @ViewBuilder private func reminders(kind: String) -> some View {
@@ -124,17 +124,17 @@ struct TherapyHomeWidgetView: View {
         let due = values.filter { $0.due <= entry.date }
         Text(due.isEmpty ? "Alles im Blick" : "\(due.count) noch offen").font(compact ? .caption.bold() : .title3.bold())
         if let first = due.first ?? values.first {
-            if compact { Text(first.title).font(.caption).lineLimit(1) }
+            if compact { Text(first.title).privacySensitive(entry.snapshot.showsPersonalTitles == true || entry.manual).font(.caption).lineLimit(1) }
             else {
                 Link(destination: URL(string: first.route)!) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(first.title).font(.subheadline.bold()).lineLimit(2)
+                        Text(first.title).privacySensitive(entry.snapshot.showsPersonalTitles == true || entry.manual).font(.subheadline.bold()).lineLimit(2)
                         Text(first.due, format: .dateTime.day().month(.abbreviated).hour().minute()).font(.caption).foregroundStyle(.secondary)
                     }
                 }
                 if family == .systemMedium {
                     ForEach(Array(values.dropFirst().prefix(2))) { value in
-                        Link(destination: URL(string: value.route)!) { Text(value.title).font(.caption).lineLimit(1) }
+                        Link(destination: URL(string: value.route)!) { Text(value.title).privacySensitive(entry.snapshot.showsPersonalTitles == true || entry.manual).font(.caption).lineLimit(1) }
                     }
                 }
             }
@@ -146,7 +146,7 @@ struct TherapyHomeWidgetView: View {
                 Text("Pause · \(Int(ceil(session.pausedRemaining / 60))) Min. übrig").font(compact ? .caption.bold() : .headline)
             } else {
                 Text(timerInterval: entry.date...max(entry.date, session.end), countsDown: true).font(compact ? .headline.monospacedDigit() : .title.monospacedDigit().bold())
-                if let phase = session.phase(at: entry.date) { Text(phase.title).font(.caption).lineLimit(2) }
+                if let phase = session.phase(at: entry.date) { Text(phase.title).privacySensitive(entry.snapshot.showsPersonalTitles == true).font(.caption).lineLimit(2) }
             }
         } else { Text("Keine Stunde aktiv").font(.headline); if !compact { Text("Therapiezeit in der App starten.").font(.caption).foregroundStyle(.secondary) } }
     }

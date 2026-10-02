@@ -42,6 +42,7 @@ struct GuidedCheckIn: Codable, Equatable, Identifiable {
     var moodPercent: Int?
     var energyPoints: [BatteryPoint]?
     var daySlotID: UUID?
+    var tags: [String]?
     var customTitle: String?
     var displayTitle: String { customTitle ?? kind.title }
 }
