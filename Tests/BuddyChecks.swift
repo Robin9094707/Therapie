@@ -184,6 +184,7 @@ final class BuddyMockProtocol: URLProtocol {
         let restoredChats = try dec.decode(AppData.self, from: enc.encode(chats))
         try expect(restoredChats.aiConversations.map(\.id) == chats.aiConversations.map(\.id) && restoredChats.guidedCheckIns[0].tags == ["Familie"], "Schema 11 chat links and check-in tags round-trip")
         try expect(AIBuddyContext.resolvedDays(question: "Heute vergleiche die letzten 14 Tage", settings: chats.aiSettings) == 14, "Explicit numeric period overrides incidental today")
+        try expect(AIBuddyContext.resolvedDays(question: "2 Wochen", settings: chats.aiSettings) == 14 && AIBuddyContext.resolvedDays(question: "2 Monate", settings: chats.aiSettings) == 60, "Numeric week/month scopes resolve to visible bounded days")
         let strict = AIBuddyAPI.schema["properties"] as! [String: Any]
         let guideSchema = strict["checkIn"] as! [String: Any]
         try expect(guideSchema["additionalProperties"] as? Bool == false && (guideSchema["required"] as! [String]).count == 13, "Structured check-in schema requires every nullable field")

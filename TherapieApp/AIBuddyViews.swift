@@ -154,8 +154,8 @@ struct AIBuddyChatContent: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 8) {
                 Label("Dein sichtbarer Datenzeitraum", systemImage: "calendar").font(.subheadline.bold())
-                let selection = Binding<Int>(get: { explicitDays ?? 0 }, set: { setDays($0 == 0 ? nil : $0); persistDays() })
-                Picker("Kontext", selection: selection) { Text("Aus Frage / Standard").tag(0); Text("Heute").tag(1); Text("7 Tage").tag(7); Text("30 Tage").tag(30); Text("90 Tage").tag(90) }
+                let selection = Binding<Int>(get: { explicitDays ?? chat?.contextDays ?? 0 }, set: { setDays($0 == 0 ? nil : $0); persistDays(); updateContext() })
+                Picker("Kontext", selection: selection) { Text("Aus Frage / Standard").tag(0); Text("Heute").tag(1); Text("7 Tage").tag(7); Text("30 Tage").tag(30); Text("90 Tage").tag(90); if let days = explicitDays ?? chat?.contextDays, ![1, 7, 30, 90].contains(days) { Text("\(days) Tage").tag(days) } }
                 Text(context.start.formatted(date: .abbreviated, time: .omitted) + " – " + context.end.formatted(date: .abbreviated, time: .omitted) + " · \(context.recordCount) Text-Einträge").font(.caption).foregroundStyle(.secondary)
                 if context.omittedCount > 0 { Text("\(context.omittedCount) Einträge werden wegen des Textlimits ausgelassen; neuere haben Vorrang.").font(.caption).foregroundStyle(.secondary) }
                 Text("Zusätzlich: aktuelle offene Aufgaben, fällige Routinen und offene Gesprächspunkte, auch ältere. Der Chat berücksichtigt die letzten 8 Nachrichten. Bilder nur nach deiner Auswahl.").font(.caption2).foregroundStyle(.secondary)
@@ -178,7 +178,7 @@ struct AIBuddyChatContent: View {
                             else { review = .init(messageID: message.id, action: action) }
                         } label: { Label(applied ? "Gespeichert · " + action.kind.label : action.kind.label + (action.title.isEmpty ? "" : ": " + AIBuddyText.plain(action.title)), systemImage: applied ? "checkmark.circle.fill" : action.kind.symbol).frame(maxWidth: .infinity, alignment: .leading) }.buttonStyle(.bordered).disabled(applied).accessibilityIdentifier("ai.action." + action.kind.rawValue)
                     }
-                    if let days = reply.suggestedDays { Text("Mehr Kontext? Vorschlag: \(days) Tage").font(.caption) }
+                    if let days = reply.suggestedDays { Button("Mehr Kontext? \(days) Tage für die nächste Nachricht") { setDays(days); persistDays(); updateContext() }.font(.caption) }
                     if message.id == messages.last?.id {
                         VStack(alignment: .leading) {
                             Text("Für die nächste Nachricht: \(explicitDays ?? chat?.contextDays ?? store.data.aiSettings.contextDays) Tage").font(.caption)

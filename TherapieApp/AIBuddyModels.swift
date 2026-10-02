@@ -109,9 +109,15 @@ struct AIBuddyContext {
     static func resolvedDays(question: String, settings: AIBuddySettings) -> Int {
         guard settings.automaticRange else { return max(1, min(90, settings.contextDays)) }
         let q = question.lowercased()
-        if let range = q.range(of: "\\b[0-9]{1,2}\\s+tage", options: .regularExpression), let number = Int(q[range].split(separator: " ")[0]) { return max(1, min(90, number)) }
+        if let range = q.range(of: "\\b[0-9]{1,2}\\s+(tage|wochen|monate)", options: .regularExpression) {
+            let matched = String(q[range])
+            if let number = Int(matched.prefix { $0.isNumber }) {
+                let multiplier = matched.contains("wochen") ? 7 : matched.contains("monate") ? 30 : 1
+                return max(1, min(90, number * multiplier))
+            }
+        }
         if q.contains("heute") || q.contains("tagesrückblick") { return 1 }
-        if q.contains("wochen") || q.contains("diese woche") { return 7 }
+        if q.contains("woche") { return 7 }
         if q.contains("monat") { return 30 }
         return max(1, min(90, settings.contextDays))
     }

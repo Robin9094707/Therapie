@@ -21,7 +21,7 @@ import UIKit
         else { var snapshot = store.data; chatID = snapshot.aiConversations.first?.id ?? AIConversationMutation.create(in: &snapshot); store.data = snapshot }
         guard let chat = store.data.aiConversations.first(where: { $0.id == chatID }) else { return false }
         let settings = store.data.aiSettings
-        let scopeInMessage = clean.range(of: "(?i)heute|tagesrückblick|wochen|monat|\\b[0-9]{1,2}\\s+tage", options: .regularExpression) != nil
+        let scopeInMessage = clean.range(of: "(?i)heute|tagesrückblick|woche|monat|\\b[0-9]{1,2}\\s+tage", options: .regularExpression) != nil
         let days = scopeInMessage && settings.automaticRange ? AIBuddyContext.resolvedDays(question: clean, settings: settings) : daysOverride ?? chat.contextDays ?? settings.contextDays
         var context = AIBuddyContext.make(data: store.data, days: days)
         let history = store.data.aiMessages.filter { $0.conversationID == chatID }
@@ -73,7 +73,7 @@ import UIKit
             }
             store.data = snapshot
             if let failure = store.lastSaveError { error = failure; return false }
-            if draft != nil && result.reply.checkIn == nil { error = "Die Antwort enthielt keine auswertbaren Check-in-Angaben. Deine Frage bleibt offen. Versuche es erneut oder setze normal fort." }
+            if draft != nil && result.reply.checkIn == nil { error = "Die Antwort enthielt keine auswertbaren Check-in-Angaben. Deine Frage bleibt offen. Versuche es erneut oder setze normal fort."; return false }
             return true
         } catch is CancellationError { return false }
         catch { self.error = error.localizedDescription; return false }
