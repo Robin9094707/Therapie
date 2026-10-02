@@ -21,8 +21,7 @@ import UIKit
         else { var snapshot = store.data; chatID = snapshot.aiConversations.first?.id ?? AIConversationMutation.create(in: &snapshot); store.data = snapshot }
         guard let chat = store.data.aiConversations.first(where: { $0.id == chatID }) else { return false }
         let settings = store.data.aiSettings
-        let scopeInMessage = clean.range(of: "(?i)heute|tagesrückblick|woche|monat|\\b[0-9]{1,2}\\s+tage", options: .regularExpression) != nil
-        let days = scopeInMessage && settings.automaticRange ? AIBuddyContext.resolvedDays(question: clean, settings: settings) : daysOverride ?? chat.contextDays ?? settings.contextDays
+        let days = AIBuddyContext.requestDays(question: clean, settings: settings, chosenDays: daysOverride ?? chat.contextDays)
         var context = AIBuddyContext.make(data: store.data, days: days)
         let history = store.data.aiMessages.filter { $0.conversationID == chatID }
         let draft = chat.checkInID.flatMap { id in store.data.guidedCheckIns.first { $0.id == id && $0.isDraft } }

@@ -124,17 +124,17 @@ struct TherapyHomeWidgetView: View {
         let due = values.filter { $0.due <= entry.date }
         Text(due.isEmpty ? "Alles im Blick" : "\(due.count) noch offen").font(compact ? .caption.bold() : .title3.bold())
         if let first = due.first ?? values.first {
-            if compact { Text(first.title).privacySensitive(entry.snapshot.showsPersonalTitles == true || entry.manual).font(.caption).lineLimit(1) }
+            if compact { Text(first.title).privacySensitive(entry.snapshot.showsPersonalTitles != false || entry.manual).font(.caption).lineLimit(1) }
             else {
                 Link(destination: URL(string: first.route)!) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(first.title).privacySensitive(entry.snapshot.showsPersonalTitles == true || entry.manual).font(.subheadline.bold()).lineLimit(2)
+                        Text(first.title).privacySensitive(entry.snapshot.showsPersonalTitles != false || entry.manual).font(.subheadline.bold()).lineLimit(2)
                         Text(first.due, format: .dateTime.day().month(.abbreviated).hour().minute()).font(.caption).foregroundStyle(.secondary)
                     }
                 }
                 if family == .systemMedium {
                     ForEach(Array(values.dropFirst().prefix(2))) { value in
-                        Link(destination: URL(string: value.route)!) { Text(value.title).privacySensitive(entry.snapshot.showsPersonalTitles == true || entry.manual).font(.caption).lineLimit(1) }
+                        Link(destination: URL(string: value.route)!) { Text(value.title).privacySensitive(entry.snapshot.showsPersonalTitles != false || entry.manual).font(.caption).lineLimit(1) }
                     }
                 }
             }
@@ -146,7 +146,7 @@ struct TherapyHomeWidgetView: View {
                 Text("Pause · \(Int(ceil(session.pausedRemaining / 60))) Min. übrig").font(compact ? .caption.bold() : .headline)
             } else {
                 Text(timerInterval: entry.date...max(entry.date, session.end), countsDown: true).font(compact ? .headline.monospacedDigit() : .title.monospacedDigit().bold())
-                if let phase = session.phase(at: entry.date) { Text(phase.title).privacySensitive(entry.snapshot.showsPersonalTitles == true).font(.caption).lineLimit(2) }
+                if let phase = session.phase(at: entry.date) { Text(phase.title).privacySensitive(entry.snapshot.showsPersonalTitles != false).font(.caption).lineLimit(2) }
             }
         } else { Text("Keine Stunde aktiv").font(.headline); if !compact { Text("Therapiezeit in der App starten.").font(.caption).foregroundStyle(.secondary) } }
     }

@@ -122,6 +122,11 @@ struct AIBuddyContext {
         if q.contains("monat") { return 30 }
         return max(1, min(90, settings.contextDays))
     }
+    static func requestDays(question: String, settings: AIBuddySettings, chosenDays: Int?) -> Int {
+        let explicit = question.range(of: "(?i)heute|tagesrückblick|woche|monat|\\b[0-9]{1,2}\\s+tage", options: .regularExpression) != nil
+        if explicit && settings.automaticRange { return resolvedDays(question: question, settings: settings) }
+        return max(1, min(90, chosenDays ?? settings.contextDays))
+    }
     static func make(data: AppData, days: Int, end: Date = Date(), calendar: Calendar = .current) -> AIBuddyContext {
         let days = max(1, min(90, days)), lastDay = calendar.startOfDay(for: end)
         let start = calendar.date(byAdding: .day, value: -(days - 1), to: lastDay)!

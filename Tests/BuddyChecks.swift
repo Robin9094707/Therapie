@@ -186,6 +186,9 @@ final class BuddyMockProtocol: URLProtocol {
         try expect(AIBuddyContext.resolvedDays(question: "Heute vergleiche die letzten 14 Tage", settings: chats.aiSettings) == 14, "Explicit numeric period overrides incidental today")
         try expect(AIBuddyContext.resolvedDays(question: "2 Wochen", settings: chats.aiSettings) == 14 && AIBuddyContext.resolvedDays(question: "2 Monate", settings: chats.aiSettings) == 60, "Numeric week/month scopes resolve to visible bounded days")
         try expect(!AIBuddyAction(kind: .task, title: "Aufgabe", text: "", weekdays: [], tags: ["Familie"]).valid, "Unsupported tag targets are rejected instead of silently losing hashtags")
+        try expect(AIBuddyContext.requestDays(question: "Heute", settings: chats.aiSettings, chosenDays: 30) == 1 && AIBuddyContext.requestDays(question: "Wie geht es mir?", settings: chats.aiSettings, chosenDays: 14) == 14, "Context preview and request share the same selection policy")
+        var manualScope = chats.aiSettings; manualScope.automaticRange = false
+        try expect(AIBuddyContext.requestDays(question: "Heute", settings: manualScope, chosenDays: 30) == 30, "Automatic text inference can be disabled")
         let strict = AIBuddyAPI.schema["properties"] as! [String: Any]
         let guideSchema = strict["checkIn"] as! [String: Any]
         try expect(guideSchema["additionalProperties"] as? Bool == false && (guideSchema["required"] as! [String]).count == 13, "Structured check-in schema requires every nullable field")

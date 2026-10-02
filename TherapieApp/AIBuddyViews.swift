@@ -132,6 +132,7 @@ struct AIBuddyChatContent: View {
             } message: { Text(chat?.savedNoteID == nil ? "Dein vollständiger Verlauf wird als bearbeitbarer Tagebucheintrag gespeichert." : "Der zuvor gespeicherte Tagebucheintrag wird mit dem vollständigen aktuellen Gespräch aktualisiert. Auch eigene Änderungen an diesem Eintrag werden dabei ersetzt.") }
             .alert("Chatverlauf leeren?", isPresented: $clearChat) { Button("Abbrechen", role: .cancel) {}; Button("Leeren", role: .destructive) { controller.cancel(); var snapshot = store.data; AIConversationMutation.delete(conversationID, in: &snapshot); store.data = snapshot } } message: { Text("Gespeicherte Tagebucheinträge bleiben erhalten. Rückgängig ist zehn Minuten lang in der geöffneten App möglich.") }
             .onAppear { controller.error = nil; updateContext() }
+            .onChange(of: text) { _, _ in updateContext(onlyIfRangeChanged: true) }
             .onDisappear { controller.cancel() }
             .onChange(of: store.data.aiSettings.enabled) { _, enabled in if !enabled { controller.cancel(); image = nil; photo = nil } }
     }
@@ -236,7 +237,11 @@ struct AIBuddyChatContent: View {
         guard let index = store.data.aiConversations.firstIndex(where: { $0.id == conversationID }) else { return }
         store.data.aiConversations[index].contextDays = explicitDays
     }
-    private func updateContext() { previewContext = AIBuddyContext.make(data: store.data, days: explicitDays ?? chat?.contextDays ?? store.data.aiSettings.contextDays) }
+    private func updateContext(onlyIfRangeChanged: Bool = false) {
+        let days = AIBuddyContext.requestDays(question: text, settings: store.data.aiSettings, chosenDays: explicitDays ?? chat?.contextDays)
+        if onlyIfRangeChanged, previewContext?.days == days { return }
+        previewContext = AIBuddyContext.make(data: store.data, days: days)
+    }
     private func startCheckIn() {
         let entry = GuidedCheckIn(kind: .free)
         // A separate linked conversation keeps the guided questions out of the current discussion.
