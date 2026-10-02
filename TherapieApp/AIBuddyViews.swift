@@ -104,6 +104,8 @@ struct AIBuddyChatContent: View {
                     }
                     if let error = controller.error { GlassCard { Text(error).font(.subheadline).foregroundStyle(.orange).textSelection(.enabled) } }
             }
+        }.onAppear {
+            if let id = messages.last?.id { DispatchQueue.main.async { proxy.scrollTo(id, anchor: .bottom) } }
         }.onChange(of: messages.count) { _, _ in
             if let id = messages.last?.id { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(id, anchor: .bottom) } }
             updateContext()
@@ -112,7 +114,7 @@ struct AIBuddyChatContent: View {
             .safeAreaInset(edge: .bottom) { if store.data.aiSettings.enabled && chat != nil { composer.padding(.horizontal, 12).padding(.vertical, 8).background(.regularMaterial) } }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) { if let draft { Button(draft.step == 7 ? "Übersicht" : "Normal", systemImage: "slider.horizontal.3") { controller.cancel(); composerFocused = false; manual = draft }.accessibilityIdentifier("ai.checkin.toolbar.manual") } }
-                ToolbarItem(placement: .topBarTrailing) { Menu { Button("KI-Einstellungen", systemImage: "slider.horizontal.3") { settings = true }; Button("Gespräch im Tagebuch speichern", systemImage: "book.closed") { confirmSaveChat = true }; Button("Gespräch löschen", systemImage: "trash", role: .destructive) { clearChat = true } } label: { Image(systemName: "ellipsis.circle") } } }
+                ToolbarItem(placement: .topBarTrailing) { Menu { Button("KI-Einstellungen", systemImage: "slider.horizontal.3") { settings = true }; Button("Gespräch im Tagebuch speichern", systemImage: "book.closed") { confirmSaveChat = true }; Button("Gespräch löschen", systemImage: "trash", role: .destructive) { clearChat = true } } label: { Image(systemName: "ellipsis.circle") }.accessibilityIdentifier("ai.chat.menu") } }
             .sheet(isPresented: $settings) { AIBuddySettingsView() }
             .sheet(item: $guided) { GuidedCheckInDestination(entry: $0) }
             .sheet(item: $manual) { GuidedCheckInView(entry: $0) }
@@ -302,7 +304,7 @@ struct AIBuddyActionReviewView: View {
                     if completion { Text("Bestätige nur, wenn du diese Aufgabe oder Routine wirklich erledigt hast.").font(.headline) }
                     TherapyInputField(title: "Überschrift", multiline: false, text: $action.title)
                     TherapyInputField(title: "Text", text: $action.text)
-                    HashtagEditor(tags: Binding(get: { action.tags ?? [] }, set: { action.tags = $0 }))
+                    if [.note, .checkIn].contains(action.kind) { HashtagEditor(tags: Binding(get: { action.tags ?? [] }, set: { action.tags = $0 })) }
                 }
                 if !completion {
                     Section("Datum & Einordnung") {

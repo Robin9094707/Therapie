@@ -309,6 +309,14 @@ final class TherapieUITests: XCTestCase {
         app.navigationBars.buttons.firstMatch.tap()
         let saved = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'ai.chat.'")).allElementsBoundByIndex
         XCTAssertEqual(saved.count, 2)
+        saved.last!.tap()
+        XCTAssertTrue(app.staticTexts["Ein zweiter Gedanke."].waitForExistence(timeout: 10), "Reopening preserves the whole conversation")
+        app.buttons["ai.chat.menu"].tap()
+        app.buttons["Gespräch im Tagebuch speichern"].tap()
+        XCTAssertTrue(app.alerts["Gespräch im Tagebuch speichern?"].waitForExistence(timeout: 10))
+        app.alerts.buttons["Speichern"].tap()
+        XCTAssertTrue(app.textFields["ai.composer"].waitForExistence(timeout: 10))
+        capture("Wieder geöffnetes Gespräch im Tagebuch gespeichert")
     }
 
     @MainActor
