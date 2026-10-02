@@ -119,7 +119,7 @@ enum InsightsAnalytics {
         return groups.values.compactMap { values in
             let sorted = values.sorted { $0.date > $1.date }
             guard let first = sorted.first, !first.title.isEmpty else { return nil }
-            return BatteryKeywordInsight(keyword: first.title, direction: first.direction, count: values.count, impact: values.reduce(0) { $0 + max(1, min(5, $1.impact)) }, points: sorted)
+            return BatteryKeywordInsight(keyword: first.title, direction: first.direction, count: values.count, impact: values.reduce(0) { $0 + ($1.hasConfirmedImpact ? max(1, min(5, $1.impact)) : 0) }, points: sorted)
         }.sorted { $0.impact == $1.impact ? $0.id < $1.id : $0.impact > $1.impact }
     }
     static func comparison(data: AppData, now: Date = Date()) -> MoodComparison? {

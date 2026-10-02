@@ -103,7 +103,7 @@ import UIKit
         guard let store, let index = store.data.aiMessages.firstIndex(where: { $0.id == message.id }), store.data.aiMessages[index].savedNoteID == nil, let reply = message.reply else { return }
         var snapshot = store.data
         let period = [message.contextStart, message.contextEnd].compactMap { $0?.formatted(date: .abbreviated, time: .omitted) }.joined(separator: " – ")
-        let note = TherapyNote(title: AIBuddyText.plain(reply.title.isEmpty ? "Mein KI-Rückblick" : reply.title), text: reply.journalText + "\n\nBerücksichtigter Zeitraum: " + period + "\nKI-gestützter Rückblick, bitte persönlich prüfen.", tags: ["Tagebuch", "KI-Rückblick"], sessionID: snapshot.currentSession?.id, category: "Therapietagebuch")
+        let note = TherapyNote(title: AIBuddyText.plain(reply.title.isEmpty ? "Mein KI-Rückblick" : reply.title), text: reply.journalText + "\n\nBerücksichtigter Zeitraum: " + period + "\nKI-gestützter Rückblick, bitte persönlich prüfen.", tags: BuddyInteraction.hashtags((reply.tags ?? []) + ["Tagebuch"], text: reply.journalText, known: AppHashtags.catalog(snapshot)), sessionID: snapshot.currentSession?.id, category: "Therapietagebuch")
         snapshot.notes.insert(note, at: 0); snapshot.aiMessages[index].savedNoteID = note.id
         store.data = snapshot
     }

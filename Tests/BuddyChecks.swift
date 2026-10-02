@@ -167,7 +167,7 @@ final class BuddyMockProtocol: URLProtocol {
         var draft = GuidedCheckIn(kind: .morning)
         let conversation = AIConversationMutation.create(in: &chats, checkIn: draft)
         try expect(AIConversationMutation.create(in: &chats, checkIn: draft) == conversation && chats.guidedCheckIns.count == 1, "Guided chat reopens same saved draft")
-        let proposal = AIBuddyCheckInProposal(moodPercent: 80, batteryPercent: 0, stress: 2, sensoryLoad: 3, sleepHours: 7.5, summary: "Meine Schwester", givesEnergy: "Musik", takesEnergy: "Lärm", smallWin: "Pause gemacht", nextNeed: "Ruhe", therapyQuestion: "Grenzen", tasks: ["Tee trinken"], tags: ["familie"])
+        let proposal = AIBuddyCheckInProposal(moodPercent: 80, batteryPercent: 0, stress: 2, sensoryLoad: 3, sleepHours: 7.5, summary: "Meine Schwester", givesEnergy: "Musik", takesEnergy: "Lärm", smallWin: "Pause gemacht", nextNeed: "Ruhe", therapyQuestion: "Grenzen", tasks: ["Tee trinken"], tags: ["familie"], energyPoints: [AIBuddyEnergyFactor(title: "Musik", direction: .gives, impact: 3), AIBuddyEnergyFactor(title: "Lärm", direction: .takes, impact: 4)])
         for step in 0..<7 {
             draft.step = step
             var answeredProposal = proposal; answeredProposal.advance = true; answeredProposal.answeredStep = step
@@ -237,11 +237,20 @@ final class BuddyMockProtocol: URLProtocol {
         try expect(aligned.message.contains("Stimmungswert") && !aligned.message.contains("geschlafen?"), "Visible follow-up belongs to the persisted module")
         _ = AICheckInGuide.apply(AIBuddyCheckInProposal(advance: false), to: &wrongModule, known: [], userText: "überspringen")
         try expect(wrongModule.step == 2, "Explicit skipping works even if the model refuses to advance")
+        var partialStress = GuidedCheckIn(step: 3)
+        _ = AICheckInGuide.apply(AIBuddyCheckInProposal(advance: true, answeredStep: 3, stress: 2), to: &partialStress, known: [], userText: "Stress 2")
+        try expect(partialStress.step == 3 && AICheckInGuide.alignedReply(reply, entry: partialStress).message.contains("Reize"), "A partial stress module asks for the next missing part instead of jumping")
+        _ = AICheckInGuide.apply(AIBuddyCheckInProposal(advance: true, answeredStep: 3, sensoryLoad: 3, sleepHours: 8), to: &partialStress, known: [], userText: "Reize 3, Schlaf 8 Stunden")
+        try expect(partialStress.step == 4, "Cumulative answers finish the whole stress, sensory and sleep module")
         var batteryDraft = GuidedCheckIn(step: 2)
         let factors = [AIBuddyEnergyFactor(title: "Mila", direction: .takes, impact: 5), AIBuddyEnergyFactor(title: "Geldprobleme", direction: .takes, impact: nil)]
         _ = AICheckInGuide.apply(AIBuddyCheckInProposal(advance: true, answeredStep: 2, batteryPercent: 40, energyPoints: factors), to: &batteryDraft, known: [], userText: "Mila nimmt sehr viel Akku, außerdem Geldprobleme")
         try expect(batteryDraft.step == 2 && batteryDraft.takesEnergy == "Mila, Geld" && batteryDraft.energyPoints?.count == 2, "Energy topics become separated short keywords and missing impact keeps module open")
         try expect(batteryDraft.energyPoints?[1].signedImpact == 0 && batteryDraft.energyPoints?[1].impactConfirmed == false, "Unknown impact contributes no invented battery change")
+        var pendingSnapshot = AppData(); pendingSnapshot.batteryPoints = batteryDraft.energyPoints ?? []
+        let energyInsights = InsightsAnalytics.keywords(data: pendingSnapshot, period: .rolling(days: 7))
+        try expect(energyInsights.first(where: { $0.keyword == "Geld" })?.impact == 0 && energyInsights.first(where: { $0.keyword == "Mila" })?.impact == 5, "Topic summaries count only known strengths")
+        try expect(AIEnergyKeywords.title("Mila zieht mir Akku") == "Mila", "Accidental model sentences cannot become keyword titles")
         let unresolved = AICheckInGuide.alignedReply(reply, entry: batteryDraft)
         try expect(unresolved.message.contains("„Geld“") && unresolved.message.contains("1 = wenig"), "Missing strength asks about the specific unresolved keyword")
         let geldID = batteryDraft.energyPoints![1].id

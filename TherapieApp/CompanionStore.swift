@@ -103,7 +103,9 @@ extension AppStore {
             if parts.count >= 2 {
                 switch parts[0] {
                 case "session": if let id = UUID(uuidString: parts[1]), data.currentSession?.id == id { notificationSession = true }
-                case "routine": notificationRoutineID = UUID(uuidString: parts[1])
+                case "routine":
+                    if let id = UUID(uuidString: parts[1]), data.routines.contains(where: { $0.id == id }) { notificationRoutineID = id }
+                    else { notificationRoutines = true }
                 case "task": if let id = UUID(uuidString: parts[1]), data.weeklyTasks.contains(where: { $0.id == id && !$0.completed }) { notificationTaskID = id }
                 case "checkin": if let kind = GuidedCheckInKind(rawValue: parts[1]) { openDailyCheckIn(kind, slotID: parts.count > 2 ? UUID(uuidString: parts[2]) : nil) }
                 default: break
@@ -111,7 +113,8 @@ extension AppStore {
             }
         }
         if let raw = UserDefaults.standard.string(forKey: "therapy.routine.open"), let id = UUID(uuidString: raw) {
-            notificationRoutineID = id
+            if data.routines.contains(where: { $0.id == id }) { notificationRoutineID = id }
+            else { notificationRoutines = true }
             UserDefaults.standard.removeObject(forKey: "therapy.routine.open")
         }
     }

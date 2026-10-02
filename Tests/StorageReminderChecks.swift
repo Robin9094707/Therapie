@@ -68,8 +68,9 @@ struct StorageReminderChecks {
         data.moodCheckIns = [MoodCheckIn(mood: 4, battery: 3, moodPercent: 76)]
         data.guidedCheckIns[0].moodPercent = 77
         let point = BatteryPoint(title: "Technik", direction: .gives, note: "Ruhe beim Tüfteln", checkInID: data.guidedCheckIns[0].id)
-        data.guidedCheckIns[0].energyPoints = [point]
-        data.batteryPoints = [point]
+        var unresolvedPoint = point; unresolvedPoint.impactConfirmed = false
+        data.guidedCheckIns[0].energyPoints = [unresolvedPoint]
+        data.batteryPoints = [unresolvedPoint]
         data.companionSettings.dayCheckInSlots = DailyCheckInSlot.defaults + [DailyCheckInSlot(name: "Mein Moment", startHour: 12, endHour: 13)]
         data.companionSettings.taskAlarmsEnabled = true
         data.companionSettings.energyReviewAlarm = true
@@ -104,6 +105,8 @@ struct StorageReminderChecks {
         try expect(try String(contentsOf: root.appendingPathComponent("UEBERSICHT.md"), encoding: .utf8).contains("Lesbare Notiz"), "Human-readable index contains titles")
         let energyFile = root.appendingPathComponent("Eintraege/weeklyEnergyReviews/" + data.weeklyEnergyReviews[0].id.uuidString + ".txt")
         try expect(try String(contentsOf: energyFile, encoding: .utf8).contains("Freunde"), "Weekly energy factors human-readable")
+        let pointFile = root.appendingPathComponent("Eintraege/batteryPoints/" + point.id.uuidString + ".txt")
+        try expect(try String(contentsOf: pointFile, encoding: .utf8).contains("Akku-Wirkung bestaetigt"), "Readable mirror includes the unresolved impact status")
         var removed = data; removed.notes = []
         try ReadableBackup.writeEntries(data: removed, root: root)
         try expect(!fm.fileExists(atPath: noteFile.path), "Deleted records removed from readable mirror")
@@ -119,6 +122,7 @@ struct StorageReminderChecks {
         try expect(fm.fileExists(atPath: prepared.directory.appendingPathComponent("UEBERSICHT.md").path), "ZIP contains readable overview")
         try expect(prepared.manifest.data.aiConversations[0].id == data.aiConversations[0].id && prepared.manifest.data.aiConversations[0].contextDays == 14 && prepared.manifest.data.guidedCheckIns[0].tags == ["Familie"], "Readable ZIP preserves linked chat, context and hashtags")
         try expect(prepared.manifest.data.dashboard == data.dashboard && prepared.manifest.data.archivePreferences == data.archivePreferences, "Readable ZIP restores personalization and archive settings")
+        try expect(prepared.manifest.data.batteryPoints[0].impactConfirmed == false && prepared.manifest.data.guidedCheckIns[0].energyPoints?[0].signedImpact == 0, "Readable ZIP preserves unresolved energy strength in both linked records")
         let reminderText = try String(contentsOf: prepared.directory.appendingPathComponent("Eintraege/Einstellungen/companionSettings.txt"), encoding: .utf8)
         try expect(reminderText.contains("Check-in-Erinnerungen"), "Reminder settings appear in readable mirror")
         let logText = try String(contentsOf: prepared.directory.appendingPathComponent("Eintraege/routineCompletions/" + data.routineCompletions[0].id.uuidString + ".txt"), encoding: .utf8)
