@@ -108,7 +108,7 @@ final class AppStore: ObservableObject {
                     selectedTab = 0; notificationAIHub = true
                 }
                 if ProcessInfo.processInfo.arguments.contains("--buddy-network-fixture") { data.aiSettings.enabled = true; selectedTab = 0; notificationAIHub = !ProcessInfo.processInfo.arguments.contains("--buddy-guided-fixture") }
-                if ProcessInfo.processInfo.arguments.contains("--buddy-guided-fixture") { data.aiSettings.enabled = true; pendingGuidedCheckIn = GuidedCheckIn(kind: .morning) }
+                if ProcessInfo.processInfo.arguments.contains("--buddy-guided-fixture") { data.aiSettings.enabled = true; pendingGuidedCheckIn = GuidedCheckIn(kind: ProcessInfo.processInfo.arguments.contains("--buddy-therapy-fixture") ? .therapy : .morning) }
                 if ProcessInfo.processInfo.arguments.contains("--show-checkin") { pendingGuidedCheckIn = GuidedCheckIn(kind: .morning, mood: 4, batteryPercent: 65, step: 2) }
                 if ProcessInfo.processInfo.arguments.contains("--show-checkin-tasks") { pendingGuidedCheckIn = GuidedCheckIn(kind: .morning, step: 5) }
                 if ProcessInfo.processInfo.arguments.contains("--show-saved-checkin") {

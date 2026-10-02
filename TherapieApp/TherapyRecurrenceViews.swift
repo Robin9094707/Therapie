@@ -2,24 +2,23 @@ import SwiftUI
 
 struct TherapyRecurrenceSection: View {
     @EnvironmentObject private var store: AppStore
-    @State private var editing = false
-    @State private var extra: TherapyExtraAppointment?
+    let editRhythm: () -> Void
+    let editExtra: (TherapyExtraAppointment) -> Void
     var body: some View {
         Section("Dein flexibler Rhythmus") {
             let rule = store.data.schedule.recurrence
             Text(rule.map { "Alle \($0.interval) \($0.unit.title.lowercased())" } ?? "Wöchentlich · bisheriger Plan")
             if let rule, rule.unit == .weeks { Text("\(1 + rule.additionalWeeklySlots.count) Termine in jeder aktiven Woche").font(.caption).foregroundStyle(.secondary) }
-            Button("Rhythmus & weitere Wochentermine", systemImage: "repeat") { editing = true }.accessibilityIdentifier("therapy.recurrence.edit")
-            Button("Einzelnen Zusatztermin hinzufügen", systemImage: "calendar.badge.plus") { extra = TherapyExtraAppointment() }
+            Button("Rhythmus & weitere Wochentermine", systemImage: "repeat", action: editRhythm).accessibilityIdentifier("therapy.recurrence.edit")
+            Button("Einzelnen Zusatztermin hinzufügen", systemImage: "calendar.badge.plus") { editExtra(TherapyExtraAppointment()) }.accessibilityIdentifier("therapy.extra.add")
             ForEach((store.data.schedule.extraAppointments ?? []).sorted { $0.date < $1.date }) { appointment in
                 HStack {
-                    Button { extra = appointment } label: { VStack(alignment: .leading) { Text(appointment.title); Text(appointment.date.formatted(date: .abbreviated, time: .shortened)).font(.caption) } }
+                    Button { editExtra(appointment) } label: { VStack(alignment: .leading) { Text(appointment.title); Text(appointment.date.formatted(date: .abbreviated, time: .shortened)).font(.caption) } }.accessibilityIdentifier("therapy.extra.edit." + appointment.id.uuidString)
                     Spacer()
                     Button(role: .destructive) { store.data.schedule.extraAppointments?.removeAll { $0.id == appointment.id } } label: { Image(systemName: "trash") }.buttonStyle(.borderless).accessibilityLabel("Zusatztermin entfernen")
                 }
             }
-        }.sheet(isPresented: $editing) { TherapyRecurrenceEditor(rule: store.data.schedule.recurrence ?? TherapyRecurrence()) }
-            .sheet(item: $extra) { TherapyExtraAppointmentEditor(appointment: $0) }
+        }
     }
 }
 struct TherapyRecurrenceEditor: View {

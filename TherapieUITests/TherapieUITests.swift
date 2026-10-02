@@ -211,6 +211,99 @@ final class TherapieUITests: XCTestCase {
         XCTAssertTrue(element.exists && element.isHittable, "Expected action is reachable: " + element.identifier)
     }
 
+    @MainActor
+    func testGuidedTherapyAndDailyProgressWithoutModelControlFields() throws {
+        for therapy in [true, false] {
+            let app = XCUIApplication()
+            app.launchArguments = ["--ui-testing", "--show-dashboard", "--buddy-network-fixture", "--buddy-guided-fixture", "--buddy-guide-missing-control-fixture"] + (therapy ? ["--buddy-therapy-fixture"] : [])
+            app.launch()
+            let input = app.textViews["ai.composer"].firstMatch
+            XCTAssertTrue(input.waitForExistence(timeout: 25))
+            XCTAssertTrue(app.buttons["ai.checkin.reply.0"].exists, "Answer buttons exist before the first model response")
+            input.tap(); input.typeText("Mila und Geld beschäftigen mich."); app.buttons["ai.send"].tap()
+            XCTAssertTrue(app.staticTexts["Check-in · 2 / 8"].waitForExistence(timeout: 10), "A thought must never get stuck waiting for missing model flags")
+            func choose(_ index: Int, step: Int, question: String) {
+                let button = app.buttons["ai.checkin.reply.\(index)"]
+                let enabled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true AND enabled == true"), object: button)
+                XCTAssertEqual(XCTWaiter.wait(for: [enabled], timeout: 10), .completed)
+                button.tap()
+                XCTAssertTrue(app.staticTexts["Check-in · \(step) / 8"].waitForExistence(timeout: 10))
+                XCTAssertTrue(app.staticTexts[question].firstMatch.waitForExistence(timeout: 10))
+            }
+            choose(1, step: 3, question: "Wie voll fühlt sich dein Gefühlsakku gerade an (0–100 %)?")
+            if therapy {
+                choose(1, step: 3, question: "Was lädt deinen Gefühlsakku auf und was kostet dich Energie?")
+                choose(0, step: 4, question: "Wie stark ist dein Stress gerade (1–5)?")
+                choose(1, step: 4, question: "Wie stark belasten dich Reize gerade (1–5)?")
+                choose(1, step: 4, question: "Wie viele Stunden hast du zuletzt geschlafen? Du darfst auch überspringen.")
+                choose(1, step: 5, question: "Was ist heute wichtig? Gab es einen kleinen Erfolg, wie zufrieden bist du (1–5) und was brauchst du jetzt?")
+                choose(0, step: 6, question: "Welche nächsten Schritte sollen in die Übersicht – oder möchtest du keine Aufgabe?")
+                choose(0, step: 7, question: "Welches Thema soll für deine nächste Therapie stehen – oder gibt es heute keines?")
+                choose(0, step: 8, question: "Deine Übersicht ist bereit. Prüfe sie und bestätige dort das Speichern.")
+                app.buttons["ai.checkin.pinned.overview"].tap()
+                XCTAssertTrue(app.staticTexts["checkin.step"].waitForExistence(timeout: 10))
+                XCTAssertEqual(app.staticTexts["checkin.step"].label, "8 / 8")
+                app.buttons["Check-in speichern"].firstMatch.tap()
+                XCTAssertTrue(input.waitForExistence(timeout: 10))
+                XCTAssertFalse(app.buttons["ai.checkin.pinned.overview"].exists, "Only confirmed review completes the draft")
+            } else {
+                XCTAssertTrue(app.buttons["ai.checkin.reply.1"].isHittable, "Daily check-ins use the same working native answer controls")
+            }
+            capture(therapy ? "Therapie-Check-in vollständig bestätigt ohne KI-Steuerfelder" : "Tages-Check-in schreitet mit Antwortknöpfen fort")
+            app.terminate()
+        }
+    }
+
+    @MainActor
+    func testTherapyAppointmentChildrenKeepParentOpen() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--show-dashboard"]
+        app.launch()
+        let manage = app.buttons["therapy.manage"]
+        XCTAssertTrue(manage.waitForExistence(timeout: 20)); manage.tap()
+        let parent = app.navigationBars["Deine Therapietermine"]
+        XCTAssertTrue(parent.waitForExistence(timeout: 10))
+        let rhythm = app.buttons["therapy.recurrence.edit"]
+        rhythm.tap()
+        XCTAssertTrue(app.navigationBars["Therapie-Rhythmus"].waitForExistence(timeout: 10))
+        let addWeekly = app.buttons["Weiteren Wochentermin ergänzen"]
+        reveal(addWeekly, in: app); addWeekly.tap()
+        app.buttons["Speichern"].firstMatch.tap()
+        XCTAssertTrue(parent.waitForExistence(timeout: 10), "Saving rhythm dismisses only the editor")
+        XCTAssertTrue(app.staticTexts["2 Termine in jeder aktiven Woche"].waitForExistence(timeout: 5))
+        app.buttons["therapy.extra.add"].tap()
+        XCTAssertTrue(app.navigationBars["Zusatztermin"].waitForExistence(timeout: 10))
+        let title = app.textFields["Bezeichnung"]
+        title.tap(); title.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (title.value as? String)?.count ?? 0) + "Mein Zusatztermin")
+        app.buttons["Speichern"].firstMatch.tap()
+        XCTAssertTrue(parent.waitForExistence(timeout: 10), "Saving an extra appointment preserves appointment management")
+        let extra = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "therapy.extra.edit.")).firstMatch
+        XCTAssertTrue(extra.waitForExistence(timeout: 5)); extra.tap()
+        XCTAssertTrue(app.navigationBars["Zusatztermin"].waitForExistence(timeout: 10))
+        app.buttons["Abbrechen"].firstMatch.tap()
+        XCTAssertTrue(parent.waitForExistence(timeout: 10))
+        let cancel = app.buttons["therapy.cancel"].firstMatch
+        reveal(cancel, in: app); cancel.tap()
+        XCTAssertTrue(app.navigationBars["Termin absagen"].waitForExistence(timeout: 10))
+        app.buttons["Abbrechen"].firstMatch.tap()
+        XCTAssertTrue(parent.waitForExistence(timeout: 10))
+        cancel.tap()
+        XCTAssertTrue(app.navigationBars["Termin absagen"].waitForExistence(timeout: 10))
+        app.buttons["Speichern"].firstMatch.tap()
+        XCTAssertTrue(parent.waitForExistence(timeout: 10))
+        let restore = app.buttons["therapy.restore"].firstMatch
+        reveal(restore, in: app); restore.tap()
+        XCTAssertTrue(parent.exists)
+        for _ in 0..<8 where !rhythm.isHittable { app.swipeDown() }
+        rhythm.tap()
+        XCTAssertTrue(app.navigationBars["Therapie-Rhythmus"].waitForExistence(timeout: 10))
+        app.buttons["Abbrechen"].firstMatch.tap()
+        XCTAssertTrue(parent.waitForExistence(timeout: 10), "Repeated nested navigation never returns to the home screen")
+        capture("Rhythmus, Zusatztermin und Absage erhalten die Terminverwaltung")
+        app.buttons["therapy.manage.close"].tap()
+        XCTAssertTrue(manage.waitForExistence(timeout: 10))
+    }
+
     private func waitForViewport(_ element: XCUIElement, width: Int, height: Int) -> Bool {
         let predicate = NSPredicate(format: "label == %@", "\(width)x\(height)")
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)

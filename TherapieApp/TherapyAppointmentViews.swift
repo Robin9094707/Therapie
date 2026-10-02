@@ -2,7 +2,6 @@ import SwiftUI
 
 struct TherapyAppointmentCard: View {
     @EnvironmentObject private var store: AppStore
-    @State private var manage = false
     var body: some View {
         SwiftUI.TimelineView(.periodic(from: .now, by: 30)) { context in
             GlassCard(emphasized: true) {
@@ -21,11 +20,11 @@ struct TherapyAppointmentCard: View {
                     if let vacation = TherapyDateHelper.vacation(schedule: store.data.schedule, at: context.date) {
                         Label("Therapiepause bis " + vacation.end.addingTimeInterval(-1).formatted(date: .abbreviated, time: .omitted), systemImage: "sun.max.fill").font(.subheadline).foregroundStyle(.teal)
                     }
-                    Button("Termine, Absagen & Urlaub", systemImage: "calendar.badge.gearshape") { manage = true }
+                    Button("Termine, Absagen & Urlaub", systemImage: "calendar.badge.gearshape") { store.notificationTherapy = true }
                         .buttonStyle(.bordered).accessibilityIdentifier("therapy.manage")
                 }
             }
-        }.sheet(isPresented: $manage) { TherapyAppointmentsView() }
+        }
     }
 }
 
@@ -64,8 +63,8 @@ struct TodayOverviewCard: View {
 }
 
 private enum AppointmentDestination: Identifiable {
-    case cancel(Date), vacation
-    var id: String { switch self { case .cancel(let date): "cancel.\(date.timeIntervalSince1970)"; case .vacation: "vacation" } }
+    case cancel(Date), vacation, recurrence(TherapyRecurrence), extra(TherapyExtraAppointment)
+    var id: String { switch self { case .cancel(let date): "cancel.\(date.timeIntervalSince1970)"; case .vacation: "vacation"; case .recurrence: "recurrence"; case .extra(let appointment): "extra." + appointment.id.uuidString } }
 }
 struct TherapyAppointmentsView: View {
     @EnvironmentObject private var store: AppStore
@@ -83,7 +82,7 @@ struct TherapyAppointmentsView: View {
                     }), displayedComponents: .hourAndMinute)
                     Stepper("Dauer: \(store.data.schedule.durationMinutes) Minuten", value: $store.data.schedule.durationMinutes, in: 5...240, step: 5)
                 }
-                TherapyRecurrenceSection()
+                TherapyRecurrenceSection(editRhythm: { destination = .recurrence(store.data.schedule.recurrence ?? TherapyRecurrence()) }, editExtra: { destination = .extra($0) })
                 Section {
                     ForEach(TherapyDateHelper.occurrences(schedule: store.data.schedule, count: 8, includeExcluded: true), id: \.self) { date in appointment(date) }
                 } header: { Text("Kommende Wochen") } footer: { Text("Neue Absagen betreffen den ausgewählten Termin. Dein Therapieplan bleibt erhalten.") }
@@ -132,8 +131,15 @@ struct TherapyAppointmentsView: View {
             }.buttonStyle(.borderless).navigationTitle("Deine Therapietermine").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fertig") { dismiss() }.accessibilityIdentifier("therapy.manage.close") } }
                 .safeAreaInset(edge: .bottom) { WellnessSaveErrorView() }
-                .sheet(item: $destination) { route in switch route { case .cancel(let date): TherapyCancellationEditor(date: date); case .vacation: TherapyVacationEditor() } }
         }.accessibilityIdentifier("therapy.appointments")
+            .sheet(item: $destination) { route in
+                switch route {
+                case .cancel(let date): TherapyCancellationEditor(date: date)
+                case .vacation: TherapyVacationEditor()
+                case .recurrence(let rule): TherapyRecurrenceEditor(rule: rule)
+                case .extra(let appointment): TherapyExtraAppointmentEditor(appointment: appointment)
+                }
+            }
     }
     @ViewBuilder private func appointment(_ date: Date) -> some View {
         VStack(alignment: .leading, spacing: 8) {

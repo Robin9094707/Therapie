@@ -278,7 +278,7 @@ struct AIBuddyChatContent: View {
                     if let days = reply.suggestedDays { Button("Mehr Kontext? \(days) Tage für die nächste Nachricht") { setDays(days); persistDays(); updateContext() }.font(.caption) }
                     if message.id == messages.last?.id {
                         if draft?.step == 7 { Button("Check-in-Übersicht prüfen", systemImage: "checkmark.rectangle") { showOverview() }.buttonStyle(.borderedProminent).accessibilityIdentifier("ai.checkin.overview") }
-                        if !(reply.quickReplies ?? []).isEmpty {
+                        if draft == nil && !(reply.quickReplies ?? []).isEmpty {
                             ScrollView(.horizontal, showsIndicators: false) { HStack { ForEach(reply.quickReplies ?? []) { suggestion in prompt(suggestion.title, question: suggestion.text, days: nil) } } }
                         }
                         if let note = chat?.noteContext, let onNoteProposal {
@@ -409,10 +409,17 @@ struct AIBuddyChatContent: View {
         VStack(alignment: .leading, spacing: 7) {
             HStack { Label("Check-in · \(min(8, entry.step + 1)) / 8", systemImage: "sparkles").font(.caption.bold()); Spacer(); Button("Übersicht") { showOverview() }.font(.caption.bold()).disabled(voiceActive).accessibilityIdentifier("ai.checkin.pinned.overview") }
             ProgressView(value: Double(min(8, entry.step + 1)), total: 8).tint(Color.accentColor).accessibilityIdentifier("ai.checkin.pinned.progress")
-            Text(AICheckInGuide.questions[max(0, min(7, entry.step))]).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+            Text(AICheckInGuide.question(for: entry)).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+            if entry.step < 7 {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack { ForEach(Array(AICheckInGuide.quickReplies(for: entry).enumerated()), id: \.element.id) { index, reply in
+                        Button(reply.title) { send(questionOverride: reply.text) }.accessibilityIdentifier("ai.checkin.reply.\(index)")
+                    } }
+                }.font(.caption).buttonStyle(.bordered).disabled(voiceActive || controller.busy || sending)
+            }
             HStack {
                 Button(entry.step == 7 ? "Übersicht prüfen & abschließen" : "Normal fortsetzen", systemImage: "slider.horizontal.3") { controller.cancel(); inputHandle.finishEditing(); route = .manual(entry) }.accessibilityIdentifier("ai.checkin.manual")
-                if entry.step < 7 { Button("Überspringen") { controller.cancel(); var snapshot = store.data; var next = entry; next.step += 1; _ = GuidedCheckInMutation.apply(next, complete: false, to: &snapshot); store.data = snapshot } }
+                if entry.step < 7 { Button("Überspringen") { controller.cancel(); inputHandle.finishEditing(); var snapshot = store.data; var next = entry; next.step += 1; _ = GuidedCheckInMutation.apply(next, complete: false, to: &snapshot); store.data = snapshot }.accessibilityIdentifier("ai.checkin.skip") }
             }.font(.caption).buttonStyle(.bordered).disabled(voiceActive)
         }
     }

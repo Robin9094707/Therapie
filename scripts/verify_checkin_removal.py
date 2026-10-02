@@ -56,9 +56,9 @@ if os.environ.get('BUDDY_SMOKE') == '1':
 if os.environ.get('BUGFIX_SMOKE') == '1':
     command = [part for part in command if not part.startswith('-only-testing:')]
     command[command.index('CODE_SIGNING_ALLOWED=NO'):command.index('CODE_SIGNING_ALLOWED=NO')] = [
-        '-only-testing:TherapieUITests/TherapieUITests/testTodayRoutineCompletionCancelAndConfirm',
-        '-only-testing:TherapieUITests/TherapieUITests/testGuidedAIKeepsDraftWhenSwitchingToNormal']
-print('Testing chat send and nested menus' if os.environ.get('BUDDY_SMOKE') == '1' else 'Testing the full native UI regressions', 'on', phone['name'], flush=True)
+        '-only-testing:TherapieUITests/TherapieUITests/testTherapyAppointmentChildrenKeepParentOpen',
+        '-only-testing:TherapieUITests/TherapieUITests/testGuidedTherapyAndDailyProgressWithoutModelControlFields']
+print('Testing guided answer buttons and appointment child navigation' if os.environ.get('BUGFIX_SMOKE') == '1' else 'Testing chat send and nested menus' if os.environ.get('BUDDY_SMOKE') == '1' else 'Testing the full native UI regressions', 'on', phone['name'], flush=True)
 with (output / 'test.log').open('w') as log:
     process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
     try:
@@ -87,4 +87,4 @@ except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
 if code:
     print((output / 'test.log').read_text()[-16000:], flush=True)
     raise SystemExit(1)
-print('Focused chat Send and parent-preserving nested-menu tests passed.' if os.environ.get('BUDDY_SMOKE') == '1' else 'Full native UI regressions passed.', flush=True)
+print('Focused guided answer and appointment navigation tests passed.' if os.environ.get('BUGFIX_SMOKE') == '1' else 'Focused chat Send and parent-preserving nested-menu tests passed.' if os.environ.get('BUDDY_SMOKE') == '1' else 'Full native UI regressions passed.', flush=True)

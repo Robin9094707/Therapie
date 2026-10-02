@@ -359,6 +359,58 @@ enum AIEnergyKeywords {
     }
 }
 enum AICheckInGuide {
+    static func wantsSkip(_ text: String) -> Bool {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().range(of: "^(?:(?:bitte|ich möchte(?: bitte)?|ich will|lass uns) )?(?:(?:diesen schritt|die frage|diese frage|das modul) )?(?:überspringen|weiter|skip)[.! ]*$", options: .regularExpression) != nil
+    }
+    static func isDirectAnswer(_ text: String) -> Bool {
+        let value = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !value.isEmpty, !value.contains("?"), !wantsSkip(value), !BuddyInteraction.wantsOverview(value) else { return false }
+        return value.range(of: "^(was|wie|warum|weshalb|wieso|wo|wann|wer|welche|kannst du|könntest du|können wir|kann ich|soll ich|erklär|erkläre|hilf|zeig|zeige|bitte (erklär|hilf|zeig))\\b", options: .regularExpression) == nil
+    }
+    private static func number(_ text: String, labels: [String], maximum: Int) -> Double? {
+        let label = labels.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
+        let prefix = label.isEmpty ? "" : "(?:(?:" + label + ")\\s*(?:ist|liegt bei|:)?\\s*)?"
+        let pattern = "^" + prefix + "([0-9]+(?:[.,][0-9]+)?)(?:\\s*(?:%|von\\s*\(maximum)|/\\s*\(maximum)|stunden))?[.! ]*$"
+        let value = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() as NSString
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive), let match = regex.firstMatch(in: value as String, range: NSRange(location: 0, length: value.length)), let number = Double(value.substring(with: match.range(at: 1)).replacingOccurrences(of: ",", with: ".")), (0...Double(maximum)).contains(number) else { return nil }
+        return number
+    }
+    static func quickReplies(for entry: GuidedCheckIn) -> [BuddyQuickReply] {
+        func choices(_ label: String, values: [Int], scale: Int) -> [BuddyQuickReply] {
+            values.map { BuddyQuickReply(title: "\($0)\(scale == 100 ? " %" : " / \(scale)")", text: "\(label): \($0) von \(scale)") }
+        }
+        let skip = BuddyQuickReply(title: "Überspringen", text: "Diesen Schritt überspringen.")
+        switch entry.step {
+        case 0: return [BuddyQuickReply(title: "Erst ankommen", text: "Ich möchte erst einmal ankommen."), BuddyQuickReply(title: "Keine Gedanken", text: "Heute möchte ich keinen Gedanken festhalten."), skip]
+        case 1: return choices("Meine Stimmung", values: [25, 50, 75], scale: 100)
+        case 2:
+            if let point = (entry.energyPoints ?? []).first(where: { !$0.hasConfirmedImpact }) { return choices(point.title, values: [1, 3, 5], scale: 5) }
+            if entry.batteryPercent == nil { return choices("Mein Akku", values: [25, 50, 75], scale: 100) }
+            return [BuddyQuickReply(title: "Keine weiteren Punkte", text: "Keine weiteren Akku-Punkte."), BuddyQuickReply(title: "Punkte finden", text: "Hilf mir, meine Akku-Geber und Akku-Nehmer zu finden."), skip]
+        case 3:
+            if entry.stress == nil { return choices("Mein Stress", values: [1, 3, 5], scale: 5) }
+            if entry.sensoryLoad == nil { return choices("Meine Reizbelastung", values: [1, 3, 5], scale: 5) }
+            return [6, 7, 8].map { BuddyQuickReply(title: "\($0) Stunden", text: "Mein Schlaf: \($0) Stunden") }
+        case 4: return [BuddyQuickReply(title: "Ruhe", text: "Ich brauche jetzt Ruhe."), BuddyQuickReply(title: "Kein kleiner Erfolg", text: "Heute keinen kleinen Erfolg."), skip]
+        case 5: return [BuddyQuickReply(title: "Keine Aufgaben", text: "Keine Aufgaben."), BuddyQuickReply(title: "Schritt finden", text: "Hilf mir, einen kleinen nächsten Schritt zu finden."), skip]
+        case 6: return [BuddyQuickReply(title: "Kein Thema", text: "Heute kein Therapiethema."), BuddyQuickReply(title: "Thema finden", text: "Hilf mir, ein Therapiethema zu finden."), skip]
+        default: return []
+        }
+    }
+    static func question(for entry: GuidedCheckIn) -> String {
+        let prompts = ["Welchen Gedanken möchtest du zum Ankommen festhalten?", "Welcher Stimmungswert passt gerade zu dir (0–100)?", "Was lädt deinen Gefühlsakku auf und was kostet dich Energie?", "Möchtest du Stress, Reizbelastung oder Schlaf für heute festhalten?", questions[4], "Welche nächsten Schritte sollen in die Übersicht – oder möchtest du keine Aufgabe?", "Welches Thema soll für deine nächste Therapie stehen – oder gibt es heute keines?", "Deine Übersicht ist bereit. Prüfe sie und bestätige dort das Speichern."]
+        var question = prompts[max(0, min(7, entry.step))]
+        if entry.step == 2, let point = (entry.energyPoints ?? []).first(where: { !$0.hasConfirmedImpact }) {
+            question = "Wie stark \(point.direction == .takes ? "kostet" : "gibt") dir „\(point.title)“ Akku: 1 = wenig bis 5 = sehr stark?"
+        } else if entry.step == 2 && entry.batteryPercent == nil {
+            question = "Wie voll fühlt sich dein Gefühlsakku gerade an (0–100 %)?"
+        } else if entry.step == 3 {
+            if entry.stress == nil { question = "Wie stark ist dein Stress gerade (1–5)?" }
+            else if entry.sensoryLoad == nil { question = "Wie stark belasten dich Reize gerade (1–5)?" }
+            else if entry.sleepHours == nil { question = "Wie viele Stunden hast du zuletzt geschlafen? Du darfst auch überspringen." }
+        }
+        return question
+    }
     static func alignedReply(_ reply: AIBuddyReply, entry: GuidedCheckIn) -> AIBuddyReply {
         var result = reply
         // The locally persisted module owns the next question, including side conversations.
@@ -374,19 +426,8 @@ enum AICheckInGuide {
             let heading = withoutQuestions(section.heading)
             return AIBuddySection(heading: heading.isEmpty ? "Zum Gespräch" : heading, text: text)
         }
-        let prompts = ["Welchen Gedanken möchtest du zum Ankommen festhalten?", "Welcher Stimmungswert passt gerade zu dir (0–100)?", "Was lädt deinen Gefühlsakku auf und was kostet dich Energie?", "Möchtest du Stress, Reizbelastung oder Schlaf für heute festhalten?", questions[4], "Welche nächsten Schritte sollen in die Übersicht – oder möchtest du keine Aufgabe?", "Welches Thema soll für deine nächste Therapie stehen – oder gibt es heute keines?", "Deine Übersicht ist bereit. Prüfe sie und bestätige dort das Speichern."]
-        var question = prompts[max(0, min(7, entry.step))]
-        if entry.step == 2, let point = (entry.energyPoints ?? []).first(where: { !$0.hasConfirmedImpact }) {
-            question = "Wie stark \(point.direction == .takes ? "kostet" : "gibt") dir „\(point.title)“ Akku: 1 = wenig bis 5 = sehr stark?"
-        } else if entry.step == 2 && entry.batteryPercent == nil {
-            question = "Wie voll fühlt sich dein Gefühlsakku gerade an (0–100 %)?"
-        } else if entry.step == 3 {
-            if entry.stress == nil { question = "Wie stark ist dein Stress gerade (1–5)?" }
-            else if entry.sensoryLoad == nil { question = "Wie stark belasten dich Reize gerade (1–5)?" }
-            else if entry.sleepHours == nil { question = "Wie viele Stunden hast du zuletzt geschlafen? Du darfst auch überspringen." }
-        }
-        result.message = (acknowledgment.isEmpty ? "" : acknowledgment + "\n\n") + question
-        result.quickReplies = entry.step == 7 ? [] : nil
+        result.message = (acknowledgment.isEmpty ? "" : acknowledgment + "\n\n") + question(for: entry)
+        result.quickReplies = quickReplies(for: entry)
         // Energy belongs to this draft, not a second independently saved copy.
         result.actions.removeAll { [.energy, .battery, .mood, .task, .checkIn, .guidedCheckIn].contains($0.kind) }
         return result
@@ -405,7 +446,7 @@ enum AICheckInGuide {
         let step = max(0, min(7, entry.step))
         var result = "\nKI-GEFÜHRTER CHECK-IN. Aktuelle Standardfrage: " + questions[step]
         result += "\nDeute ausschließlich Angaben aus der aktuellen Nutzerantwort als Daten. Auch ausdrücklich genannte Angaben zu späteren Fragen dürfen übernommen werden. checkIn enthält nur belegte Angaben, sonst null. Kein Ergänzen aus älteren Einträgen. Stimmung vorsichtig vorschlagen, immer überprüfbar. tasks nur explizite gewünschte Schritte, tags bekannte Hashtags bevorzugen. Alle Fragen sind freiwillig; 'überspringen' ergibt null. Keine actions für separate Kopien dieses Check-ins."
-        result += "\nVERBINDLICHER ABLAUF: Schritt \(step + 1) von 8. answeredStep ist ausschließlich \(step < 7 ? String(step) : "null"), wenn die aktuelle Frage beantwortet ist, sonst null. In der Übersicht ist answeredStep immer null und advance=false. Bei Rückfragen, Themenwechsel, Unklarheit oder weiterem Gespräch advance=false und answeredStep=null. Beantworte die Zwischenfrage kurz, kehre zum AKTUELLEN Modul zurück; stelle niemals eine Frage aus einem späteren Modul, solange das aktuelle nicht abgeschlossen ist. Nur mit belegter Antwort auf das aktuelle Modul oder ausdrücklichem Überspringen advance=true; dann genau einen Schritt weiter. Angaben zu späteren Modulen speichern, aber damit nicht den aktuellen Schritt beenden. Bei advance=true folgt: " + questions[min(7, step + 1)]
+        result += "\nEine klare Antwort auf Ankommen wird immer in summary übernommen. Auch eine kurze Antwort zählt; verlange keine Wiederholung. Die App bestimmt den nächsten Schritt anhand belegter Antworten und Vollständigkeit, die Steuerfelder sind Hinweise.\nVERBINDLICHER ABLAUF: Schritt \(step + 1) von 8. answeredStep ist ausschließlich \(step < 7 ? String(step) : "null"), wenn die aktuelle Frage beantwortet ist, sonst null. In der Übersicht ist answeredStep immer null und advance=false. Bei Rückfragen, Themenwechsel, Unklarheit oder weiterem Gespräch advance=false und answeredStep=null. Beantworte die Zwischenfrage kurz, kehre zum AKTUELLEN Modul zurück; stelle niemals eine Frage aus einem späteren Modul, solange das aktuelle nicht abgeschlossen ist. Nur mit belegter Antwort auf das aktuelle Modul oder ausdrücklichem Überspringen advance=true; dann genau einen Schritt weiter. Angaben zu späteren Modulen speichern, aber damit nicht den aktuellen Schritt beenden. Bei advance=true folgt: " + questions[min(7, step + 1)]
         result += "\nDie Standardfrage ist angeheftet. Stelle nur eine passende persönliche Frage zum zulässigen Modul. finish=true nur bei ausdrücklichem Wunsch nach Übersicht/Speichern oder nach Abschluss von Schritt 7 (Therapiefrage). Am Ende zur Übersicht einladen, niemals behaupten gespeichert zu haben. energyPoints: alle ausdrücklich genannten Akku-Geber und -Nehmer einzeln, jeweils ein kurzes Stichwort, bevorzugt EIN Wort oder Personenname. Beispiel 'Mila zieht mir Akku, außerdem Geldprobleme' => takes: Mila und Geld. Keine ganzen Sätze als Titel. impact 1–5 nur aus selbst genannter Stärke (z.B. sehr stark=5, wenig=1), sonst null. Frage dann konkret nach der Stärke des einzelnen Punktes; erfinde keine Zahl. Auf eine Stärke-Rückantwort den vorhandenen Punkt per Titel/Richtung aktualisieren, keine Kopie. givesEnergy/takesEnergy ebenfalls nur getrennte Stichwörter. Hashtags enthalten konkrete Namen und Themen aus dem Gespräch, z.B. Mila und Geld, keine generischen KI-Begleitung-Tags."
         result += "\nMehrteilige Module vollständig begleiten: Akkuwert UND Geber/Nehmer samt Stärke; Stress UND Reizbelastung UND Schlaf; anschließend Erfolg, Zufriedenheit und Bedürfnis. Fehlende Teile einzeln nachfragen, nicht nach der ersten Teilantwort sofort weitergehen. Alle Teile sind freiwillig: bei gewünschtem Überspringen darf der Nutzer den Rest des Moduls auslassen. energyPoints=null, solange keine Akku-Themen genannt wurden; [] ausschließlich bei ausdrücklich keinen Gebern/Nehmern. Niemals 'keine' aus Schweigen ableiten."
         if let encoded = try? JSONEncoder().encode(entry), let text = String(data: encoded, encoding: .utf8) { result += "\nAKTUELLER ENTWURF: " + String(text.prefix(6000)) }
@@ -413,6 +454,36 @@ enum AICheckInGuide {
     }
     static func apply(_ proposal: AIBuddyCheckInProposal, to entry: inout GuidedCheckIn, known: [String], userText: String? = nil) -> Bool {
         guard entry.isDraft, proposal.valid else { return false }
+        var proposal = proposal
+        let directAnswer = userText.map(isDirectAnswer) == true
+        if let text = userText, directAnswer {
+            // Explicit local answers must work even when the model omits its control fields.
+            func integer(labels: [String], maximum: Int) -> Int? {
+                guard let value = number(text, labels: labels, maximum: maximum), value.rounded() == value else { return nil }
+                return Int(value)
+            }
+            switch entry.step {
+            case 0: if (proposal.summary ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { proposal.summary = entry.summary.isEmpty ? text : entry.summary }
+            case 1: if proposal.moodPercent == nil { proposal.moodPercent = integer(labels: ["meine stimmung", "stimmung", "ich bin bei", "ich liege bei"], maximum: 100) }
+            case 2:
+                if let point = (entry.energyPoints ?? []).first(where: { !$0.hasConfirmedImpact }), let value = integer(labels: [point.title.lowercased()], maximum: 5), value >= 1 {
+                    var factors = proposal.energyPoints ?? []
+                    factors.removeAll { AppHashtags.key($0.title) == AppHashtags.key(point.title) && $0.direction == point.direction }
+                    factors.append(AIBuddyEnergyFactor(title: point.title, direction: point.direction, impact: value)); proposal.energyPoints = factors
+                } else if entry.batteryPercent == nil && proposal.batteryPercent == nil { proposal.batteryPercent = integer(labels: ["mein akku", "akku"], maximum: 100) }
+                if text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines).range(of: "^(keine (weiteren )?akku-punkte|keine geber und nehmer)[.! ]*$", options: .regularExpression) != nil { proposal.energyPoints = proposal.energyPoints ?? [] }
+            case 3:
+                if entry.stress == nil && proposal.stress == nil { proposal.stress = integer(labels: ["mein stress", "stress"], maximum: 5).flatMap { $0 >= 1 ? $0 : nil } }
+                else if entry.sensoryLoad == nil && proposal.sensoryLoad == nil { proposal.sensoryLoad = integer(labels: ["meine reizbelastung", "reizbelastung", "reize"], maximum: 5).flatMap { $0 >= 1 ? $0 : nil } }
+                else if entry.sleepHours == nil && proposal.sleepHours == nil { proposal.sleepHours = number(text, labels: ["mein schlaf", "schlaf"], maximum: 24) }
+            case 4:
+                if text.lowercased().hasPrefix("ich brauche ") && proposal.nextNeed == nil { proposal.nextNeed = text }
+                if text.lowercased() == "heute keinen kleinen erfolg." && proposal.smallWin == nil { proposal.smallWin = "" }
+            case 5: if text.lowercased().trimmingCharacters(in: .punctuationCharacters.union(.whitespacesAndNewlines)) == "keine aufgaben" && proposal.tasks == nil { proposal.tasks = [] }
+            case 6: if proposal.therapyQuestion == nil { proposal.therapyQuestion = text.lowercased() == "heute kein therapiethema." ? "" : text }
+            default: break
+            }
+        }
         if let v = proposal.summary { entry.summary = v }
         if let v = proposal.moodPercent { entry.moodPercent = v; entry.mood = MoodBarometer.score(v) }
         if let v = proposal.batteryPercent { entry.batteryPercent = v }
@@ -437,7 +508,7 @@ enum AICheckInGuide {
         if let v = proposal.therapyQuestion { entry.therapyQuestion = v }
         for title in proposal.tasks ?? [] where !title.isEmpty && !entry.tasks.contains(where: { $0.title == title }) { entry.tasks.append(CheckInTaskDraft(title: title)) }
         entry.tags = AppHashtags.clean((entry.tags ?? []) + (proposal.tags ?? []), known: known)
-        let skip = userText.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().range(of: "^(bitte )?(diesen schritt |die frage )?(überspringen|weiter|skip)[.! ]*$", options: .regularExpression) != nil } ?? false
+        let skip = userText.map(wantsSkip) == true
         let answered: Bool
         switch entry.step {
         case 0: answered = !(proposal.summary ?? "").isEmpty
@@ -456,8 +527,8 @@ enum AICheckInGuide {
         case 3: moduleReady = entry.stress != nil && entry.sensoryLoad != nil && entry.sleepHours != nil
         default: moduleReady = true
         }
-        if proposal.finish == true && (userText == nil || userText.map(BuddyInteraction.wantsOverview) == true || (entry.step == 6 && proposal.advance == true && proposal.answeredStep == 6 && answered)) { entry.step = 7 }
-        else if skip || (proposal.advance == true && proposal.answeredStep == entry.step && answered && moduleReady) { entry.step = min(7, entry.step + 1) }
+        if proposal.finish == true && (userText == nil || userText.map(BuddyInteraction.wantsOverview) == true || (entry.step == 6 && directAnswer && answered)) { entry.step = 7 }
+        else if skip || (answered && moduleReady && (directAnswer || (userText == nil && proposal.advance == true && proposal.answeredStep == entry.step))) { entry.step = min(7, entry.step + 1) }
         return true
     }
 }

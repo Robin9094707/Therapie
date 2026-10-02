@@ -230,13 +230,39 @@ final class BuddyMockProtocol: URLProtocol {
         _ = AICheckInGuide.apply(AIBuddyCheckInProposal(advance: true, answeredStep: 2, batteryPercent: 55), to: &wrongModule, known: [], userText: "Mein Akku ist 55")
         try expect(wrongModule.step == 1 && wrongModule.batteryPercent == 55, "Later-module data is preserved without skipping the current module")
         _ = AICheckInGuide.apply(AIBuddyCheckInProposal(moodPercent: 60), to: &wrongModule, known: [], userText: "60")
-        try expect(wrongModule.step == 1, "Missing advance flag never moves the module")
+        try expect(wrongModule.step == 2 && wrongModule.moodPercent == 60, "A clear current-module answer progresses even without model control flags")
+        wrongModule.step = 1
         _ = AICheckInGuide.apply(AIBuddyCheckInProposal(advance: true, finish: true, answeredStep: 1), to: &wrongModule, known: [], userText: "Warum regnet es?")
         try expect(wrongModule.step == 1, "Off-topic turns cannot finish a check-in or advance without module evidence")
         let aligned = AICheckInGuide.alignedReply(AIBuddyReply(title: "Zwischenfrage", message: "Das können wir besprechen. Wie hast du geschlafen?", sections: [], actions: []), entry: wrongModule)
         try expect(aligned.message.contains("Stimmungswert") && !aligned.message.contains("geschlafen?"), "Visible follow-up belongs to the persisted module")
         _ = AICheckInGuide.apply(AIBuddyCheckInProposal(advance: false), to: &wrongModule, known: [], userText: "überspringen")
         try expect(wrongModule.step == 2, "Explicit skipping works even if the model refuses to advance")
+        for kind in GuidedCheckInKind.allCases {
+            var local = GuidedCheckIn(kind: kind)
+            let missing = AIBuddyCheckInProposal(advance: false)
+            _ = AICheckInGuide.apply(missing, to: &local, known: [], userText: "Mila und Geld beschäftigen mich.")
+            try expect(local.step == 1 && local.summary == "Mila und Geld beschäftigen mich.", "\(kind) records a thought and advances without any AI proposal fields")
+            for expectedStep in [2, 2, 3, 3, 3, 4, 5, 6, 7] {
+                let choices = AICheckInGuide.quickReplies(for: local)
+                try expect(!choices.isEmpty && choices.count <= 3 && choices.allSatisfy(\.valid), "\(kind) has valid native answer buttons before completion")
+                let response = local.step == 4 ? choices[0] : choices[min(1, choices.count - 1)]
+                // Battery topics and optional tasks need the explicit 'none' choice.
+                let text = local.step == 2 && local.batteryPercent != nil ? choices[0].text : local.step == 5 || local.step == 6 ? choices[0].text : response.text
+                _ = AICheckInGuide.apply(missing, to: &local, known: [], userText: text)
+                try expect(local.step == expectedStep, "\(kind) native answer preserves order and multipart modules: \(expectedStep)")
+            }
+            try expect(AICheckInGuide.quickReplies(for: local).isEmpty && local.moodPercent == 50 && local.batteryPercent == 50 && local.stress == 3 && local.sensoryLoad == 3 && local.sleepHours == 7 && local.tasks.isEmpty, "\(kind) reaches review with exactly the selected values, no fabricated tasks")
+        }
+        var questionDraft = GuidedCheckIn(kind: .therapy)
+        _ = AICheckInGuide.apply(AIBuddyCheckInProposal(advance: true, answeredStep: 0, summary: "Zwischenfrage"), to: &questionDraft, known: [], userText: "Was soll ich hier schreiben?")
+        try expect(questionDraft.step == 0, "Even an incorrect model advance cannot consume a user's clarifying question")
+        _ = AICheckInGuide.apply(AIBuddyCheckInProposal(), to: &questionDraft, known: [], userText: "Ich möchte bitte diesen Schritt überspringen.")
+        try expect(questionDraft.step == 1, "A polite skip request works without AI control flags")
+        var unknownStrength = GuidedCheckIn(batteryPercent: 40, step: 2, energyPoints: [BatteryPoint(title: "Mila", direction: .takes, impactConfirmed: false)])
+        let strengthChoice = AICheckInGuide.quickReplies(for: unknownStrength)[2]
+        _ = AICheckInGuide.apply(AIBuddyCheckInProposal(), to: &unknownStrength, known: [], userText: strengthChoice.text)
+        try expect(unknownStrength.step == 3 && unknownStrength.energyPoints?.count == 1 && unknownStrength.energyPoints?[0].signedImpact == -5, "Named strength button updates exactly the existing energy factor without AI extraction")
         var partialStress = GuidedCheckIn(step: 3)
         _ = AICheckInGuide.apply(AIBuddyCheckInProposal(advance: true, answeredStep: 3, stress: 2), to: &partialStress, known: [], userText: "Stress 2")
         try expect(partialStress.step == 3 && AICheckInGuide.alignedReply(reply, entry: partialStress).message.contains("Reize"), "A partial stress module asks for the next missing part instead of jumping")

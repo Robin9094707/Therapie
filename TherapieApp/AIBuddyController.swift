@@ -21,7 +21,8 @@ import UIKit
         else { var snapshot = store.data; chatID = snapshot.aiConversations.first?.id ?? AIConversationMutation.create(in: &snapshot); store.data = snapshot }
         guard let chat = store.data.aiConversations.first(where: { $0.id == chatID }) else { return false }
         let draftForCommand = chat.checkInID.flatMap { id in store.data.guidedCheckIns.first { $0.id == id && $0.isDraft } }
-        guard let key = storedKey ?? (draftForCommand != nil && BuddyInteraction.wantsOverview(clean) ? "local-overview" : nil) else { error = "Bitte hinterlege zuerst deinen OpenAI-API-Schlüssel im Profil."; return false }
+        let localChoice = image == nil && draftForCommand.map { entry in AICheckInGuide.quickReplies(for: entry).contains { $0.text == clean } && (AICheckInGuide.isDirectAnswer(clean) || AICheckInGuide.wantsSkip(clean)) } == true
+        guard let key = storedKey ?? (localChoice || (draftForCommand != nil && BuddyInteraction.wantsOverview(clean)) ? "local-check-in" : nil) else { error = "Bitte hinterlege zuerst deinen OpenAI-API-Schlüssel im Profil."; return false }
         let settings = store.data.aiSettings
         let days = AIBuddyContext.requestDays(question: clean, settings: settings, chosenDays: daysOverride ?? chat.contextDays)
         let history = store.data.aiMessages.filter { $0.conversationID == chatID }
@@ -57,9 +58,12 @@ import UIKit
             if draft != nil && BuddyInteraction.wantsOverview(clean) {
                 return AIBuddyResponse(reply: AIBuddyReply(title: "Deine Check-in-Übersicht", message: "Deine Angaben sind für die Übersicht bereit. Prüfe sie über den Knopf und bestätige dort das Speichern. Du kannst vorher auch noch etwas ergänzen.", sections: [], actions: [], checkIn: AIBuddyCheckInProposal(advance: false, finish: true)))
             }
+            if localChoice {
+                return AIBuddyResponse(reply: AIBuddyReply(title: "Deine Auswahl", message: "Deine Auswahl ist im Entwurf festgehalten.", sections: [], actions: [], checkIn: AIBuddyCheckInProposal(advance: false)))
+            }
             if fixture {
                 try await Task.sleep(for: .milliseconds(150))
-                let proposal = draft == nil ? nil : AIBuddyCheckInProposal(advance: true, answeredStep: draft?.step, summary: clean, tags: ["Familie"])
+                let proposal = draft == nil || ProcessInfo.processInfo.arguments.contains("--buddy-guide-missing-control-fixture") ? nil : AIBuddyCheckInProposal(advance: true, answeredStep: draft?.step, summary: clean, tags: ["Familie"])
                 let message = draft.map { AICheckInGuide.questions[min(7, $0.step + 1)] } ?? "Deine Nachricht ist angekommen. Möchtest du sie im Tagebuch festhalten?"
                 let reply = AIBuddyReply(title: "Dein Gedanke", message: message, sections: [], actions: [], checkIn: proposal)
                 return AIBuddyResponse(reply: reply)
@@ -92,7 +96,7 @@ import UIKit
                     reply = AICheckInGuide.alignedReply(reply, entry: entry)
                 }
             }
-            snapshot.aiMessages.append(AIBuddyMessage(role: "assistant", text: reply.journalText, reply: reply, contextStart: context.start, contextEnd: context.end, model: settings.model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, conversationID: chatID))
+            snapshot.aiMessages.append(AIBuddyMessage(role: "assistant", text: reply.journalText, reply: reply, contextStart: context.start, contextEnd: context.end, model: localChoice ? "Lokale Check-in-Antwort" : settings.model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, conversationID: chatID))
             store.data = snapshot
             if let failure = store.lastSaveError { error = failure; return false }
             return true
