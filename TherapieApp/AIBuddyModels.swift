@@ -68,7 +68,7 @@ struct AIBuddyAction: Codable, Equatable, Identifiable {
         guard (options?.valid ?? true), (tags ?? []).count <= 15, (tags ?? []).allSatisfy({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.count <= 60 }), title.count <= 160, text.count <= 6000, (dateISO == nil || date != nil), (moodPercent == nil || (0...100).contains(moodPercent!)), weekdays.allSatisfy({ (1...7).contains($0) }) else { return false }
         if ![AIBuddyActionKind.note, .checkIn].contains(kind), !(tags ?? []).isEmpty { return false }
         if options?.times != nil && ![AIBuddyActionKind.routine, .updateRoutine].contains(kind) { return false }
-        if options?.once == true && ((options?.times?.count ?? 1) > 1 || options?.repeatCount != nil || options?.repeatEveryWeeks != nil) { return false }
+        if options?.once == true && (options?.times != nil || options?.repeatCount != nil || options?.repeatEveryWeeks != nil) { return false }
         if (options?.repeatUntilDone != nil || options?.once != nil) && ![AIBuddyActionKind.routine, .updateRoutine].contains(kind) { return false }
         if options?.priority != nil && kind != .goal { return false }
         if kind == .startSession { return targetID.flatMap(UUID.init(uuidString:)) != nil }

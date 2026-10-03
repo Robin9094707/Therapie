@@ -133,6 +133,7 @@ enum AIBuddyMutation {
                 routine.endsAt = calendar.date(byAdding: .weekOfYear, value: (count - 1) * (routine.repeatEveryWeeks ?? 1) + 1, to: week)?.addingTimeInterval(-1)
             }
         }
+        if action.options?.once == false && action.kind == .updateRoutine { routine.endsAt = nil }
         if action.options?.once == true { routine.endsAt = start.addingTimeInterval(1); routine.recurrenceAnchor = start; routine.repeatEveryWeeks = 1; let clock = Calendar.current.dateComponents([.hour, .minute, .weekday], from: start); routine.times = [RoutineTime(weekdays: [clock.weekday ?? 1], hour: clock.hour ?? 9, minute: clock.minute ?? 0)] }
     }
     static func targetSnapshot(_ action: AIBuddyAction, in data: AppData) -> Data? {

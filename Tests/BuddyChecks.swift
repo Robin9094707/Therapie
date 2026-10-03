@@ -342,6 +342,7 @@ final class BuddyMockProtocol: URLProtocol {
         let startRound = AIBuddyAction(kind: .startSession, title: "Runde", text: "", targetID: actionData.sessionTemplates[0].id.uuidString, weekdays: [])
         try AIBuddyMutation.apply(startRound, originalID: startRound.id, messageID: instruction.id, to: &actionData, now: now)
         try expect(actionData.currentSession?.title == actionData.sessionTemplates[0].title, "Only actual reviewed therapy template can start")
+        do {
         let percentages = BatteryLanguage.factors("Mila nimmt mir Akku zu ungefähr 50 Prozent und Sport gibt mir 80%", known: [])
         try expect(percentages.count == 2 && percentages[0].title == "Mila" && percentages[0].direction == .takes && percentages[0].impact == 3 && percentages[1].impact == 4, "Multiple explicit percentage strengths map without extra questions")
         var percentageDraft = GuidedCheckIn(isDraft: true, step: 2)
@@ -356,6 +357,9 @@ final class BuddyMockProtocol: URLProtocol {
         let oneTime = AIBuddyAction(kind: .routine, title: "Einmal", text: "", dateISO: ISO8601DateFormatter().string(from: now), weekdays: [], options: AIBuddyActionOptions(repeatUntilDone: false, once: true))
         try AIBuddyMutation.apply(oneTime, originalID: oneTime.id, messageID: instruction.id, to: &actionData, now: now)
         try expect(actionData.routines[0].endsAt == now.addingTimeInterval(1) && !RoutineRecurrence.includes(actionData.routines[0], date: now.addingTimeInterval(86400)), "Once-only reminder never repeats next week")
+        var urgentOnceData = AppData(); urgentOnceData.routines = [actionData.routines[0]]
+        urgentOnceData.routines[0].repeatUntilDone = true; urgentOnceData.routines[0].retryMinutes = 30
+        try expect(!RoutinePlanner.slots(data: urgentOnceData, now: now.addingTimeInterval(120), calendar: cal).isEmpty, "Urgent one-time reminders continue retrying after their original timestamp")
         let tomorrow = now.addingTimeInterval(86400), clock = cal.dateComponents([.hour,.minute,.weekday], from: tomorrow)
         var oncePerSlot = DailyRoutine(title: "Ein Hinweis", times: [RoutineTime(weekdays: [clock.weekday!], hour: clock.hour!, minute: clock.minute!)], urgentAlarm: true, repeatUntilDone: false)
         var hintData = AppData(); hintData.routines = [oncePerSlot]
@@ -374,6 +378,7 @@ final class BuddyMockProtocol: URLProtocol {
         try expect(timelineItems.map(\.id).count == Set(timelineItems.map(\.id)).count, "Timeline identities remain distinct")
         timelineData.entryLocations = [EntryLocation(id: "task-" + timelineData.weeklyTasks[0].id.uuidString, capturedAt: now, latitude: 52.5, longitude: 13.4, accuracy: 80), EntryLocation(id: "removed", capturedAt: now, latitude: 52.5, longitude: 13.4, accuracy: 80)]
         try expect(EntryLocator.summary(timelineData).contains("1 Einträge") && !EntryLocation(id: "bad", capturedAt: now, latitude: 200, longitude: 13, accuracy: 1).valid, "Location summaries exclude deleted and invalid records")
+        }
         print("Passed \(count) duplicate, flexible recurrence, therapy discussion, alarm lifecycle, AI privacy/action and offline network checks.")
     }
 }

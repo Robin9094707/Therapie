@@ -171,12 +171,17 @@ enum RoutinePlanner {
         }
         return output.sorted { $0.due == $1.due ? $0.id < $1.id : $0.due < $1.due }
     }
+    static func activeReminder(_ routine: DailyRoutine, occurrence: RoutineOccurrence, settings: CompanionSettings, now: Date) -> Bool {
+        let point = max(now, occurrence.due)
+        // Recurrence gates the original occurrence, not each retry after its last scheduled date.
+        return active(routine, settings: settings, at: occurrence.due) && !(routine.pausedUntil.map { $0 > point } ?? false) && !(routine.pauseOnVacation && (settings.vacationUntil.map { $0 > point } ?? false))
+    }
     static func slots(data: AppData, now: Date = Date(), calendar: Calendar = .current) -> [RoutineReminderSlot] {
         var output: [RoutineReminderSlot] = []
         for occurrence in occurrences(data.routines, settings: data.companionSettings, now: now, calendar: calendar) {
             guard !resolved(occurrence, completions: data.routineCompletions),
                   let routine = data.routines.first(where: { $0.id == occurrence.routineID }), routine.remindersEnabled,
-                  active(routine, settings: data.companionSettings, at: max(now, occurrence.due)) else { continue }
+                  activeReminder(routine, occurrence: occurrence, settings: data.companionSettings, now: now) else { continue }
             let snooze = data.routineSnoozes.first { $0.id == occurrence.id }?.until
             var fire = occurrence.due
             if let snooze, snooze > fire { fire = snooze }

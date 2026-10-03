@@ -592,7 +592,7 @@ struct AIBuddyActionReviewView: View {
                             if action.options?.alarmEnabled != nil { Toggle("AlarmKit-Wecker", isOn: Binding(get: { action.options?.alarmEnabled ?? false }, set: { options.wrappedValue.alarmEnabled = $0 })) }
                         }
                         if [.routine, .updateRoutine].contains(action.kind) {
-                            Toggle("Nur einmal erinnern", isOn: Binding(get: { action.options?.once ?? false }, set: { options.wrappedValue.once = $0 }))
+                            Toggle("Nur einmal erinnern", isOn: Binding(get: { action.options?.once ?? false }, set: { options.wrappedValue.once = $0; if $0 { options.wrappedValue.times = nil; options.wrappedValue.repeatEveryWeeks = nil; options.wrappedValue.repeatCount = nil } }))
                             Toggle("Bis zum Abhaken erneut erinnern", isOn: Binding(get: { action.options?.repeatUntilDone ?? true }, set: { options.wrappedValue.repeatUntilDone = $0 }))
                             Text("AlarmKit ist der Wecker. Erneute Hinweise können unabhängig davon ausgeschaltet werden; bei Erledigung werden ausstehende Hinweise entfernt. Die begrenzte iPhone-Warteschlange wird beim Öffnen / Abhaken aufgefüllt.").font(.caption).foregroundStyle(.secondary)
                             if action.options?.repeatUntilDone != false { Stepper("Intervall: \(action.options?.retryMinutes ?? 20) Minuten", value: Binding(get: { action.options?.retryMinutes ?? 20 }, set: { options.wrappedValue.retryMinutes = $0 }), in: 5...180, step: 5) }
