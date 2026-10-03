@@ -10,6 +10,7 @@ final class AppStore: ObservableObject {
             save()
             if lastSaveError == nil {
                 if !data.aiSettings.enabled && selectedTab == 5 { selectedTab = 4 }
+                captureLocations(from: oldValue)
                 rememberChange(from: oldValue, to: data)
                 TherapyEffects.shared.changed(from: oldValue, to: data)
                 var previous = oldValue.schedule, current = data.schedule
@@ -59,6 +60,12 @@ final class AppStore: ObservableObject {
     private var writeBlocked = false
 
     private var isLoading = true
+    var pendingLocationRecords: [String: Date] = [:]
+    lazy var entryLocationService: LocationService = {
+        let service = LocationService()
+        service.receiveLocation = { [weak self] location in self?.attachLocation(location) }
+        return service
+    }()
     lazy var aiController = AIBuddyController(store: self)
     lazy var sessionController = TherapySessionController(store: self)
     private var backupWorkItem: DispatchWorkItem?
@@ -127,6 +134,22 @@ final class AppStore: ObservableObject {
                     appendWord(1, width: 2); appendWord(8, width: 2); wav.append(Data("data".utf8)); appendWord(8000, width: 4); wav.append(Data(repeating: 128, count: 8000))
                     try? wav.write(to: root.appendingPathComponent(audioPath))
                     data.media = [MediaItem(id: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!, createdAt: Date().addingTimeInterval(-3600), kind: .photo, title: "Testfoto", note: "", tags: [], relativePath: imagePath), MediaItem(id: UUID(uuidString: "33333333-3333-3333-3333-333333333333")!, createdAt: Date().addingTimeInterval(-3600), kind: .audio, title: "Testaufnahme", note: "", tags: [], relativePath: audioPath)]
+                }
+                if ProcessInfo.processInfo.arguments.contains("--feature-ui-fixture") {
+                    data.suggestionsEnabled = false
+                    data.aiSettings.enabled = true
+                    data.weeklyTasks.append(WeeklyTask(weekOfYear: week.week, yearForWeekOfYear: week.year, title: "Zweiter Wochen-Schritt", details: "Mehrere Aufgaben", dueDate: Date().addingTimeInterval(3600)))
+                    data.therapyTopics = [TherapyTopic(title: "Meine nächste Therapiefrage", isCurrent: true)]
+                    data.entryLocations = [EntryLocation(id: "task-" + data.weeklyTasks[0].id.uuidString, capturedAt: Date(), latitude: 52.52, longitude: 13.405, accuracy: 60)]
+                    var wav = Data("RIFF".utf8)
+                    func word(_ value: UInt32, _ width: Int) { for byte in 0..<width { wav.append(UInt8((value >> (byte * 8)) & 255)) } }
+                    word(40036, 4); wav.append(Data("WAVEfmt ".utf8)); word(16, 4); word(1, 2); word(1, 2); word(8000, 4); word(8000, 4); word(1, 2); word(8, 2); wav.append(Data("data".utf8)); word(40000, 4); wav.append(Data(repeating: 128, count: 40000))
+                    let path = "Recordings/chat-fixture.wav"
+                    try? wav.write(to: root.appendingPathComponent(path))
+                    let item = MediaItem(kind: .audio, title: "Chat-Testaudio", note: "Meine gesicherte Audio", tags: ["Chat"], relativePath: path, duration: 5)
+                    data.media.append(item)
+                    let chatID = AIConversationMutation.create(in: &data)
+                    data.aiMessages.append(AIBuddyMessage(role: "user", text: "Meine Audio bleibt abspielbar.", conversationID: chatID, mediaIDs: [item.id]))
                 }
                 if ProcessInfo.processInfo.arguments.contains("--show-appointments") { notificationTherapy = true }
                 if ProcessInfo.processInfo.arguments.contains("--show-routines") {

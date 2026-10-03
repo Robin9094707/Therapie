@@ -30,7 +30,7 @@ enum AIBuddyMutation {
                 let occurrence = Calendar.therapyCalendar.date(byAdding: .weekOfYear, value: index * (action.options?.repeatEveryWeeks ?? 1), to: date) ?? date
                 let period = occurrence.therapyWeek
                 let clock = Calendar.current.dateComponents([.hour, .minute], from: occurrence)
-                let reminder = action.options?.remindersEnabled == false ? TaskReminder(enabled: false) : (action.date == nil ? nil : TaskReminder(enabled: true, weekdays: action.weekdays.isEmpty ? [Calendar.current.component(.weekday, from: occurrence)] : Array(Set(action.weekdays)).sorted(), hour: clock.hour ?? 18, minute: clock.minute ?? 0, alarmEnabled: action.options?.alarmEnabled))
+                let reminder = action.options?.remindersEnabled == false ? TaskReminder(enabled: false) : (action.date == nil ? nil : TaskReminder(enabled: true, weekdays: action.weekdays.isEmpty ? [Calendar.current.component(.weekday, from: occurrence)] : Array(Set(action.weekdays)).sorted(), hour: clock.hour ?? 18, minute: clock.minute ?? 0, alarmEnabled: action.options?.alarmEnabled ?? true))
                 snapshot.weeklyTasks.insert(WeeklyTask(weekOfYear: period.week, yearForWeekOfYear: period.year, title: title, details: text, reminder: reminder, dueDate: action.date == nil ? nil : occurrence, smallStep: text), at: 0)
             }
         case .appointment:
@@ -42,6 +42,9 @@ enum AIBuddyMutation {
             let clock = Calendar.current.dateComponents([.hour, .minute], from: date)
             var routine = DailyRoutine(title: title, details: text, times: [RoutineTime(weekdays: action.weekdays.isEmpty ? Array(1...7) : Array(Set(action.weekdays)).sorted(), hour: clock.hour ?? 9, minute: clock.minute ?? 0)])
             if let times = action.options?.times { routine.times = times.sorted().map { RoutineTime(weekdays: action.weekdays.isEmpty ? Array(1...7) : Array(Set(action.weekdays)).sorted(), hour: $0 / 60, minute: $0 % 60) } }
+            routine.urgentAlarm = action.options?.alarmEnabled ?? true
+            routine.repeatUntilDone = action.options?.repeatUntilDone ?? false
+            routine.escalationHour = nil
             configure(&routine, action: action, start: date)
             snapshot.routines.insert(routine, at: 0)
         case .goal:
@@ -119,6 +122,7 @@ enum AIBuddyMutation {
         if let enabled = action.options?.enabled { routine.enabled = enabled }
         if let enabled = action.options?.remindersEnabled { routine.remindersEnabled = enabled }
         if let alarm = action.options?.alarmEnabled { routine.urgentAlarm = alarm }
+        if let untilDone = action.options?.repeatUntilDone { routine.repeatUntilDone = untilDone }
         if let retry = action.options?.retryMinutes { routine.retryMinutes = retry }
         if action.kind == .routine || action.options?.repeatEveryWeeks != nil || action.options?.repeatCount != nil {
             routine.recurrenceAnchor = start
@@ -129,6 +133,7 @@ enum AIBuddyMutation {
                 routine.endsAt = calendar.date(byAdding: .weekOfYear, value: (count - 1) * (routine.repeatEveryWeeks ?? 1) + 1, to: week)?.addingTimeInterval(-1)
             }
         }
+        if action.options?.once == true { routine.endsAt = start.addingTimeInterval(1); routine.recurrenceAnchor = start; routine.repeatEveryWeeks = 1; let clock = Calendar.current.dateComponents([.hour, .minute, .weekday], from: start); routine.times = [RoutineTime(weekdays: [clock.weekday ?? 1], hour: clock.hour ?? 9, minute: clock.minute ?? 0)] }
     }
     static func targetSnapshot(_ action: AIBuddyAction, in data: AppData) -> Data? {
         let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]

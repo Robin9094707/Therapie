@@ -3,6 +3,7 @@ import SwiftUI
 struct TherapyEditableTimeline: View {
     @EnvironmentObject private var store: AppStore
     var searchText: String
+    @State private var recordLimit = 60
     @State private var editing: ArchiveRecord?
     @State private var deleting: ArchiveRecord?
     @State private var confirmDelete = false
@@ -31,7 +32,7 @@ struct TherapyEditableTimeline: View {
         }
     }
     private var groups: [(date: Date, values: [ArchiveRecord])] {
-        let grouped = Dictionary(grouping: records) { store.data.archivePreferences.grouping.start(of: $0.date) }
+        let grouped = Dictionary(grouping: Array(records.prefix(recordLimit))) { store.data.archivePreferences.grouping.start(of: $0.date) }
         return grouped.keys.sorted { store.data.archivePreferences.oldestFirst ? $0 < $1 : $0 > $1 }.map { ($0, grouped[$0] ?? []) }
     }
     var body: some View {
@@ -62,7 +63,10 @@ struct TherapyEditableTimeline: View {
                     }.padding(.top, 8)
                 }
             }
+            if records.count > recordLimit { Button("Weitere 60 Einträge laden") { recordLimit += 60 }.buttonStyle(.bordered) }
         }
+        .onChange(of: searchText) { _, _ in recordLimit = 60 }
+        .onChange(of: kind) { _, _ in recordLimit = 60 }
         .sheet(item: $editing) { ArchiveRecordEditor(record: $0) }
         .alert("Eintrag löschen?", isPresented: $confirmDelete) {
             Button("Abbrechen", role: .cancel) {}

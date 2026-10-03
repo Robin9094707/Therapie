@@ -41,6 +41,7 @@ struct RoutineEditorView: View {
                 }
                 Section("Erinnern, bis du bestätigst") {
                     Toggle("Mitteilungen", isOn: $routine.remindersEnabled)
+                    Toggle("Bis zum Abhaken erneut erinnern", isOn: Binding(get: { routine.repeatUntilDone ?? true }, set: { routine.repeatUntilDone = $0 }))
                     Stepper("Erneut nach \(routine.retryMinutes) Minuten", value: $routine.retryMinutes, in: 5...180, step: 5)
                     Toggle("Abends häufiger erinnern", isOn: Binding(get: { routine.escalationHour != nil }, set: { routine.escalationHour = $0 ? 23 : nil }))
                     if routine.escalationHour != nil {

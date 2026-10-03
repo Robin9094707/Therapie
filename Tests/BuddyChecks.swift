@@ -342,6 +342,38 @@ final class BuddyMockProtocol: URLProtocol {
         let startRound = AIBuddyAction(kind: .startSession, title: "Runde", text: "", targetID: actionData.sessionTemplates[0].id.uuidString, weekdays: [])
         try AIBuddyMutation.apply(startRound, originalID: startRound.id, messageID: instruction.id, to: &actionData, now: now)
         try expect(actionData.currentSession?.title == actionData.sessionTemplates[0].title, "Only actual reviewed therapy template can start")
+        let percentages = BatteryLanguage.factors("Mila nimmt mir Akku zu ungefähr 50 Prozent und Sport gibt mir 80%", known: [])
+        try expect(percentages.count == 2 && percentages[0].title == "Mila" && percentages[0].direction == .takes && percentages[0].impact == 3 && percentages[1].impact == 4, "Multiple explicit percentage strengths map without extra questions")
+        var percentageDraft = GuidedCheckIn(isDraft: true, step: 2)
+        _ = AICheckInGuide.apply(AIBuddyCheckInProposal(batteryPercent: 50), to: &percentageDraft, known: [], userText: "Mila nimmt mir ungefähr 50 Prozent Akku.")
+        try expect(percentageDraft.batteryPercent == nil && percentageDraft.energyPoints?.first?.impact == 3 && percentageDraft.step == 2, "Factor percent never becomes the overall battery level or skips a missing level")
+        percentageDraft.energyPoints?[0].impactConfirmed = false
+        _ = AICheckInGuide.apply(AIBuddyCheckInProposal(), to: &percentageDraft, known: [], userText: "80 %")
+        try expect(percentageDraft.energyPoints?.first?.impact == 4 && percentageDraft.energyPoints?.count == 1, "Follow-up percent updates pending point without a duplicate")
+        let weekendAlarm = AIBuddyAction(kind: .routine, title: "Test-Erinnerung", text: "Nur Test", dateISO: ISO8601DateFormatter().string(from: now), weekdays: [1,7], options: AIBuddyActionOptions(retryMinutes: 15, repeatUntilDone: true, times: [540, 720]))
+        try AIBuddyMutation.apply(weekendAlarm, originalID: weekendAlarm.id, messageID: instruction.id, to: &actionData, now: now)
+        try expect(actionData.routines[0].urgentAlarm && actionData.routines[0].repeatUntilDone == true && actionData.routines[0].retryMinutes == 15 && actionData.routines[0].times.map(\.weekdays) == [[1,7],[1,7]], "Reviewed AI reminder defaults to AlarmKit and preserves exact days, clocks and retry interval")
+        let oneTime = AIBuddyAction(kind: .routine, title: "Einmal", text: "", dateISO: ISO8601DateFormatter().string(from: now), weekdays: [], options: AIBuddyActionOptions(repeatUntilDone: false, once: true))
+        try AIBuddyMutation.apply(oneTime, originalID: oneTime.id, messageID: instruction.id, to: &actionData, now: now)
+        try expect(actionData.routines[0].endsAt == now.addingTimeInterval(1) && !RoutineRecurrence.includes(actionData.routines[0], date: now.addingTimeInterval(86400)), "Once-only reminder never repeats next week")
+        let tomorrow = now.addingTimeInterval(86400), clock = cal.dateComponents([.hour,.minute,.weekday], from: tomorrow)
+        var oncePerSlot = DailyRoutine(title: "Ein Hinweis", times: [RoutineTime(weekdays: [clock.weekday!], hour: clock.hour!, minute: clock.minute!)], urgentAlarm: true, repeatUntilDone: false)
+        var hintData = AppData(); hintData.routines = [oncePerSlot]
+        let firstHints = RoutinePlanner.slots(data: hintData, now: now, calendar: cal)
+        try expect(firstHints.count == 1, "Quiet AI reminders get exactly one alarm per occurrence")
+        oncePerSlot.repeatUntilDone = true; oncePerSlot.escalationHour = nil; oncePerSlot.retryMinutes = 30
+        hintData.routines = [oncePerSlot]
+        let repeatedHints = RoutinePlanner.slots(data: hintData, now: now, calendar: cal)
+        try expect(repeatedHints.count > 1, "Urgent reminders replenish bounded repeated hints until resolution")
+        var timelineData = AppData()
+        let period = now.therapyWeek
+        timelineData.weeklyTasks = [WeeklyTask(weekOfYear: period.week, yearForWeekOfYear: period.year, title: "A", details: "", dueDate: tomorrow), WeeklyTask(weekOfYear: period.week, yearForWeekOfYear: period.year, title: "B", details: "", completed: true)]
+        timelineData.therapyTopics = [TherapyTopic(title: "Besprechen", isCurrent: true)]
+        let timelineItems = TodoTimeline.items(timelineData, now: now)
+        try expect(timelineItems.filter { $0.kind == "Aufgaben" }.count == 2 && timelineItems.contains { $0.kind == "Therapie" }, "Unified timeline keeps multiple tasks and anchored therapy topics")
+        try expect(timelineItems.map(\.id).count == Set(timelineItems.map(\.id)).count, "Timeline identities remain distinct")
+        timelineData.entryLocations = [EntryLocation(id: "task-" + timelineData.weeklyTasks[0].id.uuidString, capturedAt: now, latitude: 52.5, longitude: 13.4, accuracy: 80), EntryLocation(id: "removed", capturedAt: now, latitude: 52.5, longitude: 13.4, accuracy: 80)]
+        try expect(EntryLocator.summary(timelineData).contains("1 Einträge") && !EntryLocation(id: "bad", capturedAt: now, latitude: 200, longitude: 13, accuracy: 1).valid, "Location summaries exclude deleted and invalid records")
         print("Passed \(count) duplicate, flexible recurrence, therapy discussion, alarm lifecycle, AI privacy/action and offline network checks.")
     }
 }

@@ -1,6 +1,7 @@
 import SwiftUI
 import PhotosUI
 import UIKit
+import UniformTypeIdentifiers
 
 struct AIBuddyView: View {
     @EnvironmentObject private var store: AppStore
@@ -13,7 +14,7 @@ struct AIBuddyView: View {
     @State private var grouping = "day"
     @State private var limit = 40
     private var matching: [AIBuddyConversation] {
-        let indexed = Dictionary(grouping: store.data.aiMessages, by: { $0.conversationID })
+        let indexed = search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? [:] : Dictionary(grouping: store.data.aiMessages, by: { $0.conversationID })
         return store.data.aiConversations.filter { chat in
             (filter == "all" || (filter == "checkins" ? chat.checkInID != nil : chat.savedNoteID != nil)) &&
             (search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || ([chat.title] + (chat.tags ?? []) + (indexed[chat.id] ?? []).map(\.text)).contains { $0.localizedStandardContains(search) })
@@ -114,6 +115,13 @@ struct AIBuddyChatContent: View {
     @State private var photo: PhotosPickerItem?
     @State private var image: Data?
     @State private var confirmPhoto = false
+    @State private var attachmentMenu = false
+    @State private var showPhotos = false
+    @State private var showFiles = false
+    @State private var confirmFiles = false
+    @State private var attachmentIDs: [UUID] = []
+    @State private var attachmentText = ""
+    @State private var pendingAudioID: UUID?
     @State private var clearChat = false
     @State private var showChatMenu = false
     @State private var messageLimit = 40
@@ -175,6 +183,19 @@ struct AIBuddyChatContent: View {
                 Button("Als Entwurf speichern") { finishClose(saveDraft: true) }
                 Button("Verwerfen", role: .destructive) { finishClose(saveDraft: false) }
             } message: { Text(draft == nil ? "Deine bereits gesendeten Nachrichten bleiben erhalten. Du entscheidest über den noch nicht gesendeten Text." : "Deine gesendeten Nachrichten bleiben erhalten. Du entscheidest, ob der noch nicht abgeschlossene Check-in und ungesendete Text als Entwurf bleiben.") }
+            .confirmationDialog("Anhang hinzufügen", isPresented: $attachmentMenu, titleVisibility: .visible) {
+                Button("Foto / Bild") { showPhotos = true }
+                Button("Textdatei / PDF") { confirmFiles = true }
+                Button("Abbrechen", role: .cancel) {}
+            }
+            .photosPicker(isPresented: $showPhotos, selection: $photo, matching: .images)
+            .alert("Datei für die KI vorbereiten?", isPresented: $confirmFiles) {
+                Button("Abbrechen", role: .cancel) {}
+                Button("Datei auswählen") { showFiles = true }
+            } message: { Text("Ein lesbares PDF oder eine Textdatei kann mehr Kontext und API-Kosten verbrauchen. Maximal 10 MB; bis zu 30 PDF-Seiten / 12.000 Textzeichen werden für die nächste Nachricht gelesen. Die vollständige Datei bleibt lokal und wird mit dem Chat gesichert. Prüfe persönliche Inhalte vor dem Senden.") }
+            .fileImporter(isPresented: $showFiles, allowedContentTypes: [.pdf, .plainText, .json, .commaSeparatedText], allowsMultipleSelection: false) { result in
+                do { if let url = try result.get().first { try prepareFile(url) } } catch { controller.error = error.localizedDescription }
+            }
             .onChange(of: photo) { _, value in if value != nil { confirmPhoto = true } }
             .alert("Ausgewähltes Foto an OpenAI senden?", isPresented: $confirmPhoto) {
                 Button("Abbrechen", role: .cancel) { photo = nil; image = nil }
@@ -183,7 +204,7 @@ struct AIBuddyChatContent: View {
             .alert("Chatverlauf leeren?", isPresented: $clearChat) { Button("Abbrechen", role: .cancel) {}; Button("Leeren", role: .destructive) { controller.cancel(); var snapshot = store.data; AIConversationMutation.delete(conversationID, in: &snapshot); store.data = snapshot } } message: { Text("Gespeicherte Tagebucheinträge bleiben erhalten. Rückgängig ist zehn Sekunden lang in der geöffneten App möglich.") }
     }
     var body: some View {
-        presentedChat.onAppear { store.visibleAIComposerIDs.insert(visibilityID); if !initialized { text = chat?.draftText ?? ""; initialized = true; controller.error = nil }; updateContext() }
+        presentedChat.onAppear { store.visibleAIComposerIDs.insert(visibilityID); if !initialized { text = chat?.draftText ?? ""; attachmentIDs = chat?.draftMediaIDs ?? []; initialized = true; controller.error = nil }; updateContext() }
             .onChange(of: text) { _, _ in updateContext(onlyIfRangeChanged: true) }
             .onDisappear { speech.stop(); store.visibleAIComposerIDs.remove(visibilityID); if route == nil { inputHandle.finishEditing(); controller.cancel(); cleanupEmptyChat() } }
             .onChange(of: store.data.aiSettings.enabled) { _, enabled in if !enabled { controller.cancel(); image = nil; photo = nil } }
@@ -290,8 +311,11 @@ struct AIBuddyChatContent: View {
                     if let start = message.contextStart, let end = message.contextEnd { Text("Kontext " + start.formatted(date: .abbreviated, time: .omitted) + " – " + end.formatted(date: .abbreviated, time: .omitted)).font(.caption2).foregroundStyle(.secondary) }
                     if let input = message.inputTokens, let output = message.outputTokens { Text("\(message.model ?? "OpenAI") · letzte Antwort: \(input) Eingabe- / \(output) Ausgabetokens. Eventuelle Wiederholungen kommen hinzu.").font(.caption2).foregroundStyle(.secondary) }
                 } else { Text(message.text).font(.subheadline).textSelection(.enabled) }
+                ForEach(message.mediaIDs ?? [], id: \.self) { id in
+                    if let item = store.data.media.first(where: { $0.id == id }) { ChatStoredAttachment(item: item) } else { Label("Anhang nicht mehr verfügbar", systemImage: "paperclip").font(.caption).foregroundStyle(.secondary) }
+                }
                 Text(message.date.formatted(date: .abbreviated, time: .shortened)).font(.caption2).foregroundStyle(.secondary)
-            }.padding(16).background(message.role == "user" ? Color.accentColor.opacity(0.14) : Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 22))
+            }.padding(16).background(message.role == "user" ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 22))
             if message.role != "user" { Spacer(minLength: 16) }
         }
     }
@@ -301,14 +325,20 @@ struct AIBuddyChatContent: View {
     }
     private var composer: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if image != nil { HStack { Label("Foto vorbereitet", systemImage: "photo"); Spacer(); Button("Entfernen") { image = nil; photo = nil } }.font(.caption) }
-            HStack(alignment: .bottom, spacing: 10) {
-                BuddyInlineMicrophone(disabled: controller.busy || sending, beforeRecording: { inputHandle.finishEditing(); speech.stop() }, onStateChange: { voiceActive = $0 }) { transcript in text = text.isEmpty ? transcript : text + "\n" + transcript }
-                if store.data.aiSettings.allowPhotoUploads { PhotosPicker(selection: $photo, matching: .images) { Image(systemName: "photo") }.accessibilityLabel("Foto auswählen").frame(minWidth: 44, minHeight: 44) }
-                ChatComposerInput(text: $text, handle: inputHandle)
-                    .overlay(alignment: .topLeading) { if text.isEmpty { Text("Nachricht …").foregroundStyle(.secondary).padding(.leading, 10).padding(.top, 11).allowsHitTesting(false).accessibilityHidden(true) } }
-                    .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 22))
-                Button { send() } label: { Image(systemName: "arrow.up.circle.fill").font(.system(size: 36)).foregroundStyle(Color.accentColor) }.accessibilityLabel("Senden").disabled(voiceActive || sending || controller.busy || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || text.count > 5000).accessibilityIdentifier("ai.send")
+            if image != nil || !attachmentIDs.isEmpty {
+                HStack { Label("\(attachmentIDs.count + (image == nil ? 0 : 1)) Anhänge vorbereitet", systemImage: "paperclip"); Spacer(); Button("Entfernen") { image = nil; photo = nil; attachmentIDs = []; attachmentText = "" } }.font(.caption)
+            }
+            HStack(alignment: .bottom, spacing: 8) {
+                Button { inputHandle.finishEditing(); attachmentMenu = true } label: { Image(systemName: "plus.circle").font(.title2).frame(width: 44, height: 44) }.accessibilityLabel("Datei oder Bild anhängen").disabled(voiceActive || controller.busy || sending || attachmentIDs.count >= 3)
+                if !voiceActive {
+                    ChatComposerInput(text: $text, handle: inputHandle)
+                        .overlay(alignment: .topLeading) { if text.isEmpty { Text("Nachricht …").foregroundStyle(.secondary).padding(.leading, 10).padding(.top, 11).allowsHitTesting(false).accessibilityHidden(true) } }
+                        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 22))
+                }
+                ChatVoiceRecorder(disabled: controller.busy || sending || image != nil || !attachmentIDs.isEmpty, beforeRecording: { inputHandle.finishEditing(); speech.stop() }, onStateChange: { voiceActive = $0 }, receive: sendAudio)
+                if !voiceActive {
+                    Button { send() } label: { Image(systemName: "arrow.up.circle.fill").font(.system(size: 36)).foregroundStyle(Color.accentColor) }.accessibilityLabel("Senden").disabled(sending || controller.busy || text.count > 5000 || (text.isEmpty && image == nil && attachmentIDs.isEmpty)).accessibilityIdentifier("ai.send")
+                }
             }
             if text.count > 4800 { Text("\(text.count) / 5.000 Zeichen").font(.caption).foregroundStyle(.secondary) }
         }
@@ -316,14 +346,20 @@ struct AIBuddyChatContent: View {
     private func send(questionOverride: String? = nil, pictureOverride: Data? = nil) {
         guard !controller.busy, !sending else { return }
         inputHandle.finishEditing()
-        let question = questionOverride ?? inputHandle.currentText ?? text
+        let rawQuestion = questionOverride ?? inputHandle.currentText ?? text
+        let question = rawQuestion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && (image != nil || !attachmentIDs.isEmpty) ? "Bitte hilf mir mit meinem Anhang." : rawQuestion
         let picture = pictureOverride ?? image
         guard !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         sending = true
         Task { @MainActor in
             defer { sending = false }
-            let accepted = await controller.send(question, image: picture, inSession: inSession, daysOverride: explicitDays, conversationID: conversationID, onAccepted: {
+            var ids = attachmentIDs
+            if let picture, questionOverride == nil {
+                do { let id = try store.saveChatPhoto(picture); ids.append(id) } catch { controller.error = error.localizedDescription; return }
+            }
+            let accepted = await controller.send(question, image: picture, inSession: inSession, daysOverride: explicitDays, conversationID: conversationID, mediaIDs: ids, fileText: attachmentText, onAccepted: {
                 if questionOverride == nil { _ = inputHandle.clearIfUnchanged(question); text = "" }
+                attachmentIDs = []; attachmentText = ""
                 retryImage = picture
                 if image == picture { image = nil; photo = nil }
             })
@@ -331,11 +367,37 @@ struct AIBuddyChatContent: View {
             updateContext()
         }
     }
+    private func prepareFile(_ url: URL) throws {
+        let access = url.startAccessingSecurityScopedResource()
+        defer { if access { url.stopAccessingSecurityScopedResource() } }
+        let content = try ChatDocumentText.read(url)
+        let before = Set(store.data.media.map(\.id))
+        try store.importDocument(from: url, title: url.lastPathComponent, tags: ["Chat"])
+        guard store.lastSaveError == nil, let index = store.data.media.firstIndex(where: { !before.contains($0.id) }) else { throw AIBuddyAPIError(message: store.lastSaveError ?? "Die Datei konnte nicht gespeichert werden.") }
+        store.data.media[index].note = "Textauszug für die KI (begrenzt):\n" + content
+        attachmentIDs.append(store.data.media[index].id)
+        attachmentText = String((attachmentText + "\nDatei: " + url.lastPathComponent + "\n" + content).prefix(12000))
+    }
+    private func sendAudio(_ transcript: String, _ file: URL, _ duration: TimeInterval) async -> Bool {
+        guard !sending, !controller.busy else { return false }
+        sending = true
+        defer { sending = false }
+        do {
+            let id: UUID
+            if let existing = pendingAudioID, store.data.media.contains(where: { $0.id == existing }) { id = existing }
+            else { id = try store.saveChatAudio(file, duration: duration, transcript: transcript); pendingAudioID = id }
+            _ = await controller.send(transcript, inSession: inSession, daysOverride: explicitDays, conversationID: conversationID, mediaIDs: [id])
+            let retained = store.data.aiMessages.contains { $0.conversationID == conversationID && ($0.mediaIDs ?? []).contains(id) }
+            if retained { pendingAudioID = nil }
+            updateContext()
+            return retained
+        } catch { controller.error = error.localizedDescription; return false }
+    }
     private func requestClose() {
         if voiceActive { confirmVoiceClose = true; return }
         inputHandle.finishEditing()
         text = inputHandle.currentText ?? text
-        if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draft?.hasUserContent == true { confirmExit = true }
+        if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachmentIDs.isEmpty || image != nil || draft?.hasUserContent == true { confirmExit = true }
         else { finishClose(saveDraft: false) }
     }
     private func finishClose(saveDraft: Bool) {
@@ -343,6 +405,7 @@ struct AIBuddyChatContent: View {
         var snapshot = store.data
         if let index = snapshot.aiConversations.firstIndex(where: { $0.id == conversationID }) {
             snapshot.aiConversations[index].draftText = saveDraft ? text : nil
+            snapshot.aiConversations[index].draftMediaIDs = saveDraft ? attachmentIDs : nil
         }
         if !saveDraft {
             if let draft, draft.hasUserContent {
@@ -431,6 +494,7 @@ struct AIBuddyChatContent: View {
             let format = UIGraphicsImageRendererFormat(); format.scale = 1
             let resized = UIGraphicsImageRenderer(size: size, format: format).image { _ in original.draw(in: CGRect(origin: .zero, size: size)) }
             guard let bytes = resized.jpegData(compressionQuality: 0.7), bytes.count <= 2_000_000 else { throw AIBuddyAPIError(message: "Das Bild ist zu groß.") }
+            store.data.aiSettings.allowPhotoUploads = true
             image = bytes
         } catch { controller.error = error.localizedDescription; photo = nil }
     }
@@ -472,7 +536,7 @@ struct AIBuddyActionReviewView: View {
     @State private var baseline: Data?
     @State private var hasBaseline = false
     @State private var hasDate: Bool
-    init(action: AIBuddyAction, messageID: UUID) { original = action; self.messageID = messageID; _action = State(initialValue: action); _date = State(initialValue: action.date ?? Date()); _percent = State(initialValue: action.moodPercent ?? 50); _hasDate = State(initialValue: action.date != nil) }
+    init(action: AIBuddyAction, messageID: UUID) { original = action; self.messageID = messageID; var proposed = action; if [.routine, .task].contains(action.kind), action.date != nil { var opts = proposed.options ?? AIBuddyActionOptions(); opts.alarmEnabled = opts.alarmEnabled ?? true; opts.remindersEnabled = opts.remindersEnabled ?? true; if action.kind == .routine { opts.repeatUntilDone = opts.repeatUntilDone ?? false }; proposed.options = opts }; _action = State(initialValue: proposed); _date = State(initialValue: action.date ?? Date()); _percent = State(initialValue: action.moodPercent ?? 50); _hasDate = State(initialValue: action.date != nil) }
     private var completion: Bool { [.completeTask, .completeRoutine].contains(action.kind) }
     private var removing: Bool { [.deleteTask, .deleteRoutine].contains(action.kind) }
     private var modifying: Bool { [.updateTask, .updateRoutine, .setting].contains(action.kind) }
@@ -528,7 +592,10 @@ struct AIBuddyActionReviewView: View {
                             if action.options?.alarmEnabled != nil { Toggle("AlarmKit-Wecker", isOn: Binding(get: { action.options?.alarmEnabled ?? false }, set: { options.wrappedValue.alarmEnabled = $0 })) }
                         }
                         if [.routine, .updateRoutine].contains(action.kind) {
-                            if let retry = action.options?.retryMinutes { Stepper("Erneut nach \(retry) Minuten", value: Binding(get: { action.options?.retryMinutes ?? 20 }, set: { options.wrappedValue.retryMinutes = $0 }), in: 5...180, step: 5) }
+                            Toggle("Nur einmal erinnern", isOn: Binding(get: { action.options?.once ?? false }, set: { options.wrappedValue.once = $0 }))
+                            Toggle("Bis zum Abhaken erneut erinnern", isOn: Binding(get: { action.options?.repeatUntilDone ?? true }, set: { options.wrappedValue.repeatUntilDone = $0 }))
+                            Text("AlarmKit ist der Wecker. Erneute Hinweise können unabhängig davon ausgeschaltet werden; bei Erledigung werden ausstehende Hinweise entfernt. Die begrenzte iPhone-Warteschlange wird beim Öffnen / Abhaken aufgefüllt.").font(.caption).foregroundStyle(.secondary)
+                            if action.options?.repeatUntilDone != false { Stepper("Intervall: \(action.options?.retryMinutes ?? 20) Minuten", value: Binding(get: { action.options?.retryMinutes ?? 20 }, set: { options.wrappedValue.retryMinutes = $0 }), in: 5...180, step: 5) }
                             if action.options?.enabled != nil { Toggle("Routine aktiv", isOn: Binding(get: { action.options?.enabled ?? true }, set: { options.wrappedValue.enabled = $0 })) }
                         }
                         if action.kind == .task || action.kind == .routine {
@@ -542,6 +609,7 @@ struct AIBuddyActionReviewView: View {
                     }
                 }
                 if let error { Section { Text(error).foregroundStyle(.orange) } }
+                if recurring && !removing { Section("Erinnerungs-Vorschau") { Text(reminderSummary).font(.subheadline); if action.options?.once == true { Text("Einmalig. Weitere Uhrzeiten gelten nur, wenn sie ebenfalls am gewählten Zeitpunkt liegen.").font(.caption).foregroundStyle(.secondary) }; Text("Wecker benötigen deine AlarmKit-Freigabe am iPhone.").font(.caption).foregroundStyle(.secondary) } }
                 if let times = action.options?.times { Section("Uhrzeiten dieser Routine") { ForEach(Array(times.indices), id: \.self) { index in DatePicker("Erinnerung \(index + 1)", selection: routineClock(index), displayedComponents: .hourAndMinute) }; Text("Alle Uhrzeiten werden gemeinsam gespeichert. Gleiche Uhrzeiten sind nicht doppelt erlaubt.").font(.caption).foregroundStyle(.secondary) } }
                 Section { Text("Speichert einen regulären App-Eintrag, inklusive Backup, Export und Rückgängig-Funktion.").font(.caption).foregroundStyle(.secondary) }
             }.buttonStyle(.borderless).navigationTitle(removing ? "Entfernen prüfen" : completion ? "Wirklich erledigt?" : "KI-Vorschlag bearbeiten").navigationBarTitleDisplayMode(.inline)
@@ -550,6 +618,13 @@ struct AIBuddyActionReviewView: View {
                     ToolbarItem(placement: .confirmationAction) { Button(removing ? "Ja, entfernen" : completion ? "Ja, erledigt" : modifying ? "Änderung übernehmen" : "Speichern") { save() }.bold().disabled(!canSave) }
                 }
         }.onAppear { if !hasBaseline { baseline = AIBuddyMutation.targetSnapshot(original, in: store.data); hasBaseline = true } }
+    }
+    private var reminderSummary: String {
+        let weekdays = action.weekdays.isEmpty ? "Täglich" : action.weekdays.sorted().map { Calendar.current.weekdaySymbols[$0 - 1] }.joined(separator: ", ")
+        let times = (action.options?.times ?? [Calendar.current.component(.hour, from: date) * 60 + Calendar.current.component(.minute, from: date)]).sorted().map { String(format: "%02d:%02d", $0 / 60, $0 % 60) }.joined(separator: ", ")
+        let rhythm = action.options?.once == true ? "Einmalig" : "Alle \(action.options?.repeatEveryWeeks ?? 1) Woche(n)"
+        let repeats = action.options?.repeatUntilDone == true ? " · bis erledigt alle \(action.options?.retryMinutes ?? 20) Minuten" : " · ein Hinweis pro Zeitpunkt"
+        return weekdays + " · " + times + "\n" + rhythm + " · " + (action.options?.alarmEnabled == true ? "AlarmKit" : "Mitteilung") + repeats
     }
     private func routineClock(_ index: Int) -> Binding<Date> {
         Binding(get: { let minute = action.options?.times?[index] ?? 540; return Calendar.current.date(bySettingHour: minute / 60, minute: minute % 60, second: 0, of: date) ?? date }, set: { value in var values = action.options?.times ?? []; guard values.indices.contains(index) else { return }; let clock = Calendar.current.dateComponents([.hour, .minute], from: value); values[index] = (clock.hour ?? 9) * 60 + (clock.minute ?? 0); options.wrappedValue.times = values })
@@ -572,7 +647,7 @@ struct AIBuddyActionReviewView: View {
             var snapshot = store.data
             try AIBuddyMutation.apply(clean, originalID: original.id, messageID: messageID, to: &snapshot)
             store.data = snapshot
-            if let failure = store.lastSaveError { error = failure } else { if clean.kind == .startSession { store.sessionController.synchronize() }; dismiss() }
+            if let failure = store.lastSaveError { error = failure } else { if clean.kind == .startSession { store.sessionController.synchronize() }; if clean.options?.alarmEnabled == true { Task { await RoutineAlarmCoordinator.shared.requestAccess(store) } }; dismiss() }
         } catch { self.error = error.localizedDescription }
     }
 }

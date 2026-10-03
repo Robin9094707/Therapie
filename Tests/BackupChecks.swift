@@ -128,6 +128,12 @@ struct BackupChecks {
         data.weeklyTasks[0].reminder?.alarmEnabled = true
         try BackupArchive.encoder().encode(data).write(to: root.appendingPathComponent("therapy-data.json"))
         let prefs = PortablePreferences(appearance: "dark", calmInterface: false, haptics: false, confetti: false)
+        data.captureEntryLocation = true; data.suggestionsEnabled = true; data.lastSuggestionAttempt = Date(timeIntervalSince1970: 1780000000)
+        data.entryLocations = [EntryLocation(id: "note-" + data.notes[0].id.uuidString, capturedAt: Date(timeIntervalSince1970: 1780000000), latitude: 52.52, longitude: 13.405, accuracy: 65)]
+        data.buddySuggestions = [BuddySuggestion(date: Date(timeIntervalSince1970: 1780000000), reply: AIBuddyReply(title: "Dein Impuls", message: "Eine kleine Pause", sections: [], actions: [], quickReplies: [BuddyQuickReply(title: "Ruhe", text: "Ich brauche Ruhe.")]))]
+        data.aiMessages[0].mediaIDs = data.media.map(\.id)
+        data.aiConversations[0].draftMediaIDs = data.media.map(\.id)
+        data.routines[0].repeatUntilDone = false
         let archive = try BackupArchive.export(data: data, root: root, preferences: prefs, options: BackupOptions(), password: password, version: "3002.0.0")
         defer { try? fm.removeItem(at: archive.deletingLastPathComponent()) }
         let original = try Data(contentsOf: archive)
@@ -146,6 +152,7 @@ struct BackupChecks {
         var noCompanion = prepared.manifest
         noCompanion.data.guidedCheckIns = []; noCompanion.data.routines = []; noCompanion.data.routineCompletions = []; noCompanion.data.routineSnoozes = []
         try expect(prepared.manifest.entryCount - noCompanion.entryCount == data.guidedCheckIns.count + data.routines.count + data.routineCompletions.count + data.routineSnoozes.count, "Backup overview counts all companion records")
+        try expect(prepared.manifest.data.entryLocations == data.entryLocations && prepared.manifest.data.buddySuggestions == data.buddySuggestions && prepared.manifest.data.aiMessages[0].mediaIDs == data.media.map(\.id) && prepared.manifest.data.aiConversations[0].draftMediaIDs == data.media.map(\.id) && prepared.manifest.data.routines[0].repeatUntilDone == false, "Encrypted backup preserves locations, suggestions and replayable chat attachment links")
         try expect(prepared.manifest.preferences == prefs, "Portable preferences round-trip")
         try expect(prepared.manifest.attachments.count == 3 && prepared.manifest.omittedAttachments == 0, "All attachment kinds included")
         for (_, path, bytes) in files { try expect(try Data(contentsOf: prepared.directory.appendingPathComponent(path)) == bytes, "Exact attachment bytes: " + path) }
@@ -227,7 +234,7 @@ struct BackupChecks {
         for version in 1...12 {
             oldJSON["schemaVersion"] = version
             let migrated = try BackupArchive.decoder().decode(AppData.self, from: JSONSerialization.data(withJSONObject: oldJSON))
-            try expect(migrated.schemaVersion == 13 && migrated.notes.count == 1 && migrated.media[0].attachmentOmitted == nil, "Schema \(version) migrates for backups")
+            try expect(migrated.schemaVersion == 14 && migrated.notes.count == 1 && migrated.media[0].attachmentOmitted == nil, "Schema \(version) migrates for backups")
         }
         oldJSON["schemaVersion"] = 12; oldJSON.removeValue(forKey: "accentTheme"); oldJSON.removeValue(forKey: "wellbeingPreferences")
         let pre3011 = try BackupArchive.decoder().decode(AppData.self, from: JSONSerialization.data(withJSONObject: oldJSON))

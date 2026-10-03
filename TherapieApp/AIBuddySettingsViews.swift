@@ -29,6 +29,8 @@ struct AIBuddySettingsView: View {
                     Toggle("KI-Begleiter verwenden", isOn: $store.data.aiSettings.enabled)
                     Toggle("Wöchentlichen KI-Rückblick automatisch erstellen", isOn: $store.data.aiSettings.weeklyReviewEnabled)
                     Text("Optional: einmal pro Kalenderwoche beim Öffnen der App. Dabei wird der Textkontext der letzten sieben Tage an OpenAI gesendet und der Rückblick im Tagebuch gespeichert. Bei Fehlern höchstens ein automatischer Versuch pro Tag. Kein garantierter Hintergrundzeitpunkt.").font(.caption).foregroundStyle(.secondary)
+                    Toggle("Gelegentliche persönliche Impulse", isOn: Binding(get: { store.data.suggestionsEnabled != false }, set: { store.data.suggestionsEnabled = $0 }))
+                    Text("Höchstens ein Impuls täglich beim Öffnen der App; berücksichtigt die letzten drei Tage. Du kannst ihn auf Heute selbst neu generieren.").font(.caption).foregroundStyle(.secondary)
                     Toggle("Neue Antworten automatisch vorlesen", isOn: $store.data.aiSettings.speakReplies)
                     Text("Die iPhone-Sprachausgabe arbeitet lokal. Einzelne Antworten kannst du jederzeit über das Lautsprecher-Symbol vorlesen lassen.").font(.caption).foregroundStyle(.secondary)
                     Toggle("Check-ins standardmäßig mit KI führen", isOn: $store.data.aiSettings.preferGuidedCheckIns)

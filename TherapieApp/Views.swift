@@ -71,7 +71,7 @@ struct RootView: View {
         .task {
             store.resumeProtectedStorage()
             if store.storageReady { store.sessionController.synchronize(); store.refreshTherapyCalendar(force: false); store.consumeRoutineAlarmRoute() }
-            if store.storageReady && modal == nil { await store.aiController.refreshWeeklyReview() }
+            if store.storageReady && modal == nil { await store.aiController.refreshWeeklyReview(); await store.aiController.refreshSuggestion() }
             while !Task.isCancelled {
                 store.resumeProtectedStorage()
                 if store.storageReady && scenePhase == .active { store.sessionController.reconcile(); store.consumeRoutineAlarmRoute(); presentRequested() }
@@ -79,7 +79,7 @@ struct RootView: View {
                     lastReminderRefresh = Date()
                     store.pruneUndo()
                     TaskNotificationCoordinator.shared.refresh(store)
-                    if modal == nil { await store.aiController.refreshWeeklyReview() }
+                    if modal == nil { await store.aiController.refreshWeeklyReview(); await store.aiController.refreshSuggestion() }
                 }
                 do { try await Task.sleep(for: .seconds(1)) } catch { break }
             }
@@ -484,6 +484,8 @@ struct DashboardView: View {
         NavigationStack {
             TherapyScreen {
                 LazyVStack(spacing: store.data.dashboard.compactCards ? 10 : 18) {
+                    FeatureHubLinks()
+                    if store.data.aiSettings.enabled && store.data.suggestionsEnabled != false { BuddySuggestionsCard(controller: store.aiController) }
                     ForEach(store.data.dashboard.visibleCards) { card in
                         dashboardCard(card)
                             .contextMenu {
@@ -551,7 +553,7 @@ struct DashboardView: View {
         case .wellness: WellnessProgressCard()
         case .therapy: TherapyTodayCard()
         case .week: WeekOverviewCard()
-        case .task: weeklyTaskCard
+        case .task: WeeklyTasksHomeCard()
         case .latest: latestCard
         case .reminders: TodayRemindersCard()
         case .goals: TodayGoalsCard()
@@ -900,6 +902,14 @@ struct TasksView: View {
     @State private var taskToDelete: UUID?
     @State private var confirmDelete = false
     @State private var onlyOpen = false
+    @State private var taskLimit = 40
+    @State private var weekScope = "current"
+    private var filteredTasks: [WeeklyTask] {
+        let current = Date().therapyWeek
+        return store.data.weeklyTasks.filter { task in
+            (!onlyOpen || !task.completed) && (weekScope == "all" || (weekScope == "current" ? task.weekOfYear == current.week && task.yearForWeekOfYear == current.year : task.weekOfYear != current.week || task.yearForWeekOfYear != current.year))
+        }.sorted { ($0.dueDate ?? $0.createdAt) < ($1.dueDate ?? $1.createdAt) }
+    }
     @EnvironmentObject private var store: AppStore
     @State private var showAdd = false
 
@@ -913,6 +923,9 @@ struct TasksView: View {
                             if !store.taskReminderStatus.isEmpty { Text(store.taskReminderStatus).font(.caption).foregroundStyle(.secondary) }
                         }
                     }
+                    NavigationLink { TodoTimelineView() } label: { Label("Gemeinsame To-do-Timeline", systemImage: "calendar.day.timeline.left") }
+                    Picker("Wochen", selection: $weekScope) { Text("Diese Woche").tag("current"); Text("Andere Wochen").tag("other"); Text("Alle").tag("all") }.pickerStyle(.segmented)
+                    Text("\(filteredTasks.count) Aufgaben · mehrere Aufgaben pro Woche möglich").font(.caption).foregroundStyle(.secondary)
                     Toggle("Nur offene Aufgaben", isOn: $onlyOpen)
                         .padding(.horizontal, 4)
                     if onlyOpen && !store.data.weeklyTasks.isEmpty && store.data.weeklyTasks.allSatisfy(\.completed) {
@@ -930,7 +943,7 @@ struct TasksView: View {
                             .padding(.vertical, 26)
                         }
                     } else {
-                        ForEach(store.data.weeklyTasks) { task in
+                        ForEach(Array(filteredTasks.prefix(taskLimit))) { task in
                             if !onlyOpen || !task.completed {
                                 taskCard(task: identifiedEditorBinding($store.data.weeklyTasks, to: task))
                             }
@@ -938,6 +951,8 @@ struct TasksView: View {
                     }
                 }
             }
+            .safeAreaInset(edge: .bottom) { if filteredTasks.count > taskLimit { Button("Weitere 40 Aufgaben") { taskLimit += 40 }.buttonStyle(.bordered).padding(8).background(.regularMaterial) } }
+            .onChange(of: weekScope) { _, _ in taskLimit = 40 }
             .navigationTitle("Wochenaufgaben")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {

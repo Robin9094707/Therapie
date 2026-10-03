@@ -68,6 +68,8 @@ struct AIBuddyAction: Codable, Equatable, Identifiable {
         guard (options?.valid ?? true), (tags ?? []).count <= 15, (tags ?? []).allSatisfy({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.count <= 60 }), title.count <= 160, text.count <= 6000, (dateISO == nil || date != nil), (moodPercent == nil || (0...100).contains(moodPercent!)), weekdays.allSatisfy({ (1...7).contains($0) }) else { return false }
         if ![AIBuddyActionKind.note, .checkIn].contains(kind), !(tags ?? []).isEmpty { return false }
         if options?.times != nil && ![AIBuddyActionKind.routine, .updateRoutine].contains(kind) { return false }
+        if options?.once == true && ((options?.times?.count ?? 1) > 1 || options?.repeatCount != nil || options?.repeatEveryWeeks != nil) { return false }
+        if (options?.repeatUntilDone != nil || options?.once != nil) && ![AIBuddyActionKind.routine, .updateRoutine].contains(kind) { return false }
         if options?.priority != nil && kind != .goal { return false }
         if kind == .startSession { return targetID.flatMap(UUID.init(uuidString:)) != nil }
         if kind == .battery { return moodPercent != nil }
@@ -114,6 +116,7 @@ struct AIBuddyMessage: Codable, Equatable, Identifiable {
     var appliedActionIDs: [String] = []
     var savedNoteID: UUID?
     var conversationID: UUID?
+    var mediaIDs: [UUID]?
 }
 enum AIBuddyText {
     static func plain(_ text: String) -> String {
@@ -175,6 +178,7 @@ struct AIBuddyContext {
             return lhs.date > rhs.date
         }
         var lines: [String] = [], characters = 0
+        if ["standort", "karte", "wo habe", "wo ich", "welchem ort", "welcher ort"].contains(where: intent.contains) { lines.append(EntryLocator.summary(data)) }
         for record in records.prefix(settingsIntent ? 0 : broad ? 60 : 12) {
             var details = record.subtitle
             if case .guided(let checkIn) = record {
@@ -273,6 +277,7 @@ struct AIBuddyConversation: Codable, Equatable, Identifiable {
     var savedNoteID: UUID?
     var savedMessageCount: Int?
     var draftText: String?
+    var draftMediaIDs: [UUID]?
     var memory: String?
     var tags: [String]?
     var sessionID: UUID?
@@ -447,7 +452,7 @@ enum AICheckInGuide {
         var result = "\nKI-GEFÜHRTER CHECK-IN. Aktuelle Standardfrage: " + questions[step]
         result += "\nDeute ausschließlich Angaben aus der aktuellen Nutzerantwort als Daten. Auch ausdrücklich genannte Angaben zu späteren Fragen dürfen übernommen werden. checkIn enthält nur belegte Angaben, sonst null. Kein Ergänzen aus älteren Einträgen. Stimmung vorsichtig vorschlagen, immer überprüfbar. tasks nur explizite gewünschte Schritte, tags bekannte Hashtags bevorzugen. Alle Fragen sind freiwillig; 'überspringen' ergibt null. Keine actions für separate Kopien dieses Check-ins."
         result += "\nEine klare Antwort auf Ankommen wird immer in summary übernommen. Auch eine kurze Antwort zählt; verlange keine Wiederholung. Die App bestimmt den nächsten Schritt anhand belegter Antworten und Vollständigkeit, die Steuerfelder sind Hinweise.\nVERBINDLICHER ABLAUF: Schritt \(step + 1) von 8. answeredStep ist ausschließlich \(step < 7 ? String(step) : "null"), wenn die aktuelle Frage beantwortet ist, sonst null. In der Übersicht ist answeredStep immer null und advance=false. Bei Rückfragen, Themenwechsel, Unklarheit oder weiterem Gespräch advance=false und answeredStep=null. Beantworte die Zwischenfrage kurz, kehre zum AKTUELLEN Modul zurück; stelle niemals eine Frage aus einem späteren Modul, solange das aktuelle nicht abgeschlossen ist. Nur mit belegter Antwort auf das aktuelle Modul oder ausdrücklichem Überspringen advance=true; dann genau einen Schritt weiter. Angaben zu späteren Modulen speichern, aber damit nicht den aktuellen Schritt beenden. Bei advance=true folgt: " + questions[min(7, step + 1)]
-        result += "\nDie Standardfrage ist angeheftet. Stelle nur eine passende persönliche Frage zum zulässigen Modul. finish=true nur bei ausdrücklichem Wunsch nach Übersicht/Speichern oder nach Abschluss von Schritt 7 (Therapiefrage). Am Ende zur Übersicht einladen, niemals behaupten gespeichert zu haben. energyPoints: alle ausdrücklich genannten Akku-Geber und -Nehmer einzeln, jeweils ein kurzes Stichwort, bevorzugt EIN Wort oder Personenname. Beispiel 'Mila zieht mir Akku, außerdem Geldprobleme' => takes: Mila und Geld. Keine ganzen Sätze als Titel. impact 1–5 nur aus selbst genannter Stärke (z.B. sehr stark=5, wenig=1), sonst null. Frage dann konkret nach der Stärke des einzelnen Punktes; erfinde keine Zahl. Auf eine Stärke-Rückantwort den vorhandenen Punkt per Titel/Richtung aktualisieren, keine Kopie. givesEnergy/takesEnergy ebenfalls nur getrennte Stichwörter. Hashtags enthalten konkrete Namen und Themen aus dem Gespräch, z.B. Mila und Geld, keine generischen KI-Begleitung-Tags."
+        result += "\nDie Standardfrage ist angeheftet. Stelle nur eine passende persönliche Frage zum zulässigen Modul. finish=true nur bei ausdrücklichem Wunsch nach Übersicht/Speichern oder nach Abschluss von Schritt 7 (Therapiefrage). Am Ende zur Übersicht einladen, niemals behaupten gespeichert zu haben. energyPoints: alle ausdrücklich genannten Akku-Geber und -Nehmer einzeln, jeweils ein kurzes Stichwort, bevorzugt EIN Wort oder Personenname. Beispiel 'Mila zieht mir Akku, außerdem Geldprobleme' => takes: Mila und Geld. Keine ganzen Sätze als Titel. impact 1–5 nur aus selbst genannter Stärke (z.B. sehr stark=5, wenig=1), sonst null. Prozentwirkung ausdrücklich genannter Punkte in 1–5 umrechnen: round(Prozent/20), auf 1–5 begrenzen; 50%=3/5. Mehrere Punkte und Stärken aus einer Antwort gemeinsam übernehmen. Prozentwirkung eines Punktes niemals als batteryPercent übernehmen. Frage nur nach noch fehlenden Stärken; erfinde keine Zahl. Auf eine Stärke-Rückantwort den vorhandenen Punkt per Titel/Richtung aktualisieren, keine Kopie. givesEnergy/takesEnergy ebenfalls nur getrennte Stichwörter. Hashtags enthalten konkrete Namen und Themen aus dem Gespräch, z.B. Mila und Geld, keine generischen KI-Begleitung-Tags."
         result += "\nMehrteilige Module vollständig begleiten: Akkuwert UND Geber/Nehmer samt Stärke; Stress UND Reizbelastung UND Schlaf; anschließend Erfolg, Zufriedenheit und Bedürfnis. Fehlende Teile einzeln nachfragen, nicht nach der ersten Teilantwort sofort weitergehen. Alle Teile sind freiwillig: bei gewünschtem Überspringen darf der Nutzer den Rest des Moduls auslassen. energyPoints=null, solange keine Akku-Themen genannt wurden; [] ausschließlich bei ausdrücklich keinen Gebern/Nehmern. Niemals 'keine' aus Schweigen ableiten."
         if let encoded = try? JSONEncoder().encode(entry), let text = String(data: encoded, encoding: .utf8) { result += "\nAKTUELLER ENTWURF: " + String(text.prefix(6000)) }
         return result
@@ -455,6 +460,15 @@ enum AICheckInGuide {
     static func apply(_ proposal: AIBuddyCheckInProposal, to entry: inout GuidedCheckIn, known: [String], userText: String? = nil) -> Bool {
         guard entry.isDraft, proposal.valid else { return false }
         var proposal = proposal
+        if let text = userText {
+            let parsed = BatteryLanguage.factors(text, known: entry.energyPoints ?? [])
+            if !parsed.isEmpty {
+                var factors = proposal.energyPoints ?? []
+                for factor in parsed { factors.removeAll { AppHashtags.key(AIEnergyKeywords.title($0.title)) == AppHashtags.key(factor.title) && $0.direction == factor.direction }; factors.append(factor) }
+                proposal.energyPoints = factors
+            }
+            if BatteryLanguage.hasPointPercentage(text) && !BatteryLanguage.hasBatteryLevel(text) { proposal.batteryPercent = nil }
+        }
         let directAnswer = userText.map(isDirectAnswer) == true
         if let text = userText, directAnswer {
             // Explicit local answers must work even when the model omits its control fields.
@@ -470,7 +484,7 @@ enum AICheckInGuide {
                     var factors = proposal.energyPoints ?? []
                     factors.removeAll { AppHashtags.key($0.title) == AppHashtags.key(point.title) && $0.direction == point.direction }
                     factors.append(AIBuddyEnergyFactor(title: point.title, direction: point.direction, impact: value)); proposal.energyPoints = factors
-                } else if entry.batteryPercent == nil && proposal.batteryPercent == nil { proposal.batteryPercent = integer(labels: ["mein akku", "akku"], maximum: 100) }
+                } else if entry.batteryPercent == nil && proposal.batteryPercent == nil && !BatteryLanguage.hasPointPercentage(text) { proposal.batteryPercent = integer(labels: ["mein akku", "akku"], maximum: 100) }
                 if text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines).range(of: "^(keine (weiteren )?akku-punkte|keine geber und nehmer)[.! ]*$", options: .regularExpression) != nil { proposal.energyPoints = proposal.energyPoints ?? [] }
             case 3:
                 if entry.stress == nil && proposal.stress == nil { proposal.stress = integer(labels: ["mein stress", "stress"], maximum: 5).flatMap { $0 >= 1 ? $0 : nil } }
@@ -589,7 +603,7 @@ extension GuidedCheckIn {
 extension AIConversationMutation {
     static func removeIfEmpty(_ id: UUID, in data: inout AppData) {
         guard let chat = data.aiConversations.first(where: { $0.id == id }),
-              (chat.draftText ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              (chat.draftText ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, (chat.draftMediaIDs ?? []).isEmpty,
               !data.aiMessages.contains(where: { $0.conversationID == id && $0.role == "user" }) else { return }
         if let checkID = chat.checkInID {
             guard !data.guidedCheckIns.contains(where: { $0.id == checkID && (!$0.isDraft || $0.hasUserContent) }) else { return }
@@ -604,6 +618,8 @@ struct AIBuddyActionOptions: Codable, Equatable {
     var remindersEnabled: Bool?
     var alarmEnabled: Bool?
     var retryMinutes: Int?
+    var repeatUntilDone: Bool?
+    var once: Bool?
     var repeatEveryWeeks: Int?
     var repeatCount: Int?
     var enabled: Bool?
@@ -615,8 +631,8 @@ struct AIBuddyActionOptions: Codable, Equatable {
     // Keep identities of pre-3011 proposals intact after Codable adds optional fields.
     var stableIdentity: String {
         let legacy = "AIBuddyActionOptions(remindersEnabled: \(String(describing: remindersEnabled)), alarmEnabled: \(String(describing: alarmEnabled)), retryMinutes: \(String(describing: retryMinutes)), repeatEveryWeeks: \(String(describing: repeatEveryWeeks)), repeatCount: \(String(describing: repeatCount)), enabled: \(String(describing: enabled)), valueBool: \(String(describing: valueBool)), valueInt: \(String(describing: valueInt)))"
-        guard valueString != nil || priority != nil || times != nil else { return legacy }
-        return legacy + "|string=" + (valueString ?? "") + "|priority=" + (priority ?? "") + "|times=" + (times ?? []).map(String.init).joined(separator: ",")
+        guard valueString != nil || priority != nil || times != nil || repeatUntilDone != nil || once != nil else { return legacy }
+        return legacy + (once.map { "|once=" + String($0) } ?? "") + (repeatUntilDone.map { "|untilDone=" + String($0) } ?? "") + "|string=" + (valueString ?? "") + "|priority=" + (priority ?? "") + "|times=" + (times ?? []).map(String.init).joined(separator: ",")
     }
     var valid: Bool {
         (priority == nil || ["low", "normal", "high"].contains(priority!)) &&

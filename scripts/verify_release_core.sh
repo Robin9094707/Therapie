@@ -4,7 +4,7 @@ set -euo pipefail
 CHECK_ROOT=$(mktemp -d /tmp/therapie-core.XXXXXX)
 trap 'rm -rf "$CHECK_ROOT"' EXIT
 swiftc -parse-as-library -emit-library -emit-module -enable-testing -module-name TherapyDomain \
-  TherapieApp/Models.swift TherapieApp/AIBuddyModels.swift TherapieApp/TherapyDiscussionModels.swift \
+  TherapieApp/Models.swift TherapieApp/FeatureModels.swift TherapieApp/AIBuddyModels.swift TherapieApp/TherapyDiscussionModels.swift \
   TherapieApp/DashboardModels.swift TherapieApp/ArchiveModels.swift TherapieApp/WellnessModels.swift \
   TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift TherapieApp/CompanionModels.swift \
   TherapieApp/InsightsModels.swift TherapieApp/AIBuddyAPI.swift TherapieApp/AIBuddyActions.swift \

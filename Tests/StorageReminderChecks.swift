@@ -112,6 +112,12 @@ struct StorageReminderChecks {
         try expect(!fm.fileExists(atPath: noteFile.path), "Deleted records removed from readable mirror")
         try ReadableBackup.writeEntries(data: data, root: root)
         let preferences = PortablePreferences(appearance: "dark", calmInterface: true, haptics: false, confetti: true)
+        data.captureEntryLocation = true; data.suggestionsEnabled = true; data.lastSuggestionAttempt = Date(timeIntervalSince1970: 1780000000)
+        data.entryLocations = [EntryLocation(id: "note-" + data.notes[0].id.uuidString, capturedAt: Date(timeIntervalSince1970: 1780000000), latitude: 52.52, longitude: 13.405, accuracy: 65)]
+        data.buddySuggestions = [BuddySuggestion(date: Date(timeIntervalSince1970: 1780000000), reply: AIBuddyReply(title: "Dein Impuls", message: "Eine kleine Pause", sections: [], actions: [], quickReplies: [BuddyQuickReply(title: "Ruhe", text: "Ich brauche Ruhe.")]))]
+        data.aiMessages[0].mediaIDs = data.media.map(\.id)
+        data.aiConversations[0].draftMediaIDs = data.media.map(\.id)
+        data.routines[0].repeatUntilDone = false
         let zip = try ReadableBackup.export(data: data, root: root, preferences: preferences, options: BackupOptions(), version: "3003.0.0")
         defer { try? fm.removeItem(at: zip.deletingLastPathComponent()) }
         let prepared = try ReadableBackup.prepareImport(url: zip); defer { prepared.discard() }
@@ -123,6 +129,9 @@ struct StorageReminderChecks {
         try expect(prepared.manifest.data.aiConversations[0].id == data.aiConversations[0].id && prepared.manifest.data.aiConversations[0].contextDays == 14 && prepared.manifest.data.guidedCheckIns[0].tags == ["Familie"], "Readable ZIP preserves linked chat, context and hashtags")
         try expect(prepared.manifest.data.dashboard == data.dashboard && prepared.manifest.data.archivePreferences == data.archivePreferences, "Readable ZIP restores personalization and archive settings")
         try expect(prepared.manifest.data.batteryPoints[0].impactConfirmed == false && prepared.manifest.data.guidedCheckIns[0].energyPoints?[0].signedImpact == 0, "Readable ZIP preserves unresolved energy strength in both linked records")
+        try expect(prepared.manifest.data.entryLocations == data.entryLocations && prepared.manifest.data.buddySuggestions == data.buddySuggestions && prepared.manifest.data.aiMessages[0].mediaIDs == data.media.map(\.id) && prepared.manifest.data.routines[0].repeatUntilDone == false, "Readable ZIP preserves locations, suggestions, audio links and reminder mode")
+        let locationText = try String(contentsOf: prepared.directory.appendingPathComponent("Eintraege/entryLocations/0.txt"), encoding: .utf8)
+        try expect(locationText.contains("52.52"), "New location records appear in the human-readable mirror")
         let reminderText = try String(contentsOf: prepared.directory.appendingPathComponent("Eintraege/Einstellungen/companionSettings.txt"), encoding: .utf8)
         try expect(reminderText.contains("Check-in-Erinnerungen"), "Reminder settings appear in readable mirror")
         let logText = try String(contentsOf: prepared.directory.appendingPathComponent("Eintraege/routineCompletions/" + data.routineCompletions[0].id.uuidString + ".txt"), encoding: .utf8)

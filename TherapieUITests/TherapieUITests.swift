@@ -481,6 +481,45 @@ final class TherapieUITests: XCTestCase {
     }
 
     @MainActor
+    @MainActor
+    func testFeatureTimelineAndLocationFilters() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--show-dashboard", "--feature-ui-fixture"]
+        app.launch()
+        let timeline = app.buttons["To-do-Timeline"].firstMatch
+        XCTAssertTrue(timeline.waitForExistence(timeout: 25)); timeline.tap()
+        XCTAssertTrue(app.navigationBars["To-do-Timeline"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Zweiter Wochen-Schritt"].waitForExistence(timeout: 10))
+        app.segmentedControls.buttons["Therapie"].tap()
+        XCTAssertTrue(app.staticTexts["Meine nächste Therapiefrage"].waitForExistence(timeout: 5))
+        capture("Gemeinsame Timeline mit Therapieanker")
+        app.navigationBars.buttons.firstMatch.tap()
+        let map = app.buttons["Meine Eintragskarte"].firstMatch
+        XCTAssertTrue(map.waitForExistence(timeout: 10)); map.tap()
+        XCTAssertTrue(app.navigationBars["Meine Eintragskarte"].waitForExistence(timeout: 10))
+        app.segmentedControls.buttons["Alle"].tap()
+        XCTAssertTrue(app.staticTexts["1 von 1 Einträgen auf der Karte"].waitForExistence(timeout: 10))
+        capture("Eintragskarte mit Filter und ohne erfundene Altstandorte")
+    }
+    @MainActor
+    func testReplayableChatAudioAndAttachmentWarning() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--show-dashboard", "--feature-ui-fixture", "--buddy-network-fixture"]
+        app.launch()
+        let play = app.buttons["Audio abspielen"].firstMatch
+        XCTAssertTrue(play.waitForExistence(timeout: 25)); play.tap()
+        XCTAssertTrue(app.buttons["Audio pausieren"].firstMatch.waitForExistence(timeout: 3))
+        app.buttons["Audio pausieren"].firstMatch.tap()
+        XCTAssertTrue(app.sliders["Audioposition"].firstMatch.exists)
+        let add = app.buttons["Datei oder Bild anhängen"].firstMatch
+        XCTAssertTrue(add.waitForExistence(timeout: 5)); add.tap()
+        app.buttons["Textdatei / PDF"].tap()
+        XCTAssertTrue(app.alerts["Datei für die KI vorbereiten?"].waitForExistence(timeout: 5))
+        app.alerts.buttons["Abbrechen"].tap()
+        XCTAssertTrue(app.textViews["ai.composer"].firstMatch.exists)
+        capture("Dauerhafte Chat-Audio und rechter Mikrofonbereich")
+    }
+
     private func capture(_ name: String) {
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         attachment.name = name

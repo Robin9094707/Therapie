@@ -51,6 +51,7 @@ enum ReadableBackup {
         "guidedCheckIns": "Gefuehrte-Check-ins", "routines": "Alltagsroutinen", "routineCompletions": "Routine-Protokoll", "routineSnoozes": "Verschobene-Routinen", "companionSettings": "Alltags-Einstellungen",
         "batteryPercent": "Akku in Prozent", "isDraft": "Entwurf", "scheduledAt": "Geplant fuer", "recordedAt": "Bestaetigt am", "outcome": "Ergebnis", "times": "Uhrzeiten", "pauseOnVacation": "Urlaubspause", "retryMinutes": "Erneut erinnern nach Minuten",
         "weeklyTasks": "Wochenaufgaben", "notes": "Notizen", "energyEntries": "Energie-Checks", "media": "Materialien",
+        "entryLocations": "Eintrags-Standorte", "buddySuggestions": "Persoenliche KI-Impulse", "captureEntryLocation": "Standorte fuer neue Eintraege", "suggestionsEnabled": "KI-Impulse aktiviert", "mediaIDs": "Verknuepfte Anhaenge", "draftMediaIDs": "Entwurfs-Anhaenge", "repeatUntilDone": "Erneut bis erledigt",
         "reflections": "Therapie-Rueckblicke", "moodCheckIns": "Stimmungs-Check-ins", "batteryPoints": "Akku-Punkte",
         "weekReviews": "Wochenrueckblicke", "therapyFolders": "Therapieordner", "therapyTopics": "Therapiethemen",
         "therapyGoals": "Therapieziele", "sessionTemplates": "Stundenplaene", "sessionHistory": "Therapiestunden",

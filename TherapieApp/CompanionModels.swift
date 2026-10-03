@@ -74,6 +74,7 @@ struct DailyRoutine: Codable, Equatable, Identifiable {
     var times = [RoutineTime()]
     var remindersEnabled = true
     var urgentAlarm = false
+    var repeatUntilDone: Bool?
     var retryMinutes = 20
     var escalationHour: Int? = 23
     var escalationMinutes = 5
@@ -187,6 +188,7 @@ enum RoutinePlanner {
                     start == routine.quietEndHour ? true : (start > routine.quietEndHour ? hour >= start || hour < routine.quietEndHour : hour >= start && hour < routine.quietEndHour)
                 } ?? false
                 if fire > now && !quiet { output.append(RoutineReminderSlot(occurrence: occurrence, fireAt: fire)) }
+                if routine.repeatUntilDone == false { break }
                 let escalated = routine.escalationHour.map { hour >= $0 } ?? false
                 let minutes = max(5, min(180, escalated ? routine.escalationMinutes : routine.retryMinutes))
                 fire = fire.addingTimeInterval(Double(minutes) * 60)

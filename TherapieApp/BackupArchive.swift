@@ -62,6 +62,7 @@ struct BackupManifest: Codable {
         + data.therapyTopics.count + data.therapyGoals.count + data.sessionTemplates.count + data.sessionHistory.count
         + data.weeklyEnergyReviews.count + (data.currentSession == nil ? 0 : 1)
         + data.guidedCheckIns.count + data.routines.count + data.routineCompletions.count + data.routineSnoozes.count
+        + data.aiConversations.count + data.aiMessages.count + data.buddySuggestions.count + data.entryLocations.count
     }
 }
 

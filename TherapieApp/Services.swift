@@ -230,6 +230,7 @@ final class BackupService {
 @MainActor
 final class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published var lastLocation: CLLocation?
+    var receiveLocation: ((CLLocation) -> Void)?
     @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
 
     private let manager = CLLocationManager()
@@ -262,6 +263,7 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         lastLocation = locations.last
+        if let location = locations.last { receiveLocation?(location) }
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {}
