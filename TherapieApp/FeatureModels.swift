@@ -68,7 +68,10 @@ enum TodoTimeline {
             return TodoTimelineItem(id: "task-" + task.id.uuidString, date: task.dueDate ?? weekStart, title: task.title, detail: "KW \(task.weekOfYear) · " + task.details, kind: "Aufgaben", completed: task.completed, taskID: task.id)
         }
         let therapy = TherapyDateHelper.nextOccurrence(schedule: data.schedule, after: now) ?? now
-        values += TherapyDiscussionPlanner.points(in: data, includeDiscussed: true).map { .init(id: "discussion-" + $0.id, date: therapy, title: $0.text, detail: $0.source + " · erfasst " + $0.date.formatted(date: .abbreviated, time: .omitted), kind: "Therapie", completed: data.therapyDiscussionAcknowledgedIDs.contains($0.id), discussionID: $0.id) }
+        values += TherapyDiscussionPlanner.points(in: data, includeDiscussed: true).map { point in
+            let discussed = data.therapyDiscussionAcknowledgedIDs.contains(point.id)
+            return TodoTimelineItem(id: "discussion-" + point.id, date: discussed ? point.date : therapy, title: point.text, detail: point.source + (discussed ? " · besprochen, ursprünglicher Eintrag " : " · für den nächsten Termin, erfasst ") + point.date.formatted(date: .abbreviated, time: .omitted), kind: "Therapie", completed: discussed, discussionID: point.id)
+        }
         values += RoutinePlanner.occurrences(data.routines, settings: data.companionSettings, now: now).map { occurrence in
             .init(id: "routine-" + occurrence.id, date: occurrence.due, title: data.routines.first { $0.id == occurrence.routineID }?.title ?? "Routine", detail: "Geplanter Zeitpunkt", kind: "Routinen", completed: RoutinePlanner.resolved(occurrence, completions: data.routineCompletions), occurrence: occurrence)
         }

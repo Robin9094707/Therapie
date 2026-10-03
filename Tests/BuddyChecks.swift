@@ -360,6 +360,10 @@ final class BuddyMockProtocol: URLProtocol {
         var urgentOnceData = AppData(); urgentOnceData.routines = [actionData.routines[0]]
         urgentOnceData.routines[0].repeatUntilDone = true; urgentOnceData.routines[0].retryMinutes = 30
         try expect(!RoutinePlanner.slots(data: urgentOnceData, now: now.addingTimeInterval(120), calendar: cal).isEmpty, "Urgent one-time reminders continue retrying after their original timestamp")
+        let ringingKey = "therapy.routine.\(urgentOnceData.routines[0].id).\(urgentOnceData.routines[0].times[0].id).\(Int(now.timeIntervalSince1970)).retry.hash"
+        try expect(AlarmOwnershipPolicy.keepAlerting(key: ringingKey, data: urgentOnceData, now: now.addingTimeInterval(120)), "One-time alarm stays alerting through app refresh until resolved")
+        urgentOnceData.routineCompletions = [RoutineCompletion(routineID: urgentOnceData.routines[0].id, timeID: urgentOnceData.routines[0].times[0].id, scheduledAt: now)]
+        try expect(!AlarmOwnershipPolicy.keepAlerting(key: ringingKey, data: urgentOnceData, now: now.addingTimeInterval(120)), "Completing the one-time alarm cancels its current alert")
         let tomorrow = now.addingTimeInterval(86400), clock = cal.dateComponents([.hour,.minute,.weekday], from: tomorrow)
         var oncePerSlot = DailyRoutine(title: "Ein Hinweis", times: [RoutineTime(weekdays: [clock.weekday!], hour: clock.hour!, minute: clock.minute!)], urgentAlarm: true, repeatUntilDone: false)
         var hintData = AppData(); hintData.routines = [oncePerSlot]

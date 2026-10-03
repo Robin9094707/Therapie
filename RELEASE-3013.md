@@ -16,4 +16,4 @@ Schema 14 erweitert bisherige Daten additiv; alte Sicherungen bleiben importierb
 
 Rollback vor dieser Erweiterung: `0fd7c20d6a5fbc3e7b99c9e6aaac207b89e386af`, Branch `backup/pre-features-3013-2026-10-03`. Dieser Code-Rollback ist keine Rücksetzung neu erstellter Nutzerdaten. Vor einer Installation der älteren App ein aktuelles Backup erhalten; ältere Apps überschreiben Schema 14 nicht.
 
-Prüfung: vier gebündelte Domänen-/Backup-Prüfprogramme und ZIP64-Prüfung; iPhone-Release-Build und tatsächliche Bundle-Prüfung; vier gezielte Simulatorfälle für Timeline/Karte, Chat-Audio/Anhangswarnung sowie bisherigen Check-in- und Terminablauf. AlarmKit-Freigabe, echte Alarme, Mikrofon-Gesten und GPS brauchen abschließend ein physisches iPhone.
+Prüfung: vier gebündelte Domänen-/Backup-Prüfprogramme und ZIP64-Prüfung; iPhone-Release-Build und tatsächliche Bundle-Prüfung; zwei gezielte Simulatorfälle für Timeline/Karte und Chat-Audio/Anhangswarnung; zusätzlich wurden im vorhergehenden Build derselben Erweiterung bisheriger Check-in- und Terminablauf geprüft. AlarmKit-Freigabe, echte Alarme, Mikrofon-Gesten und GPS brauchen abschließend ein physisches iPhone.

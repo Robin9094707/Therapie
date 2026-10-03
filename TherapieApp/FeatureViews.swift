@@ -1,5 +1,6 @@
 import SwiftUI
 import MapKit
+import UIKit
 
 struct FeatureHubLinks: View {
     var body: some View {
@@ -154,6 +155,7 @@ struct EntryMapView: View {
             VStack(alignment: .leading, spacing: 14) {
                 Toggle("Neue Einträge mit aktuellem Standort", isOn: Binding(get: { store.data.captureEntryLocation != false }, set: { store.data.captureEntryLocation = $0 }))
                 Text("Nur nach deiner iPhone-Standortfreigabe, beim Erstellen eines Eintrags. Keine dauerhafte Ortung. Alte Einträge bekommen keinen nachträglichen Standort. Genauigkeit hängt vom iPhone ab.").font(.caption).foregroundStyle(.secondary)
+                Link("iPhone-Standortfreigabe prüfen", destination: URL(string: UIApplication.openSettingsURLString)!).font(.caption)
                 Picker("Zeitraum", selection: $days) { Text("7 Tage").tag(7); Text("30 Tage").tag(30); Text("Alle").tag(0) }.pickerStyle(.segmented)
                 Map(selection: $selected) {
                     ForEach(Array(entries.prefix(limit))) { entry in

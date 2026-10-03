@@ -928,6 +928,7 @@ struct TasksView: View {
                     Text("\(filteredTasks.count) Aufgaben · mehrere Aufgaben pro Woche möglich").font(.caption).foregroundStyle(.secondary)
                     Toggle("Nur offene Aufgaben", isOn: $onlyOpen)
                         .padding(.horizontal, 4)
+                    if filteredTasks.isEmpty && !store.data.weeklyTasks.isEmpty { Text("Keine Aufgaben im gewählten Filter. Unter Alle findest du auch andere Wochen.").font(.subheadline).foregroundStyle(.secondary) }
                     if onlyOpen && !store.data.weeklyTasks.isEmpty && store.data.weeklyTasks.allSatisfy(\.completed) {
                         ContentUnavailableView("Alles erledigt", systemImage: "checkmark.seal",
                                                description: Text("Du hast alle eingetragenen Aufgaben abgeschlossen."))

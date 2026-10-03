@@ -9,7 +9,7 @@ extension AppStore {
         let before = EntryLocator.recordIDs(previous), after = EntryLocator.recordIDs(data)
         let added = after.subtracting(before)
         guard !added.isEmpty else { return }
-        for id in added where !data.entryLocations.contains(where: { $0.id == id }) { pendingLocationRecords[id] = Date() }
+        for id in added where (data.preferences.includeLocationForNewMedia || !id.hasPrefix("media-")) && !data.entryLocations.contains(where: { $0.id == id }) { pendingLocationRecords[id] = Date() }
         entryLocationService.requestCurrentLocation()
     }
     func attachLocation(_ location: CLLocation) {

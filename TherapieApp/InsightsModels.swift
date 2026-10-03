@@ -229,10 +229,19 @@ enum CompanionAlarmPlanner {
 
 /// Device-independent decision, shared with alarm regression checks.
 enum AlarmOwnershipPolicy {
-    static func keepAlerting(key: String, data: AppData) -> Bool {
+    static func keepAlerting(key: String, data: AppData, now: Date = Date()) -> Bool {
         if key.hasPrefix("therapy.routine.") {
-            guard let routine = data.routines.first(where: { key.hasPrefix("therapy.routine.\($0.id).") }), routine.urgentAlarm,
-                  RoutinePlanner.active(routine, settings: data.companionSettings, at: Date()) else { return false }
+            guard let routine = data.routines.first(where: { key.hasPrefix("therapy.routine.\($0.id).") }), routine.urgentAlarm else { return false }
+            var active = RoutinePlanner.active(routine, settings: data.companionSettings, at: now)
+            let parts = key.split(separator: ".")
+            // The last scheduled occurrence may still ring after a one-time recurrence ends.
+            if !active, routine.endsAt != nil, parts.count >= 6, let timeID = UUID(uuidString: String(parts[3])), routine.times.contains(where: { $0.id == timeID }), let stamp = TimeInterval(parts[4]) {
+                let due = Date(timeIntervalSince1970: stamp)
+                let end = Calendar.current.date(byAdding: .day, value: 1, to: due) ?? due.addingTimeInterval(86400)
+                let occurrence = RoutineOccurrence(routineID: routine.id, timeID: timeID, due: due, end: end)
+                active = due <= now && now < end && RoutinePlanner.activeReminder(routine, occurrence: occurrence, settings: data.companionSettings, now: now)
+            }
+            guard active else { return false }
             return !data.routineCompletions.contains { key.hasPrefix("therapy.routine.\($0.routineID).\($0.timeID).\(Int($0.scheduledAt.timeIntervalSince1970)).") }
         }
         if key.hasPrefix("therapy.task.") { return data.weeklyTasks.contains { !$0.completed && key.hasPrefix("therapy.task.\($0.id).") } }
