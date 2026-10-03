@@ -21,6 +21,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   build:
@@ -30,6 +31,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Show Xcode
         run: |
@@ -59,7 +62,21 @@ jobs:
         if: contains(github.event.head_commit.message, '[feature-smoke]') || contains(github.event.head_commit.message, '[bugfix-smoke]') || contains(github.event.head_commit.message, '[buddy-smoke]') || (github.event_name == 'workflow_dispatch' && inputs.verify_checkin)
         run: python3 scripts/warm_ui_simulator.py
 
+      - name: Download verified release for UI-only follow-up
+        if: contains(github.event.head_commit.message, '[ui-only-3013]')
+        uses: actions/download-artifact@v4
+        with:
+          name: Therapie-v3013.0.0-IPA
+          github-token: ${{ github.token }}
+          run-id: 37118043756
+          path: verified-release
+
+      - name: Verify production source equivalence and restore native bundle
+        if: contains(github.event.head_commit.message, '[ui-only-3013]')
+        run: python3 scripts/reuse_verified_release.py 2a654da21f2fca0d3f3f01fac489ad2e2b8336c1 verified-release/Therapie-v3013.0.0.ipa
+
       - name: Build unsigned iPhone app
+        if: ${{ !contains(github.event.head_commit.message, '[ui-only-3013]') }}
         run: |
           set -o pipefail
           xcodebuild \

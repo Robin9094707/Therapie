@@ -505,6 +505,8 @@ final class TherapieUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing", "--show-dashboard", "--feature-ui-fixture", "--buddy-network-fixture"]
         app.launch()
+        let savedChat = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "ai.chat.")).firstMatch
+        XCTAssertTrue(savedChat.waitForExistence(timeout: 25)); savedChat.tap()
         let play = app.buttons["Audio abspielen"].firstMatch
         XCTAssertTrue(play.waitForExistence(timeout: 25)); play.tap()
         XCTAssertTrue(app.buttons["Audio pausieren"].firstMatch.waitForExistence(timeout: 3))
