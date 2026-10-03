@@ -507,8 +507,11 @@ final class TherapieUITests: XCTestCase {
         app.launch()
         let savedChat = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "ai.chat.")).firstMatch
         XCTAssertTrue(savedChat.waitForExistence(timeout: 25)); savedChat.tap()
+        capture("Geöffnetes Gespräch mit gesicherter Sprachnachricht")
+        XCTAssertTrue(app.textViews["ai.composer"].firstMatch.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(app.staticTexts["Meine Audio bleibt abspielbar."].firstMatch.waitForExistence(timeout: 10), app.debugDescription)
         let play = app.buttons["Audio abspielen"].firstMatch
-        XCTAssertTrue(play.waitForExistence(timeout: 25)); play.tap()
+        XCTAssertTrue(play.waitForExistence(timeout: 10), app.debugDescription); play.tap()
         XCTAssertTrue(app.buttons["Audio pausieren"].firstMatch.waitForExistence(timeout: 3))
         app.buttons["Audio pausieren"].firstMatch.tap()
         XCTAssertTrue(app.sliders["Audioposition"].firstMatch.exists)
