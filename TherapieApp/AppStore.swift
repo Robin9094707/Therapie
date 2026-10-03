@@ -136,6 +136,11 @@ final class AppStore: ObservableObject {
                     data.media = [MediaItem(id: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!, createdAt: Date().addingTimeInterval(-3600), kind: .photo, title: "Testfoto", note: "", tags: [], relativePath: imagePath), MediaItem(id: UUID(uuidString: "33333333-3333-3333-3333-333333333333")!, createdAt: Date().addingTimeInterval(-3600), kind: .audio, title: "Testaufnahme", note: "", tags: [], relativePath: audioPath)]
                 }
                 if ProcessInfo.processInfo.arguments.contains("--feature-ui-fixture") {
+                    // A hosted simulator may launch before protected storage is available.
+                    // UI fixtures bypass that wait, so create and validate their own files.
+                    do {
+                        try fm.createDirectory(at: recordingsURL, withIntermediateDirectories: true)
+                    } catch { preconditionFailure("Audio fixture directory: \(error)") }
                     data.suggestionsEnabled = false
                     data.aiSettings.enabled = true
                     data.weeklyTasks.append(WeeklyTask(weekOfYear: week.week, yearForWeekOfYear: week.year, title: "Zweiter Wochen-Schritt", details: "Mehrere Aufgaben", dueDate: Date().addingTimeInterval(3600)))
@@ -145,7 +150,10 @@ final class AppStore: ObservableObject {
                     func word(_ value: UInt32, _ width: Int) { for byte in 0..<width { wav.append(UInt8((value >> (byte * 8)) & 255)) } }
                     word(40036, 4); wav.append(Data("WAVEfmt ".utf8)); word(16, 4); word(1, 2); word(1, 2); word(8000, 4); word(8000, 4); word(1, 2); word(8, 2); wav.append(Data("data".utf8)); word(40000, 4); wav.append(Data(repeating: 128, count: 40000))
                     let path = "Recordings/chat-fixture.wav"
-                    try? wav.write(to: root.appendingPathComponent(path))
+                    do {
+                        try wav.write(to: root.appendingPathComponent(path), options: .atomic)
+                        _ = try BackupArchive.sourceURL(path, root: root)
+                    } catch { preconditionFailure("Audio fixture file: \(error)") }
                     let item = MediaItem(kind: .audio, title: "Chat-Testaudio", note: "Meine gesicherte Audio", tags: ["Chat"], relativePath: path, duration: 5)
                     data.media.append(item)
                     let chatID = AIConversationMutation.create(in: &data)
