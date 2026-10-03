@@ -481,7 +481,6 @@ final class TherapieUITests: XCTestCase {
     }
 
     @MainActor
-    @MainActor
     func testFeatureTimelineAndLocationFilters() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing", "--show-dashboard", "--feature-ui-fixture"]
@@ -520,6 +519,7 @@ final class TherapieUITests: XCTestCase {
         capture("Dauerhafte Chat-Audio und rechter Mikrofonbereich")
     }
 
+    @MainActor
     private func capture(_ name: String) {
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         attachment.name = name
