@@ -18,7 +18,15 @@ enum BatteryLanguage {
         guard percent.isFinite, percent > 0, percent <= 100 else { return nil }
         return max(1, min(5, Int((percent / 20).rounded())))
     }
-    static func hasBatteryLevel(_ text: String) -> Bool { text.range(of: "(?i)(mein( eigener)?|aktueller|mein aktueller) akku\\s*(ist|liegt|beträgt|bei|:)|akku\\s*(ist|liegt|beträgt|bei|:)\\s*(bei\\s*)?[0-9]", options: .regularExpression) != nil }
+    static func hasBatteryLevel(_ text: String) -> Bool {
+        let patterns = [
+            "(?i)(mein( eigener| aktueller)?|aktueller) akku\\s*(ist|liegt|beträgt|hat|steht|zeigt|auf|bei|:)",
+            "(?i)\\bakku\\s*(ist|liegt|beträgt|hat|steht|zeigt|auf|bei|:)\\s*(bei\\s*)?[0-9]",
+            "(?i)\\bich\\s+habe\\s+(?:gerade |aktuell |noch |nur |ungefähr |etwa )*[0-9]{1,3}\\s*(%|prozent)\\s*(akku|energie)(?:\\s+(übrig|geladen))?(?:\\s*(,|;|\\.|$)|\\s+und\\b)",
+            "(?i)\\bich\\s+(liege|bin|stehe)\\s+(?:gerade |aktuell |noch |ungefähr |etwa )*bei\\s*[0-9]{1,3}\\s*(%|prozent)"
+        ]
+        return patterns.contains { text.range(of: $0, options: .regularExpression) != nil }
+    }
     static func hasPointPercentage(_ text: String) -> Bool { text.range(of: "(?i)(nimmt|zieht|kostet|gibt|bringt|raubt|verbraucht)[^.!?;\\n]{0,100}[0-9]+\\s*(%|prozent)", options: .regularExpression) != nil }
     static func factors(_ text: String, known: [BatteryPoint]) -> [AIBuddyEnergyFactor] {
         let clauses = text.replacingOccurrences(of: "(?i)\\s+und\\s+", with: ";", options: .regularExpression).components(separatedBy: CharacterSet(charactersIn: ";,\n.!?"))

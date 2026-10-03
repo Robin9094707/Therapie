@@ -348,6 +348,10 @@ final class BuddyMockProtocol: URLProtocol {
         var percentageDraft = GuidedCheckIn(isDraft: true, step: 2)
         _ = AICheckInGuide.apply(AIBuddyCheckInProposal(batteryPercent: 50), to: &percentageDraft, known: [], userText: "Mila nimmt mir ungefähr 50 Prozent Akku.")
         try expect(percentageDraft.batteryPercent == nil && percentageDraft.energyPoints?.first?.impact == 3 && percentageDraft.step == 2, "Factor percent never becomes the overall battery level or skips a missing level")
+        var combinedBattery = GuidedCheckIn(step: 2)
+        _ = AICheckInGuide.apply(AIBuddyCheckInProposal(batteryPercent: 60), to: &combinedBattery, known: [], userText: "Mein Akku hat 60 Prozent, Mila nimmt mir 50 Prozent.")
+        try expect(combinedBattery.batteryPercent == 60 && combinedBattery.energyPoints?.first?.impact == 3, "Explicit overall battery and factor percentage stay distinct in one answer")
+        try expect(BatteryLanguage.hasBatteryLevel("Ich habe noch 60% Akku und Mila nimmt 50%.") && BatteryLanguage.hasBatteryLevel("Ich liege bei 60%, Mila nimmt mir 50%.") && !BatteryLanguage.hasBatteryLevel("Mila zieht mir ungefähr 50 Prozent Akku."), "Natural German battery statements do not force repeated questions or invent charge from a drain")
         percentageDraft.energyPoints?[0].impactConfirmed = false
         _ = AICheckInGuide.apply(AIBuddyCheckInProposal(), to: &percentageDraft, known: [], userText: "80 %")
         try expect(percentageDraft.energyPoints?.first?.impact == 4 && percentageDraft.energyPoints?.count == 1 && percentageDraft.batteryPercent == nil, "Follow-up percent updates pending point without a duplicate")
