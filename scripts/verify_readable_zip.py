@@ -11,7 +11,7 @@ with zipfile.ZipFile(sys.argv[1]) as archive:
     data = json.loads(archive.read("therapy-data.json"))
     manifest = json.loads(archive.read("manifest.json"))
     assert data == manifest["data"]
-    assert data["schemaVersion"] == 13
+    assert data["schemaVersion"] == 14
     assert data["accentTheme"] == "purple"
     assert data["wellbeingPreferences"] == {"estimateBattery": True, "hourlyDecline": 2}
     assert data["aiSettings"]["speakReplies"] is True
@@ -69,4 +69,11 @@ with zipfile.ZipFile(sys.argv[1]) as archive:
     assert data["schedule"]["alarmIDs"] == []
     assert "calendarEventIdentifier" not in data["schedule"]
     assert "Therapie-Absagen" in archive.read("Eintraege/Einstellungen/schedule.txt").decode()
+
+    assert data["routines"][0]["repeatUntilDone"] is False
+    assert data["aiMessages"][0]["mediaIDs"] == [item["id"] for item in data["media"]]
+    assert data["aiConversations"][0]["draftMediaIDs"] == data["aiMessages"][0]["mediaIDs"]
+    assert data["entryLocations"][0]["latitude"] == 52.52
+    assert data["buddySuggestions"][0]["reply"]["title"] == "Dein Impuls"
+
 print("Independent Python ZIP64, CRC, attachment and human-readable record verification passed.")

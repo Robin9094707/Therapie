@@ -467,7 +467,7 @@ enum AICheckInGuide {
                 for factor in parsed { factors.removeAll { AppHashtags.key(AIEnergyKeywords.title($0.title)) == AppHashtags.key(factor.title) && $0.direction == factor.direction }; factors.append(factor) }
                 proposal.energyPoints = factors
             }
-            if BatteryLanguage.hasPointPercentage(text) && !BatteryLanguage.hasBatteryLevel(text) { proposal.batteryPercent = nil }
+            if (BatteryLanguage.hasPointPercentage(text) || !parsed.isEmpty) && !BatteryLanguage.hasBatteryLevel(text) { proposal.batteryPercent = nil }
         }
         let directAnswer = userText.map(isDirectAnswer) == true
         if let text = userText, directAnswer {
@@ -484,7 +484,7 @@ enum AICheckInGuide {
                     var factors = proposal.energyPoints ?? []
                     factors.removeAll { AppHashtags.key($0.title) == AppHashtags.key(point.title) && $0.direction == point.direction }
                     factors.append(AIBuddyEnergyFactor(title: point.title, direction: point.direction, impact: value)); proposal.energyPoints = factors
-                } else if entry.batteryPercent == nil && proposal.batteryPercent == nil && !BatteryLanguage.hasPointPercentage(text) { proposal.batteryPercent = integer(labels: ["mein akku", "akku"], maximum: 100) }
+                } else if entry.batteryPercent == nil && proposal.batteryPercent == nil && !BatteryLanguage.hasPointPercentage(text) && BatteryLanguage.factors(text, known: entry.energyPoints ?? []).isEmpty { proposal.batteryPercent = integer(labels: ["mein akku", "akku"], maximum: 100) }
                 if text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines).range(of: "^(keine (weiteren )?akku-punkte|keine geber und nehmer)[.! ]*$", options: .regularExpression) != nil { proposal.energyPoints = proposal.energyPoints ?? [] }
             case 3:
                 if entry.stress == nil && proposal.stress == nil { proposal.stress = integer(labels: ["mein stress", "stress"], maximum: 5).flatMap { $0 >= 1 ? $0 : nil } }

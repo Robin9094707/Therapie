@@ -350,7 +350,7 @@ final class BuddyMockProtocol: URLProtocol {
         try expect(percentageDraft.batteryPercent == nil && percentageDraft.energyPoints?.first?.impact == 3 && percentageDraft.step == 2, "Factor percent never becomes the overall battery level or skips a missing level")
         percentageDraft.energyPoints?[0].impactConfirmed = false
         _ = AICheckInGuide.apply(AIBuddyCheckInProposal(), to: &percentageDraft, known: [], userText: "80 %")
-        try expect(percentageDraft.energyPoints?.first?.impact == 4 && percentageDraft.energyPoints?.count == 1, "Follow-up percent updates pending point without a duplicate")
+        try expect(percentageDraft.energyPoints?.first?.impact == 4 && percentageDraft.energyPoints?.count == 1 && percentageDraft.batteryPercent == nil, "Follow-up percent updates pending point without a duplicate")
         let weekendAlarm = AIBuddyAction(kind: .routine, title: "Test-Erinnerung", text: "Nur Test", dateISO: ISO8601DateFormatter().string(from: now), weekdays: [1,7], options: AIBuddyActionOptions(retryMinutes: 15, repeatUntilDone: true, times: [540, 720]))
         try AIBuddyMutation.apply(weekendAlarm, originalID: weekendAlarm.id, messageID: instruction.id, to: &actionData, now: now)
         try expect(actionData.routines[0].urgentAlarm && actionData.routines[0].repeatUntilDone == true && actionData.routines[0].retryMinutes == 15 && actionData.routines[0].times.map(\.weekdays) == [[1,7],[1,7]], "Reviewed AI reminder defaults to AlarmKit and preserves exact days, clocks and retry interval")
