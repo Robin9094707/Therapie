@@ -146,10 +146,10 @@ struct ModelChecks {
         supportData.copingMethods = [.asmrExample, .thoughtStopExample]
         try expect(supportData.copingMethods[0].matches(category: .sensory, stage: .calm, query: "laut", data: supportData), "Personal method mapping matches situation, category and stage")
         try expect(!supportData.copingMethods[0].matches(category: .work, stage: .prevent, query: "", data: supportData), "Methods do not invent unrelated assignments")
-        var previous = try JSONSerialization.jsonObject(with: encoder.encode(supportData)) as! [String: Any]
-        previous["schemaVersion"] = 14
-        for key in ["copingMethods", "emergencyPlan", "groundingPractices", "showerEntries"] { previous.removeValue(forKey: key) }
-        let migratedSupport = try decoder.decode(AppData.self, from: JSONSerialization.data(withJSONObject: previous))
+        var supportPrevious = try JSONSerialization.jsonObject(with: encoder.encode(supportData)) as! [String: Any]
+        supportPrevious["schemaVersion"] = 14
+        for key in ["copingMethods", "emergencyPlan", "groundingPractices", "showerEntries"] { supportPrevious.removeValue(forKey: key) }
+        let migratedSupport = try decoder.decode(AppData.self, from: JSONSerialization.data(withJSONObject: supportPrevious))
         try expect(migratedSupport.notes == old.notes && migratedSupport.copingMethods.isEmpty && !migratedSupport.emergencyPlan.hasContent, "Previous release preserves records and starts with empty support areas")
         var dashboard = DashboardPreferences(); dashboard.pinnedCards = ["appointment"]
         try expect(dashboard.visibleCards.first == .welcome, "Greeting is above all other cards by default")
