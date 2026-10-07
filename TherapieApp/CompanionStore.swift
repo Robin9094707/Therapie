@@ -50,14 +50,14 @@ extension AppStore {
         snapshot.routineSnoozes.removeAll { $0.id == occurrence.id }
         data = snapshot
     }
-    func snoozeRoutine(_ occurrence: RoutineOccurrence) {
+    func snoozeRoutine(_ occurrence: RoutineOccurrence, minutes: Int? = nil) {
         guard !RoutinePlanner.resolved(occurrence, completions: data.routineCompletions) else { return }
         var snapshot = data
         guard let routine = data.routines.first(where: { $0.id == occurrence.routineID }) else { return }
         let count = snapshot.routineSnoozes.first { $0.id == occurrence.id }?.count ?? 0
         guard routine.maxSnoozes == nil || count < max(0, routine.maxSnoozes!) else { return }
         snapshot.routineSnoozes.removeAll { $0.id == occurrence.id }
-        snapshot.routineSnoozes.append(RoutineSnooze(id: occurrence.id, until: Date().addingTimeInterval(Double(max(1,min(180,routine.snoozeMinutes ?? 60))) * 60), count: count + 1))
+        snapshot.routineSnoozes.append(RoutineSnooze(id: occurrence.id, until: Date().addingTimeInterval(Double(max(1,min(180,minutes ?? routine.snoozeMinutes ?? 60))) * 60), count: count + 1))
         data = snapshot
     }
     func deleteRoutine(_ id: UUID) {

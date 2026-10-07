@@ -72,7 +72,19 @@ struct RoutineEditorView: View {
                     Stepper("Später: \(routine.snoozeMinutes ?? 60) Minuten", value: Binding(get: { routine.snoozeMinutes ?? 60 }, set: { routine.snoozeMinutes = $0 }), in: 1...180)
                     Toggle("Schlummeranzahl begrenzen", isOn: Binding(get: { routine.maxSnoozes != nil }, set: { routine.maxSnoozes = $0 ? 3 : nil }))
                     if routine.maxSnoozes != nil { Stepper("Maximal \(routine.maxSnoozes ?? 3) Mal", value: Binding(get: { routine.maxSnoozes ?? 3 }, set: { routine.maxSnoozes = $0 }), in: 0...10) }
-                    Text("Die Aktionen sind fest: erledigen, auslassen, einmalig verschieben. Der iOS-Wecker zeigt zusätzlich eine Taste zum Öffnen; den System-Stoppknopf legt Apple fest.").font(.caption).foregroundStyle(.secondary)
+                    Text("Du kannst darunter eigene Knöpfe mit einer der angebotenen Aktionen anlegen. Der iOS-Wecker zeigt zusätzlich eine Taste zum Öffnen; den System-Stoppknopf legt Apple fest.").font(.caption).foregroundStyle(.secondary)
+                    Toggle("Eigene Aktionsknöpfe verwenden", isOn: Binding(get: { routine.actionButtons != nil }, set: { routine.actionButtons = $0 ? [RoutineActionButton(title:"Ich mache es", action:.done), RoutineActionButton(title:"Nicht heute", action:.skip), RoutineActionButton(title:"In fünf Minuten", action:.snooze)] : nil }))
+                    ForEach(routine.actionButtons ?? []) { value in
+                        let button = Binding(get: { routine.actionButtons?.first { $0.id == value.id } ?? value }, set: { updated in if let index = routine.actionButtons?.firstIndex(where: { $0.id == value.id }) { routine.actionButtons?[index] = updated } })
+                        VStack(alignment: .leading, spacing: 8) {
+                            TextField("Beschriftung", text: button.title)
+                            Picker("Aktion", selection: button.action) { ForEach(RoutineButtonAction.allCases) { Text($0.title).tag($0) } }
+                            Toggle("Anzeigen", isOn: button.enabled)
+                            if button.wrappedValue.action == .snooze { Stepper("Später in \(button.wrappedValue.minutes) Minuten", value: button.minutes, in: 1...180) }
+                            Button("Knopf entfernen", role: .destructive) { routine.actionButtons?.removeAll { $0.id == value.id } }
+                        }
+                    }
+                    if routine.actionButtons != nil { Button("Weiterer Knopf", systemImage:"plus") { routine.actionButtons?.append(RoutineActionButton(title:"Meine Aktion")) }.disabled((routine.actionButtons?.count ?? 0) >= 6) }
                     HomeSceneBindingView(ownerID: routine.id)
                 }
                 Section("Privatsphäre & Check-ins") {

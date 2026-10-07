@@ -15,7 +15,7 @@ with zipfile.ZipFile(sys.argv[1]) as archive:
     assert data["appleIntegration"]["remindersEnabled"] is True
     assert data["wakeAlarms"][0]["title"] == "Testwecker"
     assert data["wakeRuns"][0]["outcome"] == "emergencyStopped"
-    assert data["schemaVersion"] == 16
+    assert data["schemaVersion"] == 17
     assert len(data["copingMethods"]) == 2
     assert data["copingMethods"][1]["kind"] == "thoughtStop"
     assert data["emergencyPlan"]["firstStep"] == "Reize reduzieren"

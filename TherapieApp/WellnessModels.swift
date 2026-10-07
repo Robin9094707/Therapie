@@ -517,3 +517,18 @@ enum AppleReminderPlanner {
         return result.sorted { $0.due < $1.due }.prefix(100).map { $0 }
     }
 }
+
+
+enum RoutineButtonAction: String, Codable, CaseIterable, Identifiable {
+    case done, skip, snooze, emergency, home
+    var id: String { rawValue }
+    var title: String { switch self { case .done: "Als erledigt bestätigen"; case .skip: "Termin auslassen"; case .snooze: "Einmalig später erinnern"; case .emergency: "Notfallplan öffnen"; case .home: "Verknüpfte Home-Szene starten" } }
+    var symbol: String { switch self { case .done: "checkmark.circle.fill"; case .skip: "forward.end"; case .snooze: "clock"; case .emergency: "lifepreserver.fill"; case .home: "house.fill" } }
+}
+struct RoutineActionButton: Codable, Equatable, Identifiable {
+    var id = UUID()
+    var title = ""
+    var action: RoutineButtonAction = .done
+    var minutes = 5
+    var enabled = true
+}

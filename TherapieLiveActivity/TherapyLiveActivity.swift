@@ -6,6 +6,7 @@ import ActivityKit
 struct TherapyLiveActivityBundle: WidgetBundle {
     var body: some Widget {
         TherapyLiveActivityWidget()
+        TherapyEmergencyQuickWidget()
         TherapyDirectOverviewWidget()
         TherapyDirectShowerWidget()
         TherapyOverviewWidget()

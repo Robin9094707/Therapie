@@ -124,11 +124,26 @@ struct RoutineDueCard: View {
                             if !goal.support.isEmpty { Text("Unterstützung: " + goal.support).font(.caption).foregroundStyle(.secondary) }
                         }
                     }
+                    if let buttons = routine.actionButtons {
+                        ForEach(buttons.filter(\.enabled)) { button in
+                            Button(button.title.isEmpty ? button.action.title : button.title, systemImage: button.action.symbol) {
+                                switch button.action {
+                                case .done: confirmDone = true
+                                case .skip: showSkip = true
+                                case .snooze: store.snoozeRoutine(occurrence, minutes: button.minutes)
+                                case .emergency: store.notificationApplePage = "emergency"
+                                case .home: TherapyHomeService.shared.run(for: routine.id)
+                                }
+                            }.buttonStyle(.bordered).disabled(button.action == .snooze && (routine.maxSnoozes.map { (store.data.routineSnoozes.first { $0.id == occurrence.id }?.count ?? 0) >= $0 } ?? false))
+                        }
+                        Menu("Weitere Aktionen") { Button("Erledigt") { confirmDone = true }; Button("Auslassen") { showSkip = true }; NavigationLink("Notfallplan") { EmergencyPlanView() } }
+                    } else {
                     ResponsiveButtonRow {
                         Button(routine.doneButtonTitle?.isEmpty == false ? routine.doneButtonTitle! : "Erledigt", systemImage: "checkmark.circle.fill") { confirmDone = true }.buttonStyle(.borderedProminent)
                         Button(routine.snoozeButtonTitle?.isEmpty == false ? routine.snoozeButtonTitle! : "\(routine.snoozeMinutes ?? 60) Minuten später", systemImage: "clock") { store.snoozeRoutine(occurrence) }.buttonStyle(.bordered).disabled(routine.maxSnoozes.map { (store.data.routineSnoozes.first { $0.id == occurrence.id }?.count ?? 0) >= $0 } ?? false)
                     }
                     Button(routine.skipButtonTitle?.isEmpty == false ? routine.skipButtonTitle! : "Heute auslassen", systemImage: "forward.end") { showSkip = true }.font(.caption)
+                    }
                 }
             }.onAppear { TherapyHomeService.shared.run(for: routine.id, occurrenceID: occurrence.id) }.alert("Wirklich erledigt?", isPresented: $confirmDone) {
                 Button("Noch nicht", role: .cancel) {}

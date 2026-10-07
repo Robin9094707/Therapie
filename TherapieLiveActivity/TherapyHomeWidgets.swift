@@ -193,3 +193,21 @@ enum TherapyDirectConfiguration {
         }.configurationDisplayName(title).description("App-Daten direkt anzeigen. Tippen öffnet die passenden Aktionen in der App.").supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular])
     }
 }
+
+struct TherapyEmergencyQuickWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind:"TherapyHome.emergencyQuick", provider:TherapyQuickProvider()) { _ in
+            VStack(alignment:.leading,spacing:10) {
+                Label("Meine Hilfe",systemImage:"lifepreserver.fill").font(.headline).foregroundStyle(.indigo)
+                Link(destination:URL(string:"therapie://emergency")!) { Label("Notfallplan",systemImage:"hand.raised.fill").font(.headline) }
+                Link(destination:URL(string:"therapie://grounding")!) { Label("5-4-3-2-1",systemImage:"leaf.fill").font(.subheadline) }
+                Link(destination:URL(string:"therapie://medicalpass")!) { Label("Therapiepass",systemImage:"person.text.rectangle").font(.subheadline) }
+            }.frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.topLeading).unredacted().containerBackground(.indigo.opacity(0.1),for:.widget)
+        }.configurationDisplayName("Hilfe · Schnellzugriff").description("Notfallplan und Sinnesübung direkt öffnen. Funktioniert ohne gemeinsamen App-Speicher.").supportedFamilies([.systemSmall,.systemMedium])
+    }
+}
+struct TherapyQuickProvider: TimelineProvider {
+    func placeholder(in context:Context) -> TherapyHomeEntry { .init(date:.now,snapshot:TherapyWidgetSnapshot()) }
+    func getSnapshot(in context:Context,completion:@escaping (TherapyHomeEntry)->Void) { completion(.init(date:.now,snapshot:TherapyWidgetSnapshot())) }
+    func getTimeline(in context:Context,completion:@escaping (Timeline<TherapyHomeEntry>)->Void) { completion(Timeline(entries:[.init(date:.now,snapshot:TherapyWidgetSnapshot())],policy:.never)) }
+}

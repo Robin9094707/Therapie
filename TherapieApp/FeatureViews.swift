@@ -6,11 +6,14 @@ struct FeatureHubLinks: View {
     var body: some View {
         GlassCard {
             ViewThatFits(in: .horizontal) {
-                HStack { methods; Spacer(); timeline; Spacer(); map }
-                VStack(alignment: .leading, spacing: 12) { methods; timeline; map }
+                VStack(spacing: 14) { HStack { methods; Spacer(); timeline; Spacer(); map }; HStack { alarms; Spacer(); pass; Spacer(); apple } }
+                VStack(alignment: .leading, spacing: 12) { methods; timeline; map; alarms; pass; apple }
             }
         }
     }
+    private var alarms: some View { NavigationLink { WakeAlarmHubView() } label: { Label("Wecker", systemImage: "alarm.fill") } }
+    private var pass: some View { NavigationLink { MedicalPassView() } label: { Label("Therapiepass", systemImage: "person.text.rectangle") } }
+    private var apple: some View { NavigationLink { AppleIntegrationView() } label: { Label("Apple", systemImage: "apple.logo") } }
     private var methods: some View { NavigationLink { MethodsHubView() } label: { Label("Meine Methoden", systemImage: "sparkles") } }
     private var timeline: some View { NavigationLink { TodoTimelineView() } label: { Label("To-do-Timeline", systemImage: "calendar.day.timeline.left") } }
     private var map: some View { NavigationLink { EntryMapView() } label: { Label("Meine Eintragskarte", systemImage: "map") } }

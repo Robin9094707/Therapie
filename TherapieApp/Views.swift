@@ -74,7 +74,7 @@ struct RootView: View {
         .onAppear { presentRequested() }
         .task {
             store.resumeProtectedStorage()
-            if store.storageReady { store.sessionController.synchronize(); store.refreshTherapyCalendar(force: false); store.consumeRoutineAlarmRoute() }
+            if store.storageReady { store.sessionController.synchronize(); store.refreshTherapyCalendar(force: false); AppleRemindersService.shared.refresh(store); store.consumeRoutineAlarmRoute() }
             if store.storageReady && modal == nil { await store.aiController.refreshWeeklyReview(); await store.aiController.refreshSuggestion() }
             while !Task.isCancelled {
                 store.resumeProtectedStorage()

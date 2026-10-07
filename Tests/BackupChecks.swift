@@ -58,6 +58,7 @@ struct BackupChecks {
         let routine = DailyRoutine(title: "Frühstück", symbol: "fork.knife", goalID: nil, times: [RoutineTime(title: "Vor der Arbeit", weekdays: [2, 3, 4, 5, 6], hour: 6, minute: 15, weekendHour: 9, weekendMinute: 0)], urgentAlarm: true)
         data.routines = [routine]
         data.routines[0].repeatEveryDays = 2
+        data.routines[0].actionButtons = [RoutineActionButton(title:"Frühstück in fünf Minuten",action:.snooze,minutes:5)]
         data.routineDeferrals = [RoutineDeferral(routineID: routine.id, timeID: routine.times[0].id, scheduledAt: supportClock, deferredUntil: supportClock.addingTimeInterval(86400), createdAt: supportClock)]
         data.routineCompletions = [RoutineCompletion(routineID: routine.id, timeID: routine.times[0].id, scheduledAt: Date(), outcome: .skipped, note: "Pause", routineTitle: "Frühstück", timeTitle: "Vor der Arbeit", corrections: [RoutineCorrection(previousOutcome: .done, previousNote: "", outcome: .skipped, note: "Pause", reason: "Falsche Angabe")])]
         data.routineSnoozes = [RoutineSnooze(id: "portable-occurrence", until: Date())]

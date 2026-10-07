@@ -84,6 +84,7 @@ struct DailyRoutine: Codable, Equatable, Identifiable {
     var repeatEveryDays: Int?
     var repeatEveryWeeks: Int?
     var endsAt: Date?
+    var actionButtons: [RoutineActionButton]?
     var appleReminders: Bool?
     var alarmDelayMinutes: Int?
     var doneButtonTitle: String?

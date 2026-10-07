@@ -21,11 +21,11 @@ struct EmergencyPlanView: View {
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
                     ForEach(panels) { panel in
                         if let method = store.data.copingMethods.first(where: { $0.id == panel.methodID }) {
-                            methodCard(method, title: panel.title.isEmpty ? method.title : panel.title)
+                            methodCard(method, title: panel.title.isEmpty ? method.title : panel.title, extraText: panel.text)
                         } else { helpCard(panel.title, text: panel.text, symbol: panel.symbol) }
                     }
                     ForEach(Array(plan.steps.enumerated()), id: \.offset) { index, step in helpCard("Schritt \(index + 1)", text: step, symbol: "checkmark.circle") }
-                    ForEach(store.data.copingMethods.filter { plan.methodIDs.contains($0.id) }) { method in methodCard(method, title: method.title) }
+                    ForEach(store.data.copingMethods.filter { method in plan.methodIDs.contains(method.id) && !panels.contains(where: { $0.methodID == method.id }) }) { method in methodCard(method, title: method.title) }
                     if !plan.warningSigns.isEmpty { helpCard("Meine Warnzeichen", text: plan.warningSigns, symbol: "bell") }
                     if !plan.support.isEmpty { helpCard("Meine Unterstützung", text: plan.support, symbol: "person.2.fill") }
                 }
@@ -42,8 +42,9 @@ struct EmergencyPlanView: View {
     private func helpCard(_ title: String, text: String, symbol: String) -> some View {
         VStack(alignment: .leading, spacing: 8) { Label(title, systemImage: symbol).font(.subheadline.bold()).foregroundStyle(Color.accentColor); Text(text).font(.body).textSelection(.enabled).fixedSize(horizontal: false, vertical: true) }.padding(14).frame(maxWidth: .infinity, alignment: .topLeading).background(Color.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 18))
     }
-    private func methodCard(_ method: CopingMethod, title: String) -> some View {
+    private func methodCard(_ method: CopingMethod, title: String, extraText: String = "") -> some View {
         VStack(alignment: .leading, spacing: 8) { Label(title, systemImage: method.kind == .thoughtStop ? "hand.raised.fill" : "sparkles").font(.subheadline.bold()).foregroundStyle(Color.accentColor)
+            if !extraText.isEmpty { Text(extraText).font(.body) }
             if !method.details.isEmpty { Text(method.details).font(.body).textSelection(.enabled) }
             ForEach(Array(method.steps.enumerated()), id: \.offset) { index, step in Text("\(index + 1). " + step).font(.body) }
             NavigationLink("Methode öffnen") { MethodDetailView(methodID: method.id) }.font(.caption)
