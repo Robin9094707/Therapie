@@ -689,7 +689,7 @@ enum AIBuddySettingsChange {
     static func valid(action: AIBuddyAction) -> Bool {
         guard let key = action.targetID else { return false }
         if key == "appearance.accent" { return action.options?.valueString.flatMap(AppAccent.init(rawValue:)) != nil }
-        if key == "showers.weeklyGoal" { return action.options?.valueInt.map { (1...7).contains($0) } ?? false }
+        if key == "showers.weeklyGoal" { return action.options?.valueInt.map { (2...7).contains($0) } ?? false }
         if key == "ai.contextDays" { return action.options?.valueInt.map { (1...90).contains($0) } ?? false }
         return booleanKeys.contains(key) && action.options?.valueBool != nil
     }
@@ -718,7 +718,7 @@ struct MoodEntryDraft: Codable, Equatable { var entry: MoodCheckIn; var points: 
 
 // Small, explicit capability catalogue: settings without a safe mutation open their native editor.
 enum BuddyDestinations {
-    static let names: [String: String] = ["tasks": "Alle Aufgaben nach Kategorie und offenen Schritten", "widgets": "Widget-Daten und Diagnose", "methods": "Methoden, Akkuthemen und Gedankenstopps", "emergency": "Persönlicher Notfallplan", "grounding": "Angeleitete 5-4-3-2-1-Uebung", "showers": "Feste und flexible Duschtage", "today": "Heute", "insights": "Stimmung und Auswertung", "therapy": "Therapiethemen und Ziele", "archive": "Archiv", "session": "Therapierunde und Timer", "routines": "Routinen", "appointments": "Therapieintervalle und Termine", "reminders": "Erinnerungen", "settings": "Alle App-Einstellungen, Profil und Datenschutz", "appearance": "Design, Hell/Dunkel, Haptik und Konfetti", "dashboard": "Startseite und Widgets", "wellness": "Stimmungsziele und Freigaben", "backup": "Export und Import", "ai": "KI-Schlüssel, Modelle und Upload-Freigaben", "checkins": "Check-in-Rhythmus und Zeitfenster", "sessionSettings": "Timer, Phasen und Begleitung", "profile": "Aktueller Akku und Befinden"]
+    static let names: [String: String] = ["capture": "Neuer Eintrag, Foto und Sprachaufnahme", "photo": "Foto einfügen", "audio": "Sprachnotiz aufnehmen", "weekReview": "Wochenrückblick anlegen oder bearbeiten", "weeklyEnergy": "Wochenenergie festhalten", "sessionTemplates": "Therapierunden-Vorlagen bearbeiten", "routineHistory": "Routinen-Verlauf und Korrekturen", "groundingHistory": "Verlauf der 5-4-3-2-1-Uebungen", "entryMap": "Karte und Eintragsstandorte", "tasks": "Alle Aufgaben nach Kategorie und offenen Schritten", "widgets": "Widget-Daten und Diagnose", "methods": "Methoden, Akkuthemen und Gedankenstopps", "emergency": "Persönlicher Notfallplan", "grounding": "Angeleitete 5-4-3-2-1-Uebung", "showers": "Feste und flexible Duschtage", "today": "Heute", "insights": "Stimmung und Auswertung", "therapy": "Therapiethemen und Ziele", "archive": "Archiv", "session": "Therapierunde und Timer", "routines": "Routinen", "appointments": "Therapieintervalle und Termine", "reminders": "Erinnerungen", "settings": "Alle App-Einstellungen, Profil und Datenschutz", "appearance": "Design, Hell/Dunkel, Haptik und Konfetti", "dashboard": "Startseite und Widgets", "wellness": "Stimmungsziele und Freigaben", "backup": "Export und Import", "ai": "KI-Schlüssel, Modelle und Upload-Freigaben", "checkins": "Check-in-Rhythmus und Zeitfenster", "sessionSettings": "Timer, Phasen und Begleitung", "profile": "Aktueller Akku und Befinden"]
     static var ids: [String] { names.keys.sorted() }
     static var catalogue: String { ids.map { $0 + ": " + (names[$0] ?? $0) }.joined(separator: "; ") }
 }

@@ -182,7 +182,7 @@ enum RoutinePlanner {
         for deferral in data.routineDeferrals {
             guard let routine = data.routines.first(where: { $0.id == deferral.routineID }),
                   routine.times.contains(where: { $0.id == deferral.timeID }),
-                  active(routine, settings: data.companionSettings, at: deferral.scheduledAt),
+                  routine.enabled, RoutineRecurrence.includes(routine, date: deferral.scheduledAt, calendar: calendar),
                   !(routine.pausedUntil.map { $0 > deferral.deferredUntil } ?? false),
                   !(routine.pauseOnVacation && (data.companionSettings.vacationUntil.map { $0 > deferral.deferredUntil } ?? false)),
                   let end = calendar.date(byAdding: .day, value: 1, to: deferral.deferredUntil),
@@ -194,7 +194,7 @@ enum RoutinePlanner {
     static func activeReminder(_ routine: DailyRoutine, occurrence: RoutineOccurrence, settings: CompanionSettings, now: Date) -> Bool {
         let point = max(now, occurrence.due)
         // Recurrence gates the original occurrence, not each retry after its last scheduled date.
-        return active(routine, settings: settings, at: occurrence.scheduledAt) && !(routine.pausedUntil.map { $0 > point } ?? false) && !(routine.pauseOnVacation && (settings.vacationUntil.map { $0 > point } ?? false))
+        return (occurrence.originalDue != nil ? routine.enabled && RoutineRecurrence.includes(routine, date: occurrence.scheduledAt) : active(routine, settings: settings, at: occurrence.scheduledAt)) && !(routine.pausedUntil.map { $0 > point } ?? false) && !(routine.pauseOnVacation && (settings.vacationUntil.map { $0 > point } ?? false))
     }
     static func slots(data: AppData, now: Date = Date(), calendar: Calendar = .current) -> [RoutineReminderSlot] {
         var output: [RoutineReminderSlot] = []

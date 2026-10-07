@@ -179,9 +179,13 @@ struct ModelChecks {
         try expect(ShowerPlanner.today(showerData, at: monday).isEmpty && ShowerPlanner.today(showerData, at: tuesday).first?.id == showerOccurrence.id, "Deferral hides original day and preserves occurrence identity tomorrow")
         try expect(showerData.routines[0].times[0].weekdays == [2,4,6] && ShowerPlanner.today(showerData, at: date("2026-10-07T10:00:00Z")).count == 1, "One-day deferral preserves regular weekdays")
         let deferred = ShowerPlanner.today(showerData, at: tuesday).first!
+        showerData.routines[0].urgentAlarm = true
+        let deferredAlarmKey = "therapy.routine." + showerOccurrence.id + "." + String(Int(tuesday.timeIntervalSince1970))
+        try expect(AlarmOwnershipPolicy.keepAlerting(key: deferredAlarmKey, data: showerData, now: tuesday.addingTimeInterval(60)), "Deferred alarm survives refresh on a non-regular weekday")
         let deferredWidget = TherapyWidgetSnapshotBuilder.make(data: showerData, now: tuesday.addingTimeInterval(60))
         try expect(deferredWidget.reminders.contains { $0.id == showerOccurrence.id }, "Deferred off-weekday reaches widget and reminder inventory")
         try expect(RoutineDayMutation.resolve(deferred, outcome: .done, note: "", in: &showerData, at: tuesday), "Deferred occurrence resolves using original scheduled identity")
+        try expect(!AlarmOwnershipPolicy.keepAlerting(key: deferredAlarmKey, data: showerData, now: tuesday.addingTimeInterval(60)), "Resolved deferred alarm no longer owns an alert")
         let afterShower = showerData
         try expect(!RoutineDayMutation.resolve(deferred, outcome: .done, note: "", in: &showerData, at: tuesday) && showerData == afterShower, "Repeated shower tap is idempotent")
         showerData.showerEntries = [ShowerEntry(date: tuesday, note: "Extra")]

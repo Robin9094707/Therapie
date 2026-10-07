@@ -7,7 +7,7 @@ enum TherapyWidgetSnapshotBuilder {
         result.showsPersonalTitles = data.dashboard.showWidgetTitles
         let privateTitles = !data.dashboard.showWidgetTitles
         result.showerWeekCount = ShowerPlanner.weekCount(data, at: now)
-        result.showerWeekGoal = max(1, min(7, data.showerPreferences.weeklyGoal))
+        result.showerWeekGoal = max(2, min(7, data.showerPreferences.weeklyGoal))
         result.showerDays = (0..<8).compactMap { offset in
             guard let day = calendar.date(byAdding: .day, value: offset, to: calendar.startOfDay(for: now)) else { return nil }
             let done = ShowerPlanner.dates(data).contains { calendar.isDate($0, inSameDayAs: day) }

@@ -232,6 +232,10 @@ enum AlarmOwnershipPolicy {
     static func keepAlerting(key: String, data: AppData, now: Date = Date()) -> Bool {
         if key.hasPrefix("therapy.routine.") {
             guard let routine = data.routines.first(where: { key.hasPrefix("therapy.routine.\($0.id).") }), routine.urgentAlarm else { return false }
+            if let deferral = data.routineDeferrals.first(where: { key.hasPrefix("therapy.routine." + $0.occurrenceID + ".") }) {
+                guard let occurrence = RoutinePlanner.occurrences(data: data, now: now, days: 1).first(where: { $0.id == deferral.id }) else { return false }
+                return occurrence.due <= now && now < occurrence.end && !RoutinePlanner.resolved(occurrence, completions: data.routineCompletions) && RoutinePlanner.activeReminder(routine, occurrence: occurrence, settings: data.companionSettings, now: now)
+            }
             var active = RoutinePlanner.active(routine, settings: data.companionSettings, at: now)
             let parts = key.split(separator: ".")
             // The last scheduled occurrence may still ring after a one-time recurrence ends.

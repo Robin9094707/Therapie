@@ -507,6 +507,15 @@ struct AIBuddyChatContent: View {
     }
     @ViewBuilder private func destination(_ name: String) -> some View {
         switch name {
+        case "capture": EntryHubView()
+        case "photo": AddPhotoView()
+        case "audio": AudioRecordingView()
+        case "weekReview": WeekReviewEditorView(review: store.data.weekReviews.first { Calendar.therapyCalendar.isDate($0.weekStart, equalTo: Date(), toGranularity: .weekOfYear) } ?? WeekReview(weekStart: Date().therapyWeekStart))
+        case "weeklyEnergy": WeeklyEnergyEditorView()
+        case "sessionTemplates": SessionConductorView()
+        case "routineHistory": RoutineHistoryView()
+        case "groundingHistory": GroundingHistoryView()
+        case "entryMap": EntryMapView()
         case "tasks": TodoTimelineView()
         case "widgets": WidgetSetupHelpView()
         case "profile": BuddyWellbeingProfileView()
@@ -573,7 +582,7 @@ struct AIBuddyActionReviewView: View {
                     Section("Änderung prüfen") {
                         Text(action.title.isEmpty ? "App-Einstellung" : action.title)
                         if action.targetID == "appearance.accent" { Picker("Hauptfarbe", selection: Binding(get: { action.options?.valueString ?? store.data.accentTheme.rawValue }, set: { options.wrappedValue.valueString = $0 })) { ForEach(AppAccent.allCases) { Text($0.title).tag($0.rawValue) } } }
-                        else if action.targetID == "showers.weeklyGoal" { Stepper("Neu: \(action.options?.valueInt ?? 3) Duschtage pro Woche", value: Binding(get: { action.options?.valueInt ?? 3 }, set: { options.wrappedValue.valueInt = $0 }), in: 1...7) }
+                        else if action.targetID == "showers.weeklyGoal" { Stepper("Neu: \(action.options?.valueInt ?? 3) Duschtage pro Woche", value: Binding(get: { action.options?.valueInt ?? 3 }, set: { options.wrappedValue.valueInt = $0 }), in: 2...7) }
                         else if action.targetID == "ai.contextDays" { Stepper("Neu: \(action.options?.valueInt ?? 7) Tage", value: Binding(get: { action.options?.valueInt ?? 7 }, set: { options.wrappedValue.valueInt = $0 }), in: 1...90) }
                         else { Toggle("Neuer Wert", isOn: Binding(get: { action.options?.valueBool ?? false }, set: { options.wrappedValue.valueBool = $0 })) }
                     }
@@ -614,14 +623,16 @@ struct AIBuddyActionReviewView: View {
                             if action.options?.alarmEnabled != nil { Toggle("AlarmKit-Wecker", isOn: Binding(get: { action.options?.alarmEnabled ?? false }, set: { options.wrappedValue.alarmEnabled = $0 })) }
                         }
                         if [.routine, .updateRoutine].contains(action.kind) {
-                            Toggle("Nur einmal erinnern", isOn: Binding(get: { action.options?.once ?? false }, set: { options.wrappedValue.once = $0; if $0 { options.wrappedValue.times = nil; options.wrappedValue.repeatEveryWeeks = nil; options.wrappedValue.repeatCount = nil } }))
+                            Toggle("Rhythmus in Kalendertagen", isOn: Binding(get: { action.options?.repeatEveryDays != nil }, set: { enabled in options.wrappedValue.repeatEveryDays = enabled ? 2 : nil; if enabled { options.wrappedValue.repeatEveryWeeks = nil; options.wrappedValue.repeatCount = nil; options.wrappedValue.once = false; action.weekdays = Array(1...7) } }))
+                            if action.options?.repeatEveryDays != nil { Stepper("Alle \(action.options?.repeatEveryDays ?? 2) Tage", value: Binding(get: { action.options?.repeatEveryDays ?? 2 }, set: { options.wrappedValue.repeatEveryDays = $0 }), in: 1...30) }
+                            Toggle("Nur einmal erinnern", isOn: Binding(get: { action.options?.once ?? false }, set: { options.wrappedValue.once = $0; if $0 { options.wrappedValue.repeatEveryDays = nil; options.wrappedValue.times = nil; options.wrappedValue.repeatEveryWeeks = nil; options.wrappedValue.repeatCount = nil } }))
                             Toggle("Bis zum Abhaken erneut erinnern", isOn: Binding(get: { action.options?.repeatUntilDone ?? true }, set: { options.wrappedValue.repeatUntilDone = $0 }))
                             Text("AlarmKit ist der Wecker. Erneute Hinweise können unabhängig davon ausgeschaltet werden; bei Erledigung werden ausstehende Hinweise entfernt. Die begrenzte iPhone-Warteschlange wird beim Öffnen / Abhaken aufgefüllt.").font(.caption).foregroundStyle(.secondary)
                             if action.options?.repeatUntilDone != false { Stepper("Intervall: \(action.options?.retryMinutes ?? 20) Minuten", value: Binding(get: { action.options?.retryMinutes ?? 20 }, set: { options.wrappedValue.retryMinutes = $0 }), in: 5...180, step: 5) }
                             if action.options?.enabled != nil { Toggle("Routine aktiv", isOn: Binding(get: { action.options?.enabled ?? true }, set: { options.wrappedValue.enabled = $0 })) }
                         }
                         if action.kind == .task || action.kind == .routine {
-                            Toggle("Wöchentlich wiederholen", isOn: Binding(get: { action.options?.repeatEveryWeeks != nil }, set: { options.wrappedValue.repeatEveryWeeks = $0 ? 1 : nil; if $0 && action.kind == .task { options.wrappedValue.repeatCount = action.options?.repeatCount ?? 1; hasDate = true } }))
+                            Toggle("Wöchentlich wiederholen", isOn: Binding(get: { action.options?.repeatEveryWeeks != nil }, set: { options.wrappedValue.repeatEveryWeeks = $0 ? 1 : nil; if $0 { options.wrappedValue.repeatEveryDays = nil }; if $0 && action.kind == .task { options.wrappedValue.repeatCount = action.options?.repeatCount ?? 1; hasDate = true } }))
                         }
                         if action.options?.repeatEveryWeeks != nil {
                             Stepper("Alle \(action.options?.repeatEveryWeeks ?? 1) Wochen", value: Binding(get: { action.options?.repeatEveryWeeks ?? 1 }, set: { options.wrappedValue.repeatEveryWeeks = $0 }), in: 1...52)
@@ -644,7 +655,7 @@ struct AIBuddyActionReviewView: View {
     private var reminderSummary: String {
         let weekdays = action.weekdays.isEmpty ? "Täglich" : action.weekdays.sorted().map { Calendar.current.weekdaySymbols[$0 - 1] }.joined(separator: ", ")
         let times = (action.options?.times ?? [Calendar.current.component(.hour, from: date) * 60 + Calendar.current.component(.minute, from: date)]).sorted().map { String(format: "%02d:%02d", $0 / 60, $0 % 60) }.joined(separator: ", ")
-        let rhythm = action.options?.once == true ? "Einmalig" : "Alle \(action.options?.repeatEveryWeeks ?? 1) Woche(n)"
+        let rhythm = action.options?.once == true ? "Einmalig" : action.options?.repeatEveryDays != nil ? "Alle \(action.options?.repeatEveryDays ?? 2) Kalendertage ab " + date.formatted(date: .abbreviated, time: .omitted) : "Alle \(action.options?.repeatEveryWeeks ?? 1) Woche(n)"
         let repeats = action.options?.repeatUntilDone == true ? " · bis erledigt alle \(action.options?.retryMinutes ?? 20) Minuten" : " · ein Hinweis pro Zeitpunkt"
         return weekdays + " · " + times + "\n" + rhythm + " · " + (action.options?.alarmEnabled == true ? "AlarmKit" : "Mitteilung") + repeats
     }

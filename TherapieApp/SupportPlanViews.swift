@@ -204,7 +204,7 @@ struct ShowerTodayCard: View {
                     SectionHeader(title: "Mein Duschtag", icon: "shower.fill")
                     ShowerDayActions(now: context.date)
                     let count = ShowerPlanner.weekCount(store.data, at: context.date)
-                    let goal = max(1, min(7, store.data.showerPreferences.weeklyGoal))
+                    let goal = max(2, min(7, store.data.showerPreferences.weeklyGoal))
                     ProgressView(value: Double(min(count, goal)), total: Double(goal)).tint(.accentColor)
                     Text("Diese Woche: \(count) von \(goal) Duschtagen · \(max(0, goal - count)) fehlen zu deinem Ziel").font(.caption).foregroundStyle(.secondary)
                     Button("Außer der Reihe geduscht", systemImage: "plus.circle") { entry = ShowerEntry() }.buttonStyle(.bordered)
@@ -285,7 +285,7 @@ struct ShowerDaysView: View {
                 GlassCard {
                     VStack(alignment: .leading, spacing: 14) {
                         SectionHeader(title: "Mein Wochenziel", icon: "calendar", subtitle: "Dein persönliches Ziel. Bestätigte Duschtage zählen einmal pro Tag; Auslassen zählt nicht.")
-                        Stepper("\(store.data.showerPreferences.weeklyGoal) Duschtage pro Woche", value: $store.data.showerPreferences.weeklyGoal, in: 1...7)
+                        Stepper("\(store.data.showerPreferences.weeklyGoal) Duschtage pro Woche", value: $store.data.showerPreferences.weeklyGoal, in: 2...7)
                         HStack {
                             Button("Vorherige Woche", systemImage: "chevron.left") { weekOffset -= 1 }.labelStyle(.iconOnly)
                             Spacer(); Text(ArchiveGrouping.week.title(for: week)).font(.headline); Spacer()

@@ -114,7 +114,7 @@ final class TaskNotificationCoordinator: NSObject, UNUserNotificationCenterDeleg
             content.body = snapshot.companionSettings.privateRoutineTitles ? "Eine Routine ist noch offen. Öffne sie zum Bestätigen oder verschiebe sie eine Stunde." : String(publicTitle.prefix(160))
             content.sound = .default
             content.categoryIdentifier = Self.routineCategory
-            content.userInfo = ["routineID": routine.id.uuidString, "timeID": slot.occurrence.timeID.uuidString, "due": slot.occurrence.due.timeIntervalSince1970]
+            content.userInfo = ["routineID": routine.id.uuidString, "timeID": slot.occurrence.timeID.uuidString, "due": slot.occurrence.due.timeIntervalSince1970, "scheduledAt": slot.occurrence.scheduledAt.timeIntervalSince1970]
             let parts = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: slot.fireAt)
             requests.append(UNNotificationRequest(identifier: slot.id, content: content, trigger: UNCalendarNotificationTrigger(dateMatching: parts, repeats: false)))
         }
@@ -172,10 +172,8 @@ final class TaskNotificationCoordinator: NSObject, UNUserNotificationCenterDeleg
                       let rawTime = info["timeID"] as? String, let timeID = UUID(uuidString: rawTime),
                       let due = info["due"] as? Double else { return }
                 if response.actionIdentifier == "ROUTINE_LATER" {
-                    let date = Date(timeIntervalSince1970: due)
-                    let end = Calendar.current.date(byAdding: .day, value: 1, to: date) ?? date.addingTimeInterval(86400)
-                    let occurrence = RoutineOccurrence(routineID: routineID, timeID: timeID, due: date, end: end)
-                    if end > Date() { store.snoozeRoutine(occurrence) }
+                    let scheduledAt = Date(timeIntervalSince1970: info["scheduledAt"] as? Double ?? due)
+                    if let occurrence = RoutinePlanner.occurrences(data: store.data, now: Date(), days: 1).first(where: { $0.routineID == routineID && $0.timeID == timeID && $0.scheduledAt == scheduledAt && $0.due <= Date() }) { store.snoozeRoutine(occurrence) }
                 }
                 store.notificationRoutineID = routineID
                 refresh(store)
