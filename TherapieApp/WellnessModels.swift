@@ -289,7 +289,7 @@ struct CopingMethod: Codable, Equatable, Identifiable {
     }
     func matches(category: BatteryCategory?, stage: MethodStage?, query: String, data: AppData) -> Bool {
         let linked = data.batteryPoints.filter { batteryPointIDs.contains($0.id) }
-        let fitsCategory = category == nil || categories.contains(category!) || linked.contains { $0.category == category }
+        let fitsCategory = category.map { selected in categories.contains(selected) || linked.contains { $0.category == selected } } ?? true
         let text = ([title, situation, details] + steps + linked.map(\.title)).joined(separator: " ")
         return fitsCategory && (stage == nil || stages.contains(stage!)) && (query.isEmpty || text.localizedStandardContains(query))
     }
@@ -303,7 +303,7 @@ struct PersonalEmergencyPlan: Codable, Equatable {
     var imageID: UUID?
     var methodIDs: [UUID] = []
     var updatedAt: Date?
-    var hasContent: Bool { !firstStep.isEmpty || !steps.isEmpty || !support.isEmpty || imageID != nil || !methodIDs.isEmpty }
+    var hasContent: Bool { !warningSigns.isEmpty || !firstStep.isEmpty || !steps.isEmpty || !support.isEmpty || imageID != nil || !methodIDs.isEmpty }
 }
 struct GroundingPractice: Codable, Equatable, Identifiable {
     var id = UUID()

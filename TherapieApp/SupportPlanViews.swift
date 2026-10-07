@@ -154,13 +154,14 @@ struct GroundingExerciseView: View {
             VStack(alignment: .leading, spacing: 20) {
                 ProgressView(value: Double(step), total: 5).tint(Color.accentColor).accessibilityLabel("Übungsfortschritt")
                 if step < 5 {
+                    let answerStep = step
                     GlassCard(emphasized: true) {
                         VStack(alignment: .leading, spacing: 18) {
                             Text("Schritt \(step + 1) von 5").font(.headline).foregroundStyle(Color.accentColor)
                             Label(GroundingGuide.titles[step], systemImage: GroundingGuide.symbols[step]).font(.largeTitle.bold())
                             Text(GroundingGuide.hints[step]).font(.title3).foregroundStyle(.secondary)
                             ForEach(0..<GroundingGuide.counts[step], id: \.self) { index in
-                                TextField("\(index + 1). Wahrnehmung · optional", text: Binding(get: { answers[step][index] }, set: { answers[step][index] = $0 }), axis: .vertical).font(.title3).padding(12).background(Color.accentColor.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
+                                TextField("\(index + 1). Wahrnehmung · optional", text: Binding(get: { answers[answerStep][index] }, set: { answers[answerStep][index] = $0 }), axis: .vertical).font(.title3).padding(12).background(Color.accentColor.opacity(0.07), in: RoundedRectangle(cornerRadius: 14)).id("\(answerStep)-\(index)")
                             }
                         }
                     }
@@ -197,14 +198,21 @@ struct ShowerDaysView: View {
     @State private var routine: DailyRoutine?
     @State private var entry: ShowerEntry?
     @State private var deleting: ShowerEntry?
-    private var last: ShowerEntry? { store.data.showerEntries.max { $0.date < $1.date } }
+    private var planned: [RoutineCompletion] {
+        store.data.routineCompletions.filter { entry in
+            guard entry.outcome == .done else { return false }
+            let routine = store.data.routines.first { $0.id == entry.routineID }
+            return routine?.symbol == "shower.fill" || (entry.routineTitle ?? routine?.title ?? "").localizedCaseInsensitiveContains("dusch")
+        }.sorted { $0.recordedAt > $1.recordedAt }
+    }
+    private var lastDate: Date? { (store.data.showerEntries.map(\.date) + planned.map(\.recordedAt)).max() }
     var body: some View {
         TherapyScreen {
             VStack(alignment: .leading, spacing: 18) {
                 GlassCard(emphasized: true) {
                     VStack(alignment: .leading, spacing: 14) {
                         SectionHeader(title: "Meine Duschtage", icon: "shower.fill", subtitle: "Fest planen oder flexibel festhalten. Beides ist möglich.")
-                        if let last { Text("Zuletzt: " + last.date.formatted(date: .abbreviated, time: .shortened)).font(.title3.bold()) }
+                        if let lastDate { Text("Zuletzt: " + lastDate.formatted(date: .abbreviated, time: .shortened)).font(.title3.bold()) }
                         Button("Duschtag festhalten", systemImage: "plus.circle") { entry = ShowerEntry() }.buttonStyle(.borderedProminent)
                         Button("Feste Duschtage planen", systemImage: "calendar") { routine = DailyRoutine(title: "Duschen", symbol: "shower.fill", times: [RoutineTime(weekdays: [2, 4, 6], hour: 19, minute: 0)]) }.buttonStyle(.bordered)
                         Text("Beim festen Plan bestätigst du Tage und Uhrzeit im Routine-Editor. Flexible Einträge lösen keine Erinnerung aus.").font(.caption).foregroundStyle(.secondary)
@@ -220,7 +228,20 @@ struct ShowerDaysView: View {
                         }
                     }
                 }
-                if store.data.showerEntries.isEmpty { Text("Dein Verlauf füllt sich, wenn du Duschtage selbst bestätigst.").foregroundStyle(.secondary) }
+                if !planned.isEmpty {
+                    GlassCard {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Label("Bestätigte Duschroutinen", systemImage: "checkmark.circle.fill").font(.headline).foregroundStyle(Color.accentColor)
+                            ForEach(planned.prefix(30)) { completion in
+                                NavigationLink { RoutineDetailView(routineID: completion.routineID) } label: {
+                                    VStack(alignment: .leading, spacing: 4) { Text(completion.recordedAt.formatted(date: .abbreviated, time: .shortened)); if !completion.note.isEmpty { Text(completion.note).font(.caption) } }
+                                }
+                            }
+                            NavigationLink { RoutineHistoryView() } label: { Text("Gesamten Verlauf öffnen") }
+                        }
+                    }
+                }
+                if store.data.showerEntries.isEmpty && planned.isEmpty { Text("Dein Verlauf füllt sich, wenn du Duschtage selbst bestätigst.").foregroundStyle(.secondary) }
             }
         }.navigationTitle("Duschtage").navigationBarTitleDisplayMode(.inline)
             .sheet(item: $routine) { RoutineEditorView(routine: $0) }

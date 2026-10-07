@@ -651,6 +651,7 @@ final class AppStore: ObservableObject {
         // Keep the binary until the undo window expires. Metadata is removed atomically below.
         var snapshot = data
         snapshot.media.removeAll { $0.id == item.id }
+        if snapshot.emergencyPlan.imageID == item.id { snapshot.emergencyPlan.imageID = nil }
         for index in snapshot.guidedCheckIns.indices { snapshot.guidedCheckIns[index].mediaIDs.removeAll { $0 == item.id } }
         for index in snapshot.notes.indices { snapshot.notes[index].mediaIDs?.removeAll { $0 == item.id } }
         data = snapshot
