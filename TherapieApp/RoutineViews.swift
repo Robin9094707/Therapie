@@ -126,6 +126,9 @@ struct RoutineDueCard: View {
                     }
                     if let buttons = routine.actionButtons {
                         ForEach(buttons.filter(\.enabled)) { button in
+                            if button.action == .emergency {
+                                NavigationLink { EmergencyPlanView() } label: { Label(button.title.isEmpty ? "Notfallplan" : button.title, systemImage: button.action.symbol) }.buttonStyle(.bordered)
+                            } else {
                             Button(button.title.isEmpty ? button.action.title : button.title, systemImage: button.action.symbol) {
                                 switch button.action {
                                 case .done: confirmDone = true
@@ -135,6 +138,7 @@ struct RoutineDueCard: View {
                                 case .home: TherapyHomeService.shared.run(for: routine.id)
                                 }
                             }.buttonStyle(.bordered).disabled(button.action == .snooze && (routine.maxSnoozes.map { (store.data.routineSnoozes.first { $0.id == occurrence.id }?.count ?? 0) >= $0 } ?? false))
+                            }
                         }
                         Menu("Weitere Aktionen") { Button("Erledigt") { confirmDone = true }; Button("Auslassen") { showSkip = true }; NavigationLink("Notfallplan") { EmergencyPlanView() } }
                     } else {

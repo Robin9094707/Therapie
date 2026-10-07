@@ -86,7 +86,12 @@ final class AppleRemindersService {
             for reminder in owned where !valid.contains(key(reminder)) {
                 if !store.data.appleIntegration.remindersEnabled || store.data.appleIntegration.removeFinishedReminders {
                     try events.remove(reminder, commit: false)
-                } else if !reminder.isCompleted { reminder.isCompleted = true; try events.save(reminder, commit: false) }
+                } else if !reminder.isCompleted {
+                    let id = key(reminder)
+                    let wasResolved = store.data.routineCompletions.contains { id == "routine.\($0.routineID).\($0.timeID).\(Int($0.scheduledAt.timeIntervalSince1970))" } || store.data.weeklyTasks.contains { id == "task.\($0.id)" && $0.completed }
+                    if wasResolved { reminder.isCompleted = true; try events.save(reminder, commit: false) }
+                    else { try events.remove(reminder, commit: false) }
+                }
             }
             for draft in desired {
                 let reminder = existing.removeValue(forKey: draft.id) ?? EKReminder(eventStore: events)

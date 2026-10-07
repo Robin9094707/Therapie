@@ -71,6 +71,15 @@ enum TherapyWidgetStorage {
         }
         return nil
     }
+    static func copiedSnapshot(_ code: String) -> TherapyWidgetSnapshot? {
+        guard code.count < 100_000, let bytes = Data(base64Encoded: code.trimmingCharacters(in: .whitespacesAndNewlines)), bytes.count < 75_000 else { return nil }
+        let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+        guard var snapshot = try? decoder.decode(TherapyWidgetSnapshot.self, from: bytes), snapshot.configured,
+              snapshot.reminders.count <= 200, snapshot.nextAppointments.count <= 50,
+              snapshot.reminders.allSatisfy({ $0.id.count <= 250 && $0.title.count <= 300 && $0.route.hasPrefix("therapie://") && URL(string:$0.route)?.scheme == "therapie" }) else { return nil }
+        snapshot.cacheProblem = "Kopie vom " + snapshot.generatedAt.formatted(date: .abbreviated, time: .shortened)
+        return snapshot
+    }
     static func read() -> TherapyWidgetSnapshot {
         guard let storage = container() else { return TherapyWidgetSnapshot(cacheProblem: "Signierung ohne gemeinsamen App-Speicher. Daten-Code, manuelles Widget oder Apple-Erinnerungen-Widget verwenden.") }
         let file = try? Data(contentsOf: storage.url.appendingPathComponent(TherapyWidgetSnapshot.fileName))

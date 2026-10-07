@@ -236,6 +236,11 @@ struct ModelChecks {
         for key in ["medicalPass","appleIntegration","wakeAlarms","wakeRuns"] { previousApple.removeValue(forKey:key) }
         let migratedApple = try decoder.decode(AppData.self,from:JSONSerialization.data(withJSONObject:previousApple))
         try expect(migratedApple.medicalPass == MedicalPass() && !migratedApple.appleIntegration.remindersEnabled && migratedApple.wakeAlarms.isEmpty, "Existing data gains empty pass and opt-in integrations without requesting permission")
+        let copySource = TherapyWidgetSnapshot(generatedAt:wakeClock, reminders:[TherapyWidgetReminder(id:"copy",kind:"routine",title:"Hinweis",due:wakeClock,expiresAt:wakeClock.addingTimeInterval(86400),route:"therapie://routines")],configured:true)
+        let copyCode = try encoder.encode(copySource).base64EncodedString()
+        try expect(TherapyWidgetStorage.copiedSnapshot(copyCode)?.reminders.first?.title == "Hinweis", "Copied widget data works independently of App Group storage")
+        var invalidCopy = copySource; invalidCopy.reminders[0].route = "https://example.com"
+        try expect(TherapyWidgetStorage.copiedSnapshot(try encoder.encode(invalidCopy).base64EncodedString()) == nil, "Widget copy cannot supply external deep links")
         print("Passed \(checks) migration, streak, chart aggregation and export checks.")
     }
 }

@@ -53,7 +53,7 @@ struct PerformRoutineShortcutIntent: AppIntent {
     @MainActor func perform() async throws -> some IntentResult & ProvidesDialog {
         let store = try TherapyIntentRuntime.writableStore()
         if action == .home { TherapyHomeService.shared.run(for:routine.id); store.notificationApplePage = "apple"; return .result(dialog:"Die verknüpfte Home-Szene wurde angefragt. Prüfe ihren Status in der App.") }
-        guard let occurrence = RoutinePlanner.occurrences(data:store.data,days:1).first(where: { $0.routineID == routine.id && Calendar.current.isDateInToday($0.due) && !RoutinePlanner.resolved($0,completions:store.data.routineCompletions) }) else { return .result(dialog:"Für heute ist kein offener Termin dieser Routine vorhanden.") }
+        guard let occurrence = RoutinePlanner.occurrences(data:store.data,now:Date(),days:1).first(where: { $0.routineID == routine.id && Calendar.current.isDateInToday($0.due) && !RoutinePlanner.resolved($0,completions:store.data.routineCompletions) }) else { return .result(dialog:"Für heute ist kein offener Termin dieser Routine vorhanden.") }
         var snapshot = store.data
         guard RoutineDayMutation.resolve(occurrence, outcome: action == .done ? .done : .skipped, note:"Über Kurzbefehle bestätigt", in:&snapshot) else { throw ServiceError.generic("Dieser Termin ist nicht mehr offen.") }
         store.data = snapshot

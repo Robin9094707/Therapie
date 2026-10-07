@@ -39,10 +39,7 @@ struct TherapyWidgetOptions: WidgetConfigurationIntent {
     }
     func snapshot(at now: Date) -> TherapyWidgetSnapshot? {
         if source == .copied {
-            guard let copiedCode, copiedCode.count < 100_000, let bytes = Data(base64Encoded: copiedCode.trimmingCharacters(in: .whitespacesAndNewlines)), bytes.count < 75_000 else { return TherapyWidgetSnapshot(cacheProblem: "Daten-Code aus der Widget-Einrichtung einfügen.") }
-            let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
-            guard var snapshot = try? decoder.decode(TherapyWidgetSnapshot.self, from: bytes), snapshot.configured else { return TherapyWidgetSnapshot(cacheProblem: "Daten-Code konnte nicht gelesen werden.") }
-            snapshot.cacheProblem = "Kopie vom " + snapshot.generatedAt.formatted(date: .abbreviated, time: .shortened)
+            guard let copiedCode, let snapshot = TherapyWidgetStorage.copiedSnapshot(copiedCode) else { return TherapyWidgetSnapshot(cacheProblem: "Daten-Code aus der Widget-Einrichtung einfügen oder neu kopieren.") }
             return snapshot
         }
         guard source == .manual else { return nil }
