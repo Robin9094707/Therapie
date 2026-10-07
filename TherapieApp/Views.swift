@@ -6,14 +6,14 @@ import UIKit
 private let therapyContentMaxWidth: CGFloat = 720
 
 private enum RootModal: Identifiable {
-    case ai, permissions, session, checkIn(GuidedCheckIn), task(WeeklyTask), routine(UUID), widgetSetup, routines, reminders, therapy, mood, energy
+    case ai, permissions, session, checkIn(GuidedCheckIn), task(WeeklyTask), routine(UUID), showers, widgetSetup, routines, reminders, therapy, mood, energy
     var id: String {
         switch self {
         case .ai: "ai"; case .permissions: "permissions"; case .session: "session"
         case .checkIn(let entry): "check-in-" + entry.id.uuidString
         case .task(let task): "task-" + task.id.uuidString
         case .routine(let id): "routine-" + id.uuidString
-        case .widgetSetup: "widget-setup"; case .routines: "routines"; case .reminders: "reminders"; case .therapy: "therapy"; case .mood: "mood"; case .energy: "energy"
+        case .showers: "showers"; case .widgetSetup: "widget-setup"; case .routines: "routines"; case .reminders: "reminders"; case .therapy: "therapy"; case .mood: "mood"; case .energy: "energy"
         }
     }
 }
@@ -51,6 +51,7 @@ struct RootView: View {
         .onOpenURL { url in
             guard url.scheme == "therapie" else { return }
             switch url.host {
+            case "showers": store.notificationShowers = true
             case "widgetsetup": store.notificationWidgetSetup = true
             case "session": store.notificationSession = true
             case "today": store.selectedTab = 0
@@ -128,6 +129,7 @@ struct RootView: View {
         case .checkIn(let entry): return AnyView(GuidedCheckInDestination(entry: entry))
         case .task(let task): return AnyView(WeeklyTaskEditorView(task: task))
         case .routine(let id): return AnyView(RoutineDetailView(routineID: id))
+        case .showers: return AnyView(NavigationStack { ShowerDaysView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { modal = nil } } } })
         case .widgetSetup: return AnyView(WidgetSetupHelpView())
         case .routines: return AnyView(NavigationStack { RoutineHubView() })
         case .reminders: return AnyView(NavigationStack { ReminderCenterView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { modal = nil } } } })
@@ -137,7 +139,7 @@ struct RootView: View {
         }
     }
     private var presentationRequestKey: String {
-        let flags = [showPermissions, store.notificationSession, store.notificationAIHub, store.notificationWidgetSetup, store.notificationRoutines, store.notificationReminders, store.notificationTherapy, store.notificationMood, store.openEnergyReview]
+        let flags = [showPermissions, store.notificationSession, store.notificationAIHub, store.notificationShowers, store.notificationWidgetSetup, store.notificationRoutines, store.notificationReminders, store.notificationTherapy, store.notificationMood, store.openEnergyReview]
         return flags.map { $0 ? "1" : "0" }.joined() + (store.pendingGuidedCheckIn?.id.uuidString ?? "") + (store.notificationTaskID?.uuidString ?? "") + (store.notificationRoutineID?.uuidString ?? "")
     }
 
@@ -150,6 +152,7 @@ struct RootView: View {
         else if store.notificationAIHub { store.notificationAIHub = false; modal = .ai }
         else if let id = store.notificationTaskID { store.notificationTaskID = nil; if let task = store.data.weeklyTasks.first(where: { $0.id == id }) { modal = .task(task) } }
         else if let id = store.notificationRoutineID { store.notificationRoutineID = nil; modal = .routine(id) }
+        else if store.notificationShowers { store.notificationShowers = false; modal = .showers }
         else if store.notificationWidgetSetup { store.notificationWidgetSetup = false; modal = .widgetSetup }
         else if store.notificationRoutines { store.notificationRoutines = false; modal = .routines }
         else if store.notificationReminders { store.notificationReminders = false; modal = .reminders }
@@ -545,6 +548,7 @@ struct DashboardView: View {
 
     @ViewBuilder private func dashboardCard(_ card: HomeCard) -> some View {
         switch card {
+        case .showers: ShowerTodayCard()
         case .methods: MethodsHomeCard()
         case .appointment: TherapyAppointmentCard()
         case .discussion: TherapyDiscussionCard()

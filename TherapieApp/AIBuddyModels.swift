@@ -35,8 +35,12 @@ struct AIBuddySettings: Codable, Equatable {
 }
 enum AIBuddyActionKind: String, Codable, CaseIterable {
     case note, mood, topic, task, appointment, routine, goal, checkIn, reflection, completeTask, completeRoutine, openScreen, guidedCheckIn, energy, updateTask, updateRoutine, deleteTask, deleteRoutine, setting, battery, startSession
+    case shower, skipRoutine, postponeRoutine, reopenTask, postponeTask, method, thoughtStop, updateMethod, deleteMethod, emergencyPlan, updateNote, deleteNote, updateTopic, deleteTopic, updateGoal, deleteGoal, goalProgress, discussTopic, editEntry
     var label: String {
         switch self {
+        case .shower: "Duschen eintragen"; case .skipRoutine: "Heute auslassen"; case .postponeRoutine: "Einzelnen Routinentermin verschieben"; case .reopenTask: "Aufgabe wieder öffnen"; case .postponeTask: "Aufgabe verschieben"
+        case .method: "Methode anlegen"; case .thoughtStop: "Gedankenstopp anlegen"; case .updateMethod: "Methode bearbeiten"; case .deleteMethod: "Methode entfernen"; case .emergencyPlan: "Notfallplan ergänzen"
+        case .updateNote: "Notiz bearbeiten"; case .deleteNote: "Notiz entfernen"; case .updateTopic: "Thema bearbeiten"; case .deleteTopic: "Thema entfernen"; case .updateGoal: "Ziel bearbeiten"; case .deleteGoal: "Ziel entfernen"; case .goalProgress: "Zielfortschritt eintragen"; case .discussTopic: "Als besprochen markieren"; case .editEntry: "Eintrag im Editor öffnen"
         case .battery: "Akku eintragen"; case .startSession: "Therapierunde starten"
         case .guidedCheckIn: "Check-in starten / öffnen"; case .energy: "Akku-Punkt"; case .updateTask: "Aufgabe ändern"; case .updateRoutine: "Routine ändern"; case .deleteTask: "Aufgabe entfernen"; case .deleteRoutine: "Routine entfernen"; case .setting: "Einstellung ändern"
         case .note: "Notiz / Tagebuch"; case .mood: "Stimmung eintragen"; case .topic: "Therapiethema"; case .task: "Aufgabe"; case .appointment: "Zusatztermin"; case .routine: "Routine"; case .goal: "Ziel"; case .checkIn: "Check-in"; case .reflection: "Therapie-Rückblick"; case .completeTask: "Aufgabe erledigen"; case .completeRoutine: "Routine bestätigen"; case .openScreen: "Bereich öffnen"
@@ -44,6 +48,8 @@ enum AIBuddyActionKind: String, Codable, CaseIterable {
     }
     var symbol: String {
         switch self {
+        case .shower: "shower.fill"; case .skipRoutine: "minus.circle"; case .postponeRoutine, .postponeTask: "calendar.badge.clock"; case .reopenTask: "arrow.uturn.backward"
+        case .method, .thoughtStop: "sparkles"; case .updateMethod, .updateNote, .updateTopic, .updateGoal, .editEntry: "pencil"; case .deleteMethod, .deleteNote, .deleteTopic, .deleteGoal: "trash"; case .emergencyPlan: "lifepreserver.fill"; case .goalProgress: "scope"; case .discussTopic: "checkmark.bubble"
         case .battery: "battery.100percent"; case .startSession: "timer"
         case .guidedCheckIn: "sparkles"; case .energy: "battery.100percent"; case .updateTask, .updateRoutine: "pencil"; case .deleteTask, .deleteRoutine: "trash"; case .setting: "slider.horizontal.3"
         case .note: "note.text"; case .mood: "face.smiling"; case .topic: "text.bubble"; case .task, .completeTask: "checklist"; case .appointment: "calendar.badge.plus"; case .routine, .completeRoutine: "checkmark.circle"; case .goal: "scope"; case .checkIn: "sparkles"; case .reflection: "clock.arrow.circlepath"; case .openScreen: "arrow.up.right.square"
@@ -70,7 +76,23 @@ struct AIBuddyAction: Codable, Equatable, Identifiable {
         if options?.times != nil && ![AIBuddyActionKind.routine, .updateRoutine].contains(kind) { return false }
         if options?.once == true && (options?.times != nil || options?.repeatCount != nil || options?.repeatEveryWeeks != nil) { return false }
         if (options?.repeatUntilDone != nil || options?.once != nil) && ![AIBuddyActionKind.routine, .updateRoutine].contains(kind) { return false }
-        if options?.priority != nil && kind != .goal { return false }
+        if options?.repeatEveryDays != nil && ![AIBuddyActionKind.routine, .updateRoutine].contains(kind) { return false }
+        if options?.once == true && options?.repeatEveryDays != nil { return false }
+        if options?.repeatEveryDays != nil && options?.repeatEveryWeeks != nil { return false }
+        if options?.priority != nil && ![AIBuddyActionKind.goal, .updateGoal].contains(kind) { return false }
+        if kind == .editEntry { return !(targetID ?? "").isEmpty }
+        if kind == .discussTopic { return !(targetID ?? "").isEmpty }
+        if kind == .emergencyPlan { return ["firstStep", "warningSigns", "support", "steps", "title"].contains(targetID ?? "firstStep") && (!text.isEmpty || !(options?.steps ?? []).isEmpty) }
+        if [.method, .thoughtStop].contains(kind) { return !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        if [.updateMethod, .deleteMethod, .updateNote, .deleteNote, .updateTopic, .deleteTopic, .updateGoal, .deleteGoal, .goalProgress, .reopenTask, .postponeTask].contains(kind) {
+            guard targetID.flatMap(UUID.init(uuidString:)) != nil else { return false }
+            if kind == .goalProgress { return options?.valueInt.map { (0...100).contains($0) } == true }
+            if kind == .postponeTask { return date != nil }
+            return [.deleteMethod, .deleteNote, .deleteTopic, .deleteGoal, .reopenTask].contains(kind) || !title.isEmpty
+        }
+        if kind == .postponeRoutine { return !(targetID ?? "").isEmpty && date != nil }
+        if kind == .skipRoutine { return !(targetID ?? "").isEmpty }
+        if kind == .shower { return date != nil || !(targetID ?? "").isEmpty }
         if kind == .startSession { return targetID.flatMap(UUID.init(uuidString:)) != nil }
         if kind == .battery { return moodPercent != nil }
         if kind == .setting { return AIBuddySettingsChange.valid(action: self) }
@@ -96,7 +118,7 @@ struct AIBuddyReply: Codable, Equatable {
     var tags: [String]?
     var quickReplies: [BuddyQuickReply]?
     var memory: String?
-    var valid: Bool { (quickReplies ?? []).count <= 3 && (quickReplies ?? []).allSatisfy(\.valid) && (memory?.count ?? 0) <= 1800 && (tags ?? []).count <= 12 && (tags ?? []).allSatisfy { !$0.isEmpty && $0.count <= 60 } && (checkIn?.valid ?? true) && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && message.count <= 12000 && title.count <= 160 && sections.count <= 8 && actions.count <= 6 && Set(actions.map(\.id)).count == actions.count && actions.allSatisfy(\.valid) && sections.allSatisfy { $0.heading.count <= 160 && $0.text.count <= 6000 } && (suggestedDays == nil || (1...90).contains(suggestedDays!)) }
+    var valid: Bool { (quickReplies ?? []).count <= 3 && (quickReplies ?? []).allSatisfy(\.valid) && (memory?.count ?? 0) <= 1800 && (tags ?? []).count <= 12 && (tags ?? []).allSatisfy { !$0.isEmpty && $0.count <= 60 } && (checkIn?.valid ?? true) && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && message.count <= 12000 && title.count <= 160 && sections.count <= 8 && actions.count <= 12 && Set(actions.map(\.id)).count == actions.count && actions.allSatisfy(\.valid) && sections.allSatisfy { $0.heading.count <= 160 && $0.text.count <= 6000 } && (suggestedDays == nil || (1...90).contains(suggestedDays!)) }
     var journalText: String {
         ([AIBuddyText.plain(message)] + sections.map { AIBuddyText.plain($0.heading) + "\n" + AIBuddyText.plain($0.text) }).joined(separator: "\n\n")
     }
@@ -202,12 +224,12 @@ struct AIBuddyContext {
         let average = WellnessAnalytics.average(moods).map { String(format: "%.1f/5", $0) } ?? "keine Werte"
         let trend = InsightsAnalytics.trend(data: data, period: period).map { String(format: "%+.2f", $0) } ?? "zu wenige Werte"
         let next = TherapyDateHelper.nextOccurrence(schedule: data.schedule, after: requestTime).map(formatter.string) ?? "keiner"
-        let occurrences: [RoutineOccurrence] = RoutinePlanner.due(data: data, now: requestTime)
+        let occurrences: [RoutineOccurrence] = RoutinePlanner.occurrences(data: data, now: calendar.startOfDay(for: requestTime), days: 1, calendar: calendar).filter { !RoutinePlanner.resolved($0, completions: data.routineCompletions) }
         var dueLines: [String] = []
         for occurrence in occurrences.prefix(12) {
             let routine: DailyRoutine? = data.routines.first(where: { $0.id == occurrence.routineID })
             let title: String = routine?.title ?? "Routine"
-            dueLines.append(occurrence.id + " | " + title)
+            dueLines.append(occurrence.id + " | " + title + " | " + formatter.string(from: occurrence.due))
         }
         let due: String = dueLines.joined(separator: "\n")
         var taskLines: [String] = []
@@ -241,22 +263,23 @@ struct AIBuddyContext {
             let state = existing.map { $0.isDraft ? "Entwurf fortsetzen" : "Bereits abgeschlossen; nur öffnen" } ?? (slot.contains(requestTime) ? "Jetzt verfügbar" : "Außerhalb des Zeitfensters")
             text += slot.id.uuidString + " | " + slot.title + " | " + slot.windowText + " | " + state + "\n"
         }
-        let planning = broad || ["routine", "aufgabe", "erinner", "alarm", "tablett", "termin", "therapie", "ziel"].contains(where: intent.contains)
+        let planning = broad || intent.contains("dusch") || intent.contains("erledigt") || intent.contains("verschieb") || intent.contains("auslassen") || ["routine", "aufgabe", "erinner", "alarm", "tablett", "termin", "therapie", "ziel"].contains(where: intent.contains)
         if planning {
             text += "\nROUTINEN (IDs):\n" + data.routines.prefix(12).map { $0.id.uuidString + " | " + $0.title + " | " + String($0.details.prefix(160)) + " | " + ($0.enabled ? "aktiv" : "pausiert") + " | " + $0.times.map { String(format: "%02d:%02d", $0.hour, $0.minute) + " Tage " + $0.weekdays.map(String.init).joined(separator: ",") }.joined(separator: "; ") }.joined(separator: "\n")
-            text += "\nFÄLLIGE ROUTINEN:\n" + due + "\nOFFENE AUFGABEN:\n" + String(openTasks.prefix(3000))
+            text += "\nHEUTE OFFENE ROUTINEN (teilweise später geplant):\n" + due + "\nOFFENE AUFGABEN:\n" + String(openTasks.prefix(3000))
         }
         if broad || intent.contains("therapie") || intent.contains("runde") || intent.contains("stunde") {
             text += "\nTHERAPIEVORLAGEN (startSession-IDs):\n" + data.sessionTemplates.filter(\.isValid).prefix(8).map { $0.id.uuidString + " | " + $0.title }.joined(separator: "\n")
             text += "\nGESPRÄCHSPUNKTE:\n" + String(topics.prefix(2500))
         }
         if question.isEmpty || ["einstellung", "design", "farbe", "kontext", "vorlesen", "oberfläche"].contains(where: intent.contains) {
-            text += "\nEINSTELLUNGEN:\n" + (AIBuddySettingsChange.booleanKeys + ["ai.contextDays", "appearance.accent"]).map { $0 + " | " + AIBuddySettingsChange.value($0, data: data) }.joined(separator: "\n")
+            text += "\nEINSTELLUNGEN:\n" + (AIBuddySettingsChange.booleanKeys + ["ai.contextDays", "appearance.accent", "showers.weeklyGoal"]).map { $0 + " | " + AIBuddySettingsChange.value($0, data: data) }.joined(separator: "\n")
         }
         text = BuddyInteraction.completeLines(text, limit: question.isEmpty ? 7000 : 5000)
         if data.aiSettings.includeJournal && ["methode", "asmr", "gedankenstopp", "beruhig", "überforder", "notfall"].contains(where: intent.contains) {
-            text += "\nMEINE METHODEN (persönliche Zuordnungen, keine Wirksamkeitsgarantie):\n" + data.copingMethods.prefix(10).map { $0.title + " | " + $0.situation + " | " + $0.stages.map(\.title).joined(separator: ", ") + " | " + String($0.details.prefix(300)) }.joined(separator: "\n")
+            text += "\nMEINE METHODEN (persönliche Zuordnungen, keine Wirksamkeitsgarantie):\n" + data.copingMethods.prefix(10).map { $0.id.uuidString + " | " + $0.title + " | " + $0.situation + " | " + $0.stages.map(\.title).joined(separator: ", ") + " | " + String($0.details.prefix(300)) }.joined(separator: "\n")
         }
+        text += "\nAKTIONSKONTEXT (heutige Planung unabhängig vom Rückblickzeitraum):\n" + BuddyCapabilities.context(data, question: question, now: requestTime)
         text += "\nNative Bereiche: " + BuddyDestinations.catalogue + "\nEINTRÄGE:\n"
         var sent = 0
         for line in lines {
@@ -631,31 +654,51 @@ struct AIBuddyActionOptions: Codable, Equatable {
     var valueString: String?
     var priority: String?
     var times: [Int]?
+    var stages: [String]?
+    var categories: [String]?
+    var steps: [String]?
+    var situation: String?
+    var repeatEveryDays: Int?
     // Keep identities of pre-3011 proposals intact after Codable adds optional fields.
     var stableIdentity: String {
         let legacy = "AIBuddyActionOptions(remindersEnabled: \(String(describing: remindersEnabled)), alarmEnabled: \(String(describing: alarmEnabled)), retryMinutes: \(String(describing: retryMinutes)), repeatEveryWeeks: \(String(describing: repeatEveryWeeks)), repeatCount: \(String(describing: repeatCount)), enabled: \(String(describing: enabled)), valueBool: \(String(describing: valueBool)), valueInt: \(String(describing: valueInt)))"
-        guard valueString != nil || priority != nil || times != nil || repeatUntilDone != nil || once != nil else { return legacy }
-        return legacy + (once.map { "|once=" + String($0) } ?? "") + (repeatUntilDone.map { "|untilDone=" + String($0) } ?? "") + "|string=" + (valueString ?? "") + "|priority=" + (priority ?? "") + "|times=" + (times ?? []).map(String.init).joined(separator: ",")
+        guard valueString != nil || priority != nil || times != nil || repeatUntilDone != nil || once != nil || stages != nil || categories != nil || steps != nil || situation != nil || repeatEveryDays != nil else { return legacy }
+        return legacy + (once.map { "|once=" + String($0) } ?? "") + (repeatUntilDone.map { "|untilDone=" + String($0) } ?? "") + "|string=" + (valueString ?? "") + "|priority=" + (priority ?? "") + "|times=" + (times ?? []).map(String.init).joined(separator: ",") + extraIdentity
+    }
+    private var extraIdentity: String {
+        guard stages != nil || categories != nil || steps != nil || situation != nil || repeatEveryDays != nil else { return "" }
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        return "|extended=" + ((try? encoder.encode(self)).map { String(decoding: $0, as: UTF8.self) } ?? "")
     }
     var valid: Bool {
+        (stages == nil || (stages!.count <= 3 && stages!.allSatisfy { MethodStage(rawValue: $0) != nil })) &&
+        (categories == nil || (categories!.count <= BatteryCategory.allCases.count && categories!.allSatisfy { BatteryCategory(rawValue: $0) != nil })) &&
+        (steps == nil || (steps!.count <= 20 && steps!.allSatisfy { $0.count <= 500 })) &&
+        (situation == nil || situation!.count <= 1000) &&
+        (repeatEveryDays == nil || (1...30).contains(repeatEveryDays!)) &&
         (priority == nil || ["low", "normal", "high"].contains(priority!)) &&
         (valueString == nil || valueString!.count <= 60) && (times == nil || (!times!.isEmpty && times!.count <= 8 && Set(times!).count == times!.count && times!.allSatisfy { (0...1439).contains($0) })) &&
         (retryMinutes == nil || (5...180).contains(retryMinutes!)) &&
         (repeatEveryWeeks == nil || (1...52).contains(repeatEveryWeeks!)) &&
         (repeatCount == nil || (1...52).contains(repeatCount!)) &&
-        (valueInt == nil || (1...90).contains(valueInt!))
+        (valueInt == nil || (0...100).contains(valueInt!))
     }
 }
 enum AIBuddySettingsChange {
-    static let booleanKeys = ["ai.preferGuidedCheckIns", "ai.automaticRange", "ai.weeklyReview", "dashboard.compactCards", "dashboard.showWidgetTitles", "reminders.privateTaskTitles", "companion.privateRoutineTitles", "ai.speakReplies"]
+    static let booleanKeys = ["ai.preferGuidedCheckIns", "ai.automaticRange", "ai.weeklyReview", "dashboard.compactCards", "dashboard.showWidgetTitles", "reminders.privateTaskTitles", "companion.privateRoutineTitles", "ai.speakReplies", "dashboard.welcomeFirst", "dashboard.showFeatureLinks", "dashboard.showAIImpulse"]
     static func valid(action: AIBuddyAction) -> Bool {
         guard let key = action.targetID else { return false }
         if key == "appearance.accent" { return action.options?.valueString.flatMap(AppAccent.init(rawValue:)) != nil }
+        if key == "showers.weeklyGoal" { return action.options?.valueInt.map { (1...7).contains($0) } ?? false }
         if key == "ai.contextDays" { return action.options?.valueInt.map { (1...90).contains($0) } ?? false }
         return booleanKeys.contains(key) && action.options?.valueBool != nil
     }
     static func value(_ key: String, data: AppData) -> String {
         switch key {
+        case "showers.weeklyGoal": return "\(data.showerPreferences.weeklyGoal) Duschtage pro Woche"
+        case "dashboard.welcomeFirst": return data.dashboard.welcomeFirst ? "An" : "Aus"
+        case "dashboard.showFeatureLinks": return data.dashboard.showFeatureLinks ? "An" : "Aus"
+        case "dashboard.showAIImpulse": return data.dashboard.showAIImpulse ? "An" : "Aus"
         case "appearance.accent": return data.accentTheme.title
         case "ai.speakReplies": return data.aiSettings.speakReplies ? "An" : "Aus"
         case "ai.contextDays": return "\(data.aiSettings.contextDays) Tage"
@@ -675,7 +718,7 @@ struct MoodEntryDraft: Codable, Equatable { var entry: MoodCheckIn; var points: 
 
 // Small, explicit capability catalogue: settings without a safe mutation open their native editor.
 enum BuddyDestinations {
-    static let names: [String: String] = ["methods": "Methoden, Akkuthemen und Gedankenstopps", "emergency": "Persönlicher Notfallplan", "grounding": "Angeleitete 5-4-3-2-1-Uebung", "showers": "Feste und flexible Duschtage", "today": "Heute", "insights": "Stimmung und Auswertung", "therapy": "Therapiethemen und Ziele", "archive": "Archiv", "session": "Therapierunde und Timer", "routines": "Routinen", "appointments": "Therapieintervalle und Termine", "reminders": "Erinnerungen", "settings": "Alle App-Einstellungen, Profil und Datenschutz", "appearance": "Design, Hell/Dunkel, Haptik und Konfetti", "dashboard": "Startseite und Widgets", "wellness": "Stimmungsziele und Freigaben", "backup": "Export und Import", "ai": "KI-Schlüssel, Modelle und Upload-Freigaben", "checkins": "Check-in-Rhythmus und Zeitfenster", "sessionSettings": "Timer, Phasen und Begleitung", "profile": "Aktueller Akku und Befinden"]
+    static let names: [String: String] = ["tasks": "Alle Aufgaben nach Kategorie und offenen Schritten", "widgets": "Widget-Daten und Diagnose", "methods": "Methoden, Akkuthemen und Gedankenstopps", "emergency": "Persönlicher Notfallplan", "grounding": "Angeleitete 5-4-3-2-1-Uebung", "showers": "Feste und flexible Duschtage", "today": "Heute", "insights": "Stimmung und Auswertung", "therapy": "Therapiethemen und Ziele", "archive": "Archiv", "session": "Therapierunde und Timer", "routines": "Routinen", "appointments": "Therapieintervalle und Termine", "reminders": "Erinnerungen", "settings": "Alle App-Einstellungen, Profil und Datenschutz", "appearance": "Design, Hell/Dunkel, Haptik und Konfetti", "dashboard": "Startseite und Widgets", "wellness": "Stimmungsziele und Freigaben", "backup": "Export und Import", "ai": "KI-Schlüssel, Modelle und Upload-Freigaben", "checkins": "Check-in-Rhythmus und Zeitfenster", "sessionSettings": "Timer, Phasen und Begleitung", "profile": "Aktueller Akku und Befinden"]
     static var ids: [String] { names.keys.sorted() }
     static var catalogue: String { ids.map { $0 + ": " + (names[$0] ?? $0) }.joined(separator: "; ") }
 }
@@ -717,7 +760,7 @@ enum BuddyInteraction {
             guard remaining > 0 else { break }
             var value = String(message.text.prefix(min(1200, remaining)))
             if let reply = message.reply, remaining - value.count > 0 {
-                let actions = reply.actions.prefix(4).map { $0.kind.rawValue + " | " + $0.title + " | " + ($0.targetID ?? "") + " | " + (message.appliedActionIDs.contains($0.id) ? "bestätigt" : "Vorschlag") }.joined(separator: "\n")
+                let actions = reply.actions.prefix(12).map { $0.kind.rawValue + " | " + $0.title + " | " + ($0.targetID ?? "") + " | " + (message.appliedActionIDs.contains($0.id) ? "bestätigt" : "Vorschlag") }.joined(separator: "\n")
                 value += String(("\nAKTIONEN:\n" + actions).prefix(max(0, min(600, remaining - value.count))))
             }
             remaining -= value.count; result.append(["role": message.role, "content": value])

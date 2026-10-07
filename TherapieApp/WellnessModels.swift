@@ -257,7 +257,7 @@ enum WellnessExport {
 }
 
 // MARK: - Personal methods and support (schema 15, entirely portable)
-enum MethodStage: String, Codable, CaseIterable, Identifiable {
+enum MethodStage: String, Codable, CaseIterable, Identifiable, Hashable {
     case prevent, contain, calm
     var id: String { rawValue }
     var title: String { switch self { case .prevent: "Vorbeugen"; case .contain: "Eindämmen"; case .calm: "Beruhigen" } }
@@ -321,4 +321,66 @@ enum GroundingGuide {
     static let titles = ["Fünf Dinge, die du siehst", "Vier Dinge, die du spürst", "Drei Dinge, die du hörst", "Zwei Dinge, die du riechst", "Eine Sache, die du schmeckst"]
     static let symbols = ["eye.fill", "hand.raised.fill", "ear.fill", "nose", "mouth.fill"]
     static let hints = ["Schau dich in deinem Tempo um. Zum Beispiel eine Farbe oder eine Form.", "Zum Beispiel deine Füße am Boden, den Stuhl oder die Kleidung auf deiner Haut.", "Nur angenehme oder neutrale Geräusche. Du musst nichts extra abspielen.", "Wenn gerade kein Geruch da ist, denke an etwas Vertrautes oder überspringe den Schritt.", "Zum Beispiel einen vorhandenen Geschmack. Du brauchst nichts zu essen oder zu trinken."]
+}
+
+
+struct ShowerPreferences: Codable, Equatable {
+    var weeklyGoal = 3
+}
+struct RoutineDeferral: Codable, Equatable, Identifiable {
+    var routineID: UUID
+    var timeID: UUID
+    var scheduledAt: Date
+    var deferredUntil: Date
+    var createdAt = Date()
+    var occurrenceID: String { "\(routineID).\(timeID).\(Int(scheduledAt.timeIntervalSince1970))" }
+    var id: String { occurrenceID }
+}
+enum ShowerPlanner {
+    static func isShower(_ routine: DailyRoutine) -> Bool { routine.symbol == "shower.fill" || routine.title.localizedCaseInsensitiveContains("dusch") }
+    static func isShower(_ entry: RoutineCompletion, data: AppData) -> Bool {
+        data.routines.first { $0.id == entry.routineID }.map(isShower) == true || (entry.routineTitle ?? "").localizedCaseInsensitiveContains("dusch")
+    }
+    static func dates(_ data: AppData) -> [Date] {
+        data.showerEntries.map(\.date) + data.routineCompletions.filter { $0.outcome == .done && isShower($0, data: data) }.map(\.recordedAt)
+    }
+    static func weekCount(_ data: AppData, at date: Date, calendar: Calendar = .therapyCalendar) -> Int {
+        guard let week = calendar.dateInterval(of: .weekOfYear, for: date) else { return 0 }
+        return Set(dates(data).filter { $0 >= week.start && $0 < week.end }.map { calendar.startOfDay(for: $0) }).count
+    }
+    static func today(_ data: AppData, at now: Date = Date(), calendar: Calendar = .current) -> [RoutineOccurrence] {
+        RoutinePlanner.occurrences(data: data, now: calendar.startOfDay(for: now), days: 1, calendar: calendar).filter { occurrence in
+            calendar.isDate(occurrence.due, inSameDayAs: now) && data.routines.first { $0.id == occurrence.routineID }.map(isShower) == true
+        }
+    }
+    static func defaultRoutine(at now: Date = Date(), everyTwoDays: Bool = false, calendar: Calendar = .current) -> DailyRoutine {
+        var routine = DailyRoutine(title: "Duschen", symbol: "shower.fill", times: [RoutineTime(weekdays: everyTwoDays ? Array(1...7) : [2,4,6], hour: 19, minute: 0)])
+        routine.repeatUntilDone = false
+        routine.escalationHour = nil
+        if everyTwoDays { routine.recurrenceAnchor = calendar.startOfDay(for: now); routine.repeatEveryDays = 2 }
+        return routine
+    }
+}
+enum RoutineDayMutation {
+    @discardableResult static func resolve(_ occurrence: RoutineOccurrence, outcome: RoutineOutcome, note: String, in data: inout AppData, at now: Date = Date(), calendar: Calendar = .current) -> Bool {
+        guard let routine = data.routines.first(where: { $0.id == occurrence.routineID }),
+              calendar.startOfDay(for: occurrence.due) <= calendar.startOfDay(for: now),
+              !RoutinePlanner.resolved(occurrence, completions: data.routineCompletions),
+              RoutinePlanner.occurrences(data: data, now: calendar.startOfDay(for: now), days: 1, calendar: calendar).contains(where: { $0.id == occurrence.id && $0.due == occurrence.due }) else { return false }
+        data.routineCompletions.insert(RoutineCompletion(routineID: routine.id, timeID: occurrence.timeID, scheduledAt: occurrence.scheduledAt, recordedAt: now, outcome: outcome, note: note, routineTitle: routine.title, timeTitle: routine.times.first { $0.id == occurrence.timeID }?.title), at: 0)
+        data.routineSnoozes.removeAll { $0.id == occurrence.id }
+        return true
+    }
+    @discardableResult static func postpone(_ occurrence: RoutineOccurrence, until date: Date, in data: inout AppData, at now: Date = Date(), calendar: Calendar = .current) -> Bool {
+        guard date > now, date > occurrence.due, !RoutinePlanner.resolved(occurrence, completions: data.routineCompletions),
+              data.routines.contains(where: { $0.id == occurrence.routineID }),
+              RoutinePlanner.occurrences(data: data, now: calendar.startOfDay(for: now), days: 1, calendar: calendar).contains(where: { $0.id == occurrence.id && $0.due == occurrence.due }) else { return false }
+        if let routine = data.routines.first(where: { $0.id == occurrence.routineID }), ShowerPlanner.isShower(routine), RoutinePlanner.occurrences(data: data, now: now, days: 14, calendar: calendar).contains(where: { $0.id != occurrence.id && $0.routineID == occurrence.routineID && $0.timeID == occurrence.timeID && calendar.isDate($0.due, inSameDayAs: date) && !RoutinePlanner.resolved($0, completions: data.routineCompletions) }) {
+            return resolve(occurrence, outcome: .skipped, note: "Verschoben bis zum nächsten regulären Duschtag", in: &data, at: now, calendar: calendar)
+        }
+        data.routineDeferrals.removeAll { $0.id == occurrence.id }
+        data.routineDeferrals.append(RoutineDeferral(routineID: occurrence.routineID, timeID: occurrence.timeID, scheduledAt: occurrence.scheduledAt, deferredUntil: date, createdAt: now))
+        data.routineSnoozes.removeAll { $0.id == occurrence.id }
+        return true
+    }
 }

@@ -49,6 +49,7 @@ final class AppStore: ObservableObject {
     @Published var selectedTab = 0
     @Published var notificationRoutines = false
     @Published var notificationReminders = false
+    @Published var notificationShowers = false
     @Published var notificationWidgetSetup = false
     @Published var widgetStatus = ""
     @Published var routineAlarmStatus = ""
@@ -203,8 +204,8 @@ final class AppStore: ObservableObject {
                 let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
                 loaded = try decoder.decode(AppData.self, from: raw)
                 let version = (try JSONSerialization.jsonObject(with: raw) as? [String: Any])?["schemaVersion"] as? Int ?? 1
-                if version < 15 {
-                    let beforeUpdate = rootURL.appendingPathComponent("therapy-data.pre-3014.json")
+                if version < 16 {
+                    let beforeUpdate = rootURL.appendingPathComponent("therapy-data.pre-3015.json")
                     if !fm.fileExists(atPath: beforeUpdate.path) { try raw.write(to: beforeUpdate, options: [.atomic, .completeFileProtection]) }
                 }
                 let snapshot = rootURL.appendingPathComponent("therapy-data.pre-3009.json")

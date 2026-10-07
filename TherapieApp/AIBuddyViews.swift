@@ -89,9 +89,9 @@ private struct AIBuddyReviewRoute: Identifiable {
     var action: AIBuddyAction
 }
 private enum BuddySheet: Identifiable {
-    case settings, guided(GuidedCheckIn), manual(GuidedCheckIn), review(AIBuddyReviewRoute), voice, screen(String), summary(UUID)
+    case record(ArchiveRecord), settings, guided(GuidedCheckIn), manual(GuidedCheckIn), review(AIBuddyReviewRoute), voice, screen(String), summary(UUID)
     var id: String {
-        switch self { case .summary(let id): "summary-" + id.uuidString; case .settings: "settings"; case .guided(let c): "guided-" + c.id.uuidString; case .manual(let c): "manual-" + c.id.uuidString; case .review(let r): "review-" + r.id; case .voice: "voice"; case .screen(let name): "screen-" + name }
+        switch self { case .record(let record): "record-" + record.id; case .summary(let id): "summary-" + id.uuidString; case .settings: "settings"; case .guided(let c): "guided-" + c.id.uuidString; case .manual(let c): "manual-" + c.id.uuidString; case .review(let r): "review-" + r.id; case .voice: "voice"; case .screen(let name): "screen-" + name }
     }
 }
 private struct BuddyMessageRow: Identifiable { var message: AIBuddyMessage; var startsDay: Bool; var id: UUID { message.id } }
@@ -238,6 +238,7 @@ struct AIBuddyChatContent: View {
     }
     private func sheetContent(_ sheet: BuddySheet) -> AnyView {
         switch sheet {
+        case .record(let record): return AnyView(ArchiveRecordEditor(record: record))
         case .summary(let id): return AnyView(BuddyConversationSummaryView(conversationID: id))
         case .settings: return AnyView(AIBuddySettingsView())
         case .guided(let entry): return AnyView(GuidedCheckInDestination(entry: entry))
@@ -287,11 +288,13 @@ struct AIBuddyChatContent: View {
                     if !reply.title.isEmpty { Text(AIBuddyText.plain(reply.title)).font(.headline) }
                     formatted(message.id == messages.last?.id && draft != nil ? BuddyInteraction.withoutPinnedQuestion(reply.message, step: draft?.step ?? 0) : reply.message)
                     ForEach(Array(reply.sections.enumerated()), id: \.offset) { _, section in VStack(alignment: .leading, spacing: 5) { Text(AIBuddyText.plain(section.heading)).font(.subheadline.bold()); formatted(section.text) } }
+                    if reply.actions.count > 1 { Text("\(reply.actions.count - reply.actions.filter { message.appliedActionIDs.contains($0.id) }.count) Vorschläge noch zu prüfen · jeden einzeln anpassen und bestätigen").font(.caption).foregroundStyle(.secondary) }
                     ForEach(reply.actions) { action in
                         let applied = message.appliedActionIDs.contains(action.id)
                         Button {
                             if action.kind == .openScreen { open(action.targetID ?? "") }
                             else if action.kind == .guidedCheckIn { startCheckIn(target: action.targetID) }
+                            else if action.kind == .editEntry { if let record = ArchiveRecord.all(in: store.data).first(where: { $0.id == action.targetID }) { inputHandle.finishEditing(); route = .record(record) } else { controller.error = "Dieser Eintrag ist nicht mehr vorhanden." } }
                             else { inputHandle.finishEditing(); route = .review(.init(messageID: message.id, action: action)) }
                         } label: { Label(applied ? "Gespeichert · " + action.kind.label : action.kind.label + (action.title.isEmpty ? "" : ": " + AIBuddyText.plain(action.title)), systemImage: applied ? "checkmark.circle.fill" : action.kind.symbol).frame(maxWidth: .infinity, alignment: .leading) }.buttonStyle(.bordered).disabled(applied).accessibilityIdentifier("ai.action." + action.kind.rawValue)
                     }
@@ -504,6 +507,8 @@ struct AIBuddyChatContent: View {
     }
     @ViewBuilder private func destination(_ name: String) -> some View {
         switch name {
+        case "tasks": TodoTimelineView()
+        case "widgets": WidgetSetupHelpView()
         case "profile": BuddyWellbeingProfileView()
         case "appearance": TherapyScreen { AppearanceCard() }.navigationTitle("Design")
         case "dashboard": DashboardCustomizationView(preferences: store.data.dashboard)
@@ -541,9 +546,9 @@ struct AIBuddyActionReviewView: View {
     @State private var hasBaseline = false
     @State private var hasDate: Bool
     init(action: AIBuddyAction, messageID: UUID) { original = action; self.messageID = messageID; var proposed = action; if [.routine, .task].contains(action.kind), action.date != nil { var opts = proposed.options ?? AIBuddyActionOptions(); opts.alarmEnabled = opts.alarmEnabled ?? true; opts.remindersEnabled = opts.remindersEnabled ?? true; if action.kind == .routine { opts.repeatUntilDone = opts.repeatUntilDone ?? false }; proposed.options = opts }; _action = State(initialValue: proposed); _date = State(initialValue: action.date ?? Date()); _percent = State(initialValue: action.moodPercent ?? 50); _hasDate = State(initialValue: action.date != nil) }
-    private var completion: Bool { [.completeTask, .completeRoutine].contains(action.kind) }
-    private var removing: Bool { [.deleteTask, .deleteRoutine].contains(action.kind) }
-    private var modifying: Bool { [.updateTask, .updateRoutine, .setting].contains(action.kind) }
+    private var completion: Bool { [.completeTask, .completeRoutine, .shower].contains(action.kind) }
+    private var removing: Bool { [.deleteTask, .deleteRoutine, .deleteNote, .deleteTopic, .deleteGoal, .deleteMethod].contains(action.kind) }
+    private var modifying: Bool { [.updateTask, .updateRoutine, .setting, .updateNote, .updateTopic, .updateGoal, .updateMethod, .goalProgress, .emergencyPlan, .postponeTask, .postponeRoutine, .skipRoutine, .reopenTask, .discussTopic].contains(action.kind) }
     private var settingsAction: Bool { action.kind == .setting }
     private var recurring: Bool { [.task, .routine, .updateRoutine, .updateTask].contains(action.kind) }
     private var options: Binding<AIBuddyActionOptions> { Binding(get: { action.options ?? AIBuddyActionOptions() }, set: { action.options = $0 }) }
@@ -553,7 +558,9 @@ struct AIBuddyActionReviewView: View {
             Form {
                 Section("Dein Vorschlag · bitte prüfen") {
                     Label(action.kind.label, systemImage: action.kind.symbol)
-                    if completion { Text("Bestätige nur, wenn du diese Aufgabe oder Routine wirklich erledigt hast.").font(.headline) }
+                    if completion { Text("Bestätige nur, wenn du das wirklich erledigt hast.").font(.headline) }
+                    if action.kind == .skipRoutine { Text("Dieser einzelne Termin wird als ausgelassen gespeichert. Die nächsten regulären Termine bleiben bestehen.").foregroundStyle(.orange) }
+                    if action.kind == .postponeRoutine { Text("Verschiebt nur diesen Termin. Dein regulärer Rhythmus bleibt bestehen.").font(.caption) }
                     if !removing && !settingsAction {
                         TherapyInputField(title: "Überschrift", multiline: false, text: $action.title)
                         TherapyInputField(title: "Text", text: $action.text)
@@ -566,19 +573,30 @@ struct AIBuddyActionReviewView: View {
                     Section("Änderung prüfen") {
                         Text(action.title.isEmpty ? "App-Einstellung" : action.title)
                         if action.targetID == "appearance.accent" { Picker("Hauptfarbe", selection: Binding(get: { action.options?.valueString ?? store.data.accentTheme.rawValue }, set: { options.wrappedValue.valueString = $0 })) { ForEach(AppAccent.allCases) { Text($0.title).tag($0.rawValue) } } }
+                        else if action.targetID == "showers.weeklyGoal" { Stepper("Neu: \(action.options?.valueInt ?? 3) Duschtage pro Woche", value: Binding(get: { action.options?.valueInt ?? 3 }, set: { options.wrappedValue.valueInt = $0 }), in: 1...7) }
                         else if action.targetID == "ai.contextDays" { Stepper("Neu: \(action.options?.valueInt ?? 7) Tage", value: Binding(get: { action.options?.valueInt ?? 7 }, set: { options.wrappedValue.valueInt = $0 }), in: 1...90) }
                         else { Toggle("Neuer Wert", isOn: Binding(get: { action.options?.valueBool ?? false }, set: { options.wrappedValue.valueBool = $0 })) }
                     }
                 }
+                if [.method, .thoughtStop, .updateMethod].contains(action.kind) {
+                    Section("Situation & Zuordnung") {
+                        TextField("Wann könnte das passen?", text: Binding(get: { action.options?.situation ?? "" }, set: { options.wrappedValue.situation = $0 }), axis: .vertical)
+                        ForEach(MethodStage.allCases) { stage in Toggle(stage.title, isOn: Binding(get: { (action.options?.stages ?? ["calm"]).contains(stage.rawValue) }, set: { enabled in var values = action.options?.stages ?? ["calm"]; values.removeAll { $0 == stage.rawValue }; if enabled { values.append(stage.rawValue) }; options.wrappedValue.stages = values })) }
+                        ForEach(BatteryCategory.allCases) { category in Toggle(category.title, isOn: Binding(get: { (action.options?.categories ?? []).contains(category.rawValue) }, set: { enabled in var values = action.options?.categories ?? []; values.removeAll { $0 == category.rawValue }; if enabled { values.append(category.rawValue) }; options.wrappedValue.categories = values })) }
+                        TextField("Schritte · eine Zeile pro Schritt", text: Binding(get: { (action.options?.steps ?? []).joined(separator: "\n") }, set: { options.wrappedValue.steps = $0.components(separatedBy: .newlines).filter { !$0.isEmpty } }), axis: .vertical).lineLimit(3...12)
+                    }
+                }
+                if action.kind == .goalProgress { Section("Mein Fortschritt") { Slider(value: Binding(get: { Double(action.options?.valueInt ?? 0) }, set: { options.wrappedValue.valueInt = Int($0) }), in: 0...100, step: 1); Text("\(action.options?.valueInt ?? 0) %") } }
+                if action.kind == .shower && action.targetID == nil { Section("Wann habe ich geduscht?") { DatePicker("Duschtag", selection: $date, in: ...Date()) } }
                 if !completion && !removing && !settingsAction {
                     Section("Datum & Einordnung") {
-                        if [.task, .updateTask, .updateRoutine, .goal].contains(action.kind) { Toggle("Zeitpunkt ändern / festlegen", isOn: $hasDate) }
-                        if hasDate || [.routine, .appointment].contains(action.kind) { DatePicker("Zeitpunkt", selection: $date) }
+                        if [.task, .updateTask, .updateRoutine, .goal, .updateGoal].contains(action.kind) { Toggle("Zeitpunkt ändern / festlegen", isOn: $hasDate) }
+                        if hasDate || [.routine, .appointment, .postponeRoutine, .postponeTask].contains(action.kind) { DatePicker("Zeitpunkt", selection: $date) }
                         if [.mood, .checkIn, .battery].contains(action.kind) {
                             if action.kind == .battery { EnergyBatteryControl(percent: $percent) } else { MoodBarometerControl(percent: $percent) }
                             Text(original.moodPercent == nil ? "Die KI hat keine Stimmung festgelegt. Wähle deinen eigenen Wert." : "Die KI hat diesen Wert vorgeschlagen. Du kannst ihn frei ändern.").font(.caption).foregroundStyle(.secondary)
                         }
-                        if action.kind == .goal { Picker("Priorität", selection: Binding(get: { action.options?.priority ?? "normal" }, set: { options.wrappedValue.priority = $0 })) { Text("Ruhig").tag("low"); Text("Normal").tag("normal"); Text("Dringend").tag("high") } }
+                        if [.goal, .updateGoal].contains(action.kind) { Picker("Priorität", selection: Binding(get: { action.options?.priority ?? "normal" }, set: { options.wrappedValue.priority = $0 })) { Text("Ruhig").tag("low"); Text("Normal").tag("normal"); Text("Dringend").tag("high") } }
                         if action.kind == .energy {
                             Toggle("Stärke festlegen", isOn: Binding(get: { action.options?.valueInt != nil }, set: { options.wrappedValue.valueInt = $0 ? 3 : nil }))
                             if action.options?.valueInt != nil { Stepper("Wirkung: \(action.options?.valueInt ?? 3)/5", value: Binding(get: { action.options?.valueInt ?? 3 }, set: { options.wrappedValue.valueInt = $0 }), in: 1...5) }
@@ -619,9 +637,9 @@ struct AIBuddyActionReviewView: View {
             }.buttonStyle(.borderless).navigationTitle(removing ? "Entfernen prüfen" : completion ? "Wirklich erledigt?" : "KI-Vorschlag bearbeiten").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { dismiss() } }
-                    ToolbarItem(placement: .confirmationAction) { Button(removing ? "Ja, entfernen" : completion ? "Ja, erledigt" : modifying ? "Änderung übernehmen" : "Speichern") { save() }.bold().disabled(!canSave) }
+                    ToolbarItem(placement: .confirmationAction) { Button(removing ? "Ja, entfernen" : completion ? "Ja, erledigt" : action.kind == .skipRoutine ? "Ja, auslassen" : modifying ? "Änderung übernehmen" : "Speichern") { save() }.bold().disabled(!canSave) }
                 }
-        }.onAppear { if !hasBaseline { baseline = AIBuddyMutation.targetSnapshot(original, in: store.data); hasBaseline = true } }
+        }.onAppear { if !hasBaseline { baseline = AIBuddyMutation.targetSnapshot(original, in: store.data); hasBaseline = true; if action.kind == .updateMethod, let method = store.data.copingMethods.first(where: { $0.id.uuidString == action.targetID }) { var values = action.options ?? AIBuddyActionOptions(); values.situation = values.situation ?? method.situation; values.steps = values.steps ?? method.steps; values.stages = values.stages ?? method.stages.map(\.rawValue); values.categories = values.categories ?? method.categories.map(\.rawValue); action.options = values } } }
     }
     private var reminderSummary: String {
         let weekdays = action.weekdays.isEmpty ? "Täglich" : action.weekdays.sorted().map { Calendar.current.weekdaySymbols[$0 - 1] }.joined(separator: ", ")
@@ -638,15 +656,21 @@ struct AIBuddyActionReviewView: View {
         let id = action.targetID.flatMap(UUID.init(uuidString:))
         if let task = store.data.weeklyTasks.first(where: { $0.id == id }) { return task.title + " · " + task.details + " · " + (task.dueDate?.formatted(date: .abbreviated, time: .shortened) ?? "Kein Termin") }
         if let routine = store.data.routines.first(where: { $0.id == id }) { return routine.title + " · " + routine.details + " · " + routine.times.map { String(format: "%02d:%02d", $0.hour, $0.minute) }.joined(separator: ", ") }
+        if let method = store.data.copingMethods.first(where: { $0.id == id }) { return method.title + " · " + method.details }
+        if let note = store.data.notes.first(where: { $0.id == id }) { return note.title + " · " + String(note.text.prefix(400)) }
+        if let topic = store.data.therapyTopics.first(where: { $0.id == id }) { return topic.title + " · " + topic.description }
+        if let goal = store.data.therapyGoals.first(where: { $0.id == id }) { return goal.title + " · \(goal.progress) %" }
+        if action.kind == .emergencyPlan { switch action.targetID { case "support": return store.data.emergencyPlan.support; case "warningSigns": return store.data.emergencyPlan.warningSigns; case "steps": return store.data.emergencyPlan.steps.joined(separator: " · "); default: return store.data.emergencyPlan.firstStep } }
+        if [.postponeRoutine, .skipRoutine].contains(action.kind) { return action.title + " · " + (action.targetID ?? "") }
         return "Eintrag nicht mehr vorhanden"
     }
     private func save() {
         do {
             var clean = action
-            if modifying || removing {
+            if modifying || removing || completion {
                 guard baseline == AIBuddyMutation.targetSnapshot(original, in: store.data) else { error = "Dieser Eintrag hat sich seit dem Öffnen geändert. Bitte schließe die Vorschau und prüfe sie erneut."; return }
             }
-            clean.dateISO = hasDate || [.routine, .appointment, .mood, .checkIn, .note, .energy, .reflection].contains(clean.kind) ? ISO8601DateFormatter().string(from: date) : nil
+            clean.dateISO = hasDate || [.routine, .appointment, .mood, .checkIn, .note, .energy, .reflection, .shower, .postponeRoutine, .postponeTask].contains(clean.kind) ? ISO8601DateFormatter().string(from: date) : nil
             if [.mood, .checkIn, .battery].contains(clean.kind) { clean.moodPercent = percent }
             var snapshot = store.data
             try AIBuddyMutation.apply(clean, originalID: original.id, messageID: messageID, to: &snapshot)

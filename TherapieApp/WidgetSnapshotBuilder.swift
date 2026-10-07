@@ -6,15 +6,24 @@ enum TherapyWidgetSnapshotBuilder {
         result.accentName = data.accentTheme.rawValue
         result.showsPersonalTitles = data.dashboard.showWidgetTitles
         let privateTitles = !data.dashboard.showWidgetTitles
+        result.showerWeekCount = ShowerPlanner.weekCount(data, at: now)
+        result.showerWeekGoal = max(1, min(7, data.showerPreferences.weeklyGoal))
+        result.showerDays = (0..<8).compactMap { offset in
+            guard let day = calendar.date(byAdding: .day, value: offset, to: calendar.startOfDay(for: now)) else { return nil }
+            let done = ShowerPlanner.dates(data).contains { calendar.isDate($0, inSameDayAs: day) }
+            let skipped = data.routineCompletions.contains { $0.outcome == .skipped && ShowerPlanner.isShower($0, data: data) && calendar.isDate($0.scheduledAt, inSameDayAs: day) }
+            let planned = !ShowerPlanner.today(data, at: day, calendar: calendar).isEmpty
+            return TherapyWidgetShowerDay(date: day, status: done ? "done" : skipped ? "skipped" : planned ? "planned" : "free")
+        }
         var cursor = now
         for _ in 0..<8 {
             guard let date = TherapyDateHelper.nextOccurrence(schedule: data.schedule, after: cursor, calendar: calendar) else { break }
             result.nextAppointments.append(date); cursor = date.addingTimeInterval(1)
         }
-        for occurrence in RoutinePlanner.occurrences(data.routines, settings: data.companionSettings, now: now, days: 7, calendar: calendar) {
+        for occurrence in RoutinePlanner.occurrences(data: data, now: now, days: 7, calendar: calendar) {
             guard !RoutinePlanner.resolved(occurrence, completions: data.routineCompletions),
                   let routine = data.routines.first(where: { $0.id == occurrence.routineID }),
-                  RoutinePlanner.active(routine, settings: data.companionSettings, at: now) else { continue }
+                  RoutinePlanner.activeReminder(routine, occurrence: occurrence, settings: data.companionSettings, now: now) else { continue }
             result.reminders.append(TherapyWidgetReminder(id: occurrence.id, kind: "routine", title: privateTitles ? "Deine Routine" : routine.title, due: occurrence.due, expiresAt: occurrence.end, route: "therapie://routine/" + routine.id.uuidString))
         }
         for task in data.weeklyTasks where !task.completed {

@@ -209,30 +209,30 @@ jobs:
 
       - name: Package recoverable source snapshots
         run: |
-          git archive --format=zip --output=Therapie-v3014.0.0-source.zip HEAD
+          git archive --format=zip --output=Therapie-v3015.0.0-source.zip HEAD
 
       - name: Upload source snapshot
         uses: actions/upload-artifact@v4
         with:
-          name: Therapie-v3014.0.0-source
-          path: Therapie-v3014.0.0-source.zip
+          name: Therapie-v3015.0.0-source
+          path: Therapie-v3015.0.0-source.zip
           if-no-files-found: error
           retention-days: 90
 
       - name: Package IPA
         run: |
           APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" -print -quit)
-          rm -rf Payload Therapie-v3014.0.0.ipa
+          rm -rf Payload Therapie-v3015.0.0.ipa
           mkdir Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Therapie-v3014.0.0.ipa Payload
-          ls -lh Therapie-v3014.0.0.ipa
+          /usr/bin/zip -qry Therapie-v3015.0.0.ipa Payload
+          ls -lh Therapie-v3015.0.0.ipa
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Therapie-v3014.0.0-IPA
-          path: Therapie-v3014.0.0.ipa
+          name: Therapie-v3015.0.0-IPA
+          path: Therapie-v3015.0.0.ipa
           if-no-files-found: error
           retention-days: 30
 

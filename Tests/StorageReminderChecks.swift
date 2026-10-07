@@ -21,6 +21,7 @@ struct StorageReminderChecks {
         data.emergencyPlan = PersonalEmergencyPlan(firstStep: "Reize reduzieren", steps: ["Eine Pause machen"], support: "Meine eigene Kontaktperson", methodIDs: [data.copingMethods[0].id], updatedAt: supportClock)
         data.groundingPractices = [GroundingPractice(date: supportClock, answers: [["Fenster"], ["Boden"], [], [], []], note: "In meinem Tempo")]
         data.showerEntries = [ShowerEntry(date: supportClock, note: "Flexibel")]
+        data.showerPreferences.weeklyGoal = 2
         data.dashboard.welcomeMessage = "Ein kleiner Schritt reicht."
         data.dashboard.showFeatureLinks = false
         data.dashboard.cardOrder = ["routines", "appointment", "checkIns"]
@@ -32,6 +33,8 @@ struct StorageReminderChecks {
         data.profile = UserProfile(userName: "Robin", therapistName: "Therapeutin", onboardingCompleted: true)
         let routine = DailyRoutine(title: "Frühstück", symbol: "fork.knife", goalID: nil, times: [RoutineTime(title: "Vor der Arbeit", weekdays: [2, 3, 4, 5, 6], hour: 6, minute: 15, weekendHour: 9, weekendMinute: 0)], urgentAlarm: true)
         data.routines = [routine]
+        data.routines[0].repeatEveryDays = 2
+        data.routineDeferrals = [RoutineDeferral(routineID: routine.id, timeID: routine.times[0].id, scheduledAt: supportClock, deferredUntil: supportClock.addingTimeInterval(86400), createdAt: supportClock)]
         data.routineCompletions = [RoutineCompletion(routineID: routine.id, timeID: routine.times[0].id, scheduledAt: Date(), outcome: .skipped, note: "Pause", routineTitle: "Frühstück", timeTitle: "Vor der Arbeit", corrections: [RoutineCorrection(previousOutcome: .done, previousNote: "", outcome: .skipped, note: "Pause", reason: "Falsche Angabe")])]
         data.routineSnoozes = [RoutineSnooze(id: "portable-occurrence", until: Date())]
         data.guidedCheckIns = [GuidedCheckIn(kind: .therapy, mood: 4, batteryPercent: 0, stress: 2, sensoryLoad: 3, sleepHours: 7.5, summary: "Geführter Rückblick", therapyQuestion: "Was hilft?", tasks: [CheckInTaskDraft(title: "Erster Schritt", source: "Aus der Therapie")], isDraft: false)]
@@ -131,6 +134,7 @@ struct StorageReminderChecks {
         defer { try? fm.removeItem(at: zip.deletingLastPathComponent()) }
         let prepared = try ReadableBackup.prepareImport(url: zip); defer { prepared.discard() }
         try expect(prepared.manifest.data.copingMethods == data.copingMethods && prepared.manifest.data.emergencyPlan == data.emergencyPlan, "Methods, thought stops and emergency image references round-trip")
+        try expect(prepared.manifest.data.showerPreferences == data.showerPreferences && prepared.manifest.data.routineDeferrals == data.routineDeferrals && prepared.manifest.data.routines[0].repeatEveryDays == 2, "Shower target, calendar-day rhythm and per-occurrence deferral round-trip")
         try expect(prepared.manifest.data.groundingPractices == data.groundingPractices && prepared.manifest.data.showerEntries == data.showerEntries, "Grounding answers and flexible shower dates round-trip")
         try expect(try BackupArchive.encoder().encode(prepared.manifest.data) == BackupArchive.encoder().encode(data.portableSnapshot), "Plain ZIP preserves all AppData fields")
         try expect(prepared.manifest.preferences == preferences, "Plain ZIP preserves portable settings")

@@ -81,6 +81,7 @@ struct DailyRoutine: Codable, Equatable, Identifiable {
     var quietStartHour: Int?
     var quietEndHour = 7
     var recurrenceAnchor: Date?
+    var repeatEveryDays: Int?
     var repeatEveryWeeks: Int?
     var endsAt: Date?
 }
@@ -130,7 +131,9 @@ struct RoutineOccurrence: Identifiable, Equatable {
     var timeID: UUID
     var due: Date
     var end: Date
-    var id: String { "\(routineID).\(timeID).\(Int(due.timeIntervalSince1970))" }
+    var originalDue: Date?
+    var scheduledAt: Date { originalDue ?? due }
+    var id: String { "\(routineID).\(timeID).\(Int(scheduledAt.timeIntervalSince1970))" }
 }
 struct RoutineReminderSlot: Identifiable, Equatable {
     var occurrence: RoutineOccurrence
@@ -142,7 +145,7 @@ enum RoutinePlanner {
         routine.enabled && RoutineRecurrence.includes(routine, date: date) && !(routine.pausedUntil.map { $0 > date } ?? false) && !(routine.pauseOnVacation && (settings.vacationUntil.map { $0 > date } ?? false))
     }
     static func resolved(_ occurrence: RoutineOccurrence, completions: [RoutineCompletion]) -> Bool {
-        completions.contains { $0.routineID == occurrence.routineID && $0.timeID == occurrence.timeID && $0.scheduledAt == occurrence.due }
+        completions.contains { $0.routineID == occurrence.routineID && $0.timeID == occurrence.timeID && $0.scheduledAt == occurrence.scheduledAt }
     }
     static func occurrences(_ routines: [DailyRoutine], settings: CompanionSettings, now: Date, days: Int = 7, calendar: Calendar = .current) -> [RoutineOccurrence] {
         let today = calendar.startOfDay(for: now)
@@ -171,14 +174,31 @@ enum RoutinePlanner {
         }
         return output.sorted { $0.due == $1.due ? $0.id < $1.id : $0.due < $1.due }
     }
+    /// Deferred occurrences retain the original identity, including after midnight and DST.
+    static func occurrences(data: AppData, now: Date, days: Int = 7, calendar: Calendar = .current) -> [RoutineOccurrence] {
+        let raw = occurrences(data.routines, settings: data.companionSettings, now: now, days: days, calendar: calendar)
+        let horizon = calendar.date(byAdding: .day, value: max(1, days), to: calendar.startOfDay(for: now)) ?? now
+        var output = raw.filter { occurrence in !data.routineDeferrals.contains { $0.occurrenceID == occurrence.id } }
+        for deferral in data.routineDeferrals {
+            guard let routine = data.routines.first(where: { $0.id == deferral.routineID }),
+                  routine.times.contains(where: { $0.id == deferral.timeID }),
+                  active(routine, settings: data.companionSettings, at: deferral.scheduledAt),
+                  !(routine.pausedUntil.map { $0 > deferral.deferredUntil } ?? false),
+                  !(routine.pauseOnVacation && (data.companionSettings.vacationUntil.map { $0 > deferral.deferredUntil } ?? false)),
+                  let end = calendar.date(byAdding: .day, value: 1, to: deferral.deferredUntil),
+                  end > now, deferral.deferredUntil < horizon else { continue }
+            output.append(RoutineOccurrence(routineID: deferral.routineID, timeID: deferral.timeID, due: deferral.deferredUntil, end: end, originalDue: deferral.scheduledAt))
+        }
+        return output.sorted { $0.due == $1.due ? $0.id < $1.id : $0.due < $1.due }
+    }
     static func activeReminder(_ routine: DailyRoutine, occurrence: RoutineOccurrence, settings: CompanionSettings, now: Date) -> Bool {
         let point = max(now, occurrence.due)
         // Recurrence gates the original occurrence, not each retry after its last scheduled date.
-        return active(routine, settings: settings, at: occurrence.due) && !(routine.pausedUntil.map { $0 > point } ?? false) && !(routine.pauseOnVacation && (settings.vacationUntil.map { $0 > point } ?? false))
+        return active(routine, settings: settings, at: occurrence.scheduledAt) && !(routine.pausedUntil.map { $0 > point } ?? false) && !(routine.pauseOnVacation && (settings.vacationUntil.map { $0 > point } ?? false))
     }
     static func slots(data: AppData, now: Date = Date(), calendar: Calendar = .current) -> [RoutineReminderSlot] {
         var output: [RoutineReminderSlot] = []
-        for occurrence in occurrences(data.routines, settings: data.companionSettings, now: now, calendar: calendar) {
+        for occurrence in occurrences(data: data, now: now, calendar: calendar) {
             guard !resolved(occurrence, completions: data.routineCompletions),
                   let routine = data.routines.first(where: { $0.id == occurrence.routineID }), routine.remindersEnabled,
                   activeReminder(routine, occurrence: occurrence, settings: data.companionSettings, now: now) else { continue }
@@ -215,11 +235,11 @@ enum RoutinePlanner {
         return selected.sorted { $0.fireAt == $1.fireAt ? $0.id < $1.id : $0.fireAt < $1.fireAt }
     }
     static func due(data: AppData, now: Date = Date()) -> [RoutineOccurrence] {
-        occurrences(data.routines, settings: data.companionSettings, now: now, days: 1).filter {
+        occurrences(data: data, now: now, days: 1).filter {
             $0.due <= now && !resolved($0, completions: data.routineCompletions)
         }.filter { occurrence in
             guard let routine = data.routines.first(where: { $0.id == occurrence.routineID }) else { return false }
-            return active(routine, settings: data.companionSettings, at: now)
+            return occurrence.originalDue != nil ? routine.enabled && !(routine.pausedUntil.map { $0 > now } ?? false) && !(routine.pauseOnVacation && (data.companionSettings.vacationUntil.map { $0 > now } ?? false)) : active(routine, settings: data.companionSettings, at: now)
         }
     }
 }
@@ -452,6 +472,10 @@ enum IdentifiedDraftAccess {
 enum RoutineRecurrence {
     static func includes(_ routine: DailyRoutine, date: Date, calendar: Calendar = .current) -> Bool {
         if let anchor = routine.recurrenceAnchor, date < anchor { return false }
+        if let every = routine.repeatEveryDays, let anchor = routine.recurrenceAnchor {
+            let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: anchor), to: calendar.startOfDay(for: date)).day ?? -1
+            if days < 0 || days % max(1, every) != 0 { return false }
+        }
         if let end = routine.endsAt, date > end { return false }
         guard let anchor = routine.recurrenceAnchor, let every = routine.repeatEveryWeeks, every > 1,
               let start = calendar.dateInterval(of: .weekOfYear, for: anchor)?.start,

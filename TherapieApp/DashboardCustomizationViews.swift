@@ -87,7 +87,7 @@ struct TodayRoutinesCard: View {
                 VStack(alignment: .leading, spacing: 14) {
                     SectionHeader(title: "Deine Routinen heute", icon: "checkmark.circle", subtitle: due.isEmpty ? "Aktuell ist nichts fällig." : "\(due.count) fällig · ein kleiner Schritt nach dem anderen")
                     if due.isEmpty {
-                        let upcoming = RoutinePlanner.occurrences(store.data.routines, settings: store.data.companionSettings, now: context.date, days: 1).filter { $0.due > context.date && Calendar.current.isDate($0.due, inSameDayAs: context.date) && !RoutinePlanner.resolved($0, completions: store.data.routineCompletions) }
+                        let upcoming = RoutinePlanner.occurrences(data: store.data, now: context.date, days: 1).filter { $0.due > context.date && Calendar.current.isDate($0.due, inSameDayAs: context.date) && !RoutinePlanner.resolved($0, completions: store.data.routineCompletions) }
                         if let next = upcoming.first, let routine = store.data.routines.first(where: { $0.id == next.routineID }) {
                             Text("Als Nächstes: \(routine.title) · \(next.due.formatted(date: .omitted, time: .shortened))").font(.subheadline).foregroundStyle(.secondary)
                         } else { Text("Du hast gerade Zeit für dich.").font(.subheadline).foregroundStyle(.secondary) }
@@ -223,12 +223,13 @@ struct WidgetSetupHelpView: View {
                     Toggle("Titel in Widgets anzeigen", isOn: $store.data.dashboard.showWidgetTitles)
                 }
                 Section("Am iPhone einstellen") {
+                    Text("Bei Lade-Streifen das bisherige Widget entfernen und „Heute · direkt“ oder „Duschtage · direkt“ neu hinzufügen. Diese lesen App-Daten ohne konfigurierbare AppIntents. App vorher öffnen und oben aktualisieren.")
                     Text("Halte das Widget gedrückt und wähle Widget bearbeiten. Aktuelle App-Daten zeigen Termine, fällige Routinen, offene Erinnerungen und den laufenden Timer. Du kannst Routinen/Erinnerungen nach einem Titel filtern.")
                     Text("Manuelle Widgets zeigen auch ohne ausgewähltes Datum den nächsten eingestellten Uhrzeitpunkt. Ein Titelfilter wird bei neutralen Titeln nicht angewendet, damit Inhalte sichtbar bleiben.")
                     Text("Falls die Installation keinen gemeinsamen App-Gruppen-Zugriff erlaubt: Manuell eingestellter Termin / Hinweis wählen, Datum oder wöchentlichen Wochentag und Uhrzeit festlegen. Das Widget kennzeichnet diese Angaben als manuell und verändert deine App-Daten nicht.")
                 }
                 Section("Gemeinsame Daten") {
-                    Text("Automatische Live-Daten brauchen beim Signieren dieselbe App-Gruppe group.eu.rjuhas.therapie in App und Erweiterung. Eine Widget-Einstellung kann eine entfernte iOS-Berechtigung nicht ersetzen. Nach einer passenden Installation App öffnen und das Widget gegebenenfalls neu hinzufügen.").font(.caption)
+                    Text("Automatische Live-Daten brauchen beim Signieren dieselbe freigegebene App-Gruppe in App und Erweiterung. Die App prüft auch passende umbenannte Gruppen aus dem Signaturprofil. Eine Widget-Einstellung kann eine entfernte iOS-Berechtigung nicht ersetzen. Nach einer passenden Installation App öffnen und das Widget gegebenenfalls neu hinzufügen.").font(.caption)
                 }
             }.buttonStyle(.borderless).navigationTitle("Widget einrichten").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { dismiss() } } }

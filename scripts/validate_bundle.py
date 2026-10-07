@@ -5,9 +5,9 @@ import sys
 
 app = Path(sys.argv[1])
 info = plistlib.loads((app / "Info.plist").read_bytes())
-assert info["CFBundleShortVersionString"] == "3014.0.0"
+assert info["CFBundleShortVersionString"] == "3015.0.0"
 assert info["CFBundleIdentifier"] == "eu.rjuhas.therapie", "Existing app identity must be preserved"
-assert info["CFBundleVersion"] == "22", "Expected release build number"
+assert info["CFBundleVersion"] == "23", "Expected release build number"
 assert "therapie" in info["CFBundleURLTypes"][0]["CFBundleURLSchemes"], "Widget deep-link scheme missing"
 assert info["UIDeviceFamily"] == [1], "Expected a native iPhone target"
 assert info["UILaunchStoryboardName"] == "LaunchScreen"
@@ -23,6 +23,7 @@ extension = app / "PlugIns" / "TherapieLiveActivity.appex"
 assert extension.is_dir(), "Live Activity extension not embedded"
 widget = plistlib.loads((extension / "Info.plist").read_bytes())
 assert widget["NSExtension"]["NSExtensionPointIdentifier"] == "com.apple.widgetkit-extension"
+assert (extension / "Metadata.appintents" / "extract.actionsdata").is_file(), "Widget configuration metadata missing"
 assert widget["CFBundleIdentifier"] == "eu.rjuhas.therapie.liveactivity"
 assert widget["CFBundleShortVersionString"] == info["CFBundleShortVersionString"]
 assert (extension / widget["CFBundleExecutable"]).is_file(), "Compiled Live Activity executable missing"

@@ -193,63 +193,168 @@ struct GroundingExerciseView: View {
     }
 }
 
+struct ShowerTodayCard: View {
+    @EnvironmentObject private var store: AppStore
+    @State private var entry: ShowerEntry?
+    var showDetailsLink = true
+    var body: some View {
+        SwiftUI.TimelineView(.periodic(from: .now, by: 60)) { context in
+            GlassCard(emphasized: true) {
+                VStack(alignment: .leading, spacing: 12) {
+                    SectionHeader(title: "Mein Duschtag", icon: "shower.fill")
+                    ShowerDayActions(now: context.date)
+                    let count = ShowerPlanner.weekCount(store.data, at: context.date)
+                    let goal = max(1, min(7, store.data.showerPreferences.weeklyGoal))
+                    ProgressView(value: Double(min(count, goal)), total: Double(goal)).tint(.accentColor)
+                    Text("Diese Woche: \(count) von \(goal) Duschtagen · \(max(0, goal - count)) fehlen zu deinem Ziel").font(.caption).foregroundStyle(.secondary)
+                    Button("Außer der Reihe geduscht", systemImage: "plus.circle") { entry = ShowerEntry() }.buttonStyle(.bordered)
+                    if showDetailsLink { NavigationLink { ShowerDaysView() } label: { Label("Wochenplan & Verlauf", systemImage: "calendar") } }
+                }
+            }
+        }.sheet(item: $entry) { ShowerEntryEditor(entry: $0) }
+    }
+}
+struct ShowerDayActions: View {
+    @EnvironmentObject private var store: AppStore
+    var now: Date
+    @State private var confirming: RoutineOccurrence?
+    @State private var pendingSkip: RoutineOccurrence?
+    @State private var error: String?
+    private var today: [RoutineOccurrence] { ShowerPlanner.today(store.data, at: now) }
+    private var done: Bool { ShowerPlanner.dates(store.data).contains { Calendar.current.isDate($0, inSameDayAs: now) } }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label(done ? "Heute geduscht ✓" : today.isEmpty ? "Heute kein geplanter Duschtag" : "Heute ist Duschtag", systemImage: done ? "checkmark.seal.fill" : "shower.fill").font(.title3.bold()).foregroundStyle(Color.accentColor)
+            ForEach(today) { occurrence in
+                if let log = store.data.routineCompletions.first(where: { $0.routineID == occurrence.routineID && $0.timeID == occurrence.timeID && $0.scheduledAt == occurrence.scheduledAt }) {
+                    Text(log.outcome == .done ? "Geplanter Duschtag erledigt" : "Heute ausgelassen · nächster regulärer Tag bleibt bestehen").font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Text((occurrence.originalDue == nil ? "Geplant: " : "Verschoben auf: ") + occurrence.due.formatted(date: .omitted, time: .shortened)).font(.subheadline)
+                    ViewThatFits(in: .horizontal) {
+                        HStack { doneButton(occurrence); postponeMenu(occurrence) }
+                        VStack(alignment: .leading) { doneButton(occurrence); postponeMenu(occurrence) }
+                    }
+                }
+            }
+            if !done, today.isEmpty, let next = RoutinePlanner.occurrences(data: store.data, now: now, days: 14).first(where: { value in !RoutinePlanner.resolved(value, completions: store.data.routineCompletions) && store.data.routines.first { $0.id == value.routineID }.map(ShowerPlanner.isShower) == true && value.due > now }) {
+                Text("Nächster Duschtag: " + next.due.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
+            }
+            if let error { Text(error).font(.caption).foregroundStyle(.orange) }
+        }
+        .alert("Wirklich geduscht?", isPresented: Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } })) {
+            Button("Abbrechen", role: .cancel) { confirming = nil }
+            Button("Ja, erledigt") { if let confirming { resolve(confirming, outcome: .done) }; confirming = nil }
+        }
+        .alert("Duschtag auslassen?", isPresented: Binding(get: { pendingSkip != nil }, set: { if !$0 { pendingSkip = nil } })) {
+            Button("Abbrechen", role: .cancel) { pendingSkip = nil }
+            Button("Auslassen") { if let pendingSkip { resolve(pendingSkip, outcome: .skipped) }; pendingSkip = nil }
+        } message: { Text("Heute wird als ausgelassen gespeichert. Der nächste reguläre Duschtag bleibt bestehen.") }
+    }
+    private func doneButton(_ occurrence: RoutineOccurrence) -> some View {
+        Button("Geduscht", systemImage: "checkmark.circle.fill") { confirming = occurrence }.buttonStyle(.borderedProminent)
+    }
+    private func postponeMenu(_ occurrence: RoutineOccurrence) -> some View {
+        Menu {
+            Button("Um einen Tag verschieben", systemImage: "calendar.badge.clock") {
+                guard let date = Calendar.current.date(byAdding: .day, value: 1, to: occurrence.due) else { return }
+                var snapshot = store.data
+                if RoutineDayMutation.postpone(occurrence, until: date, in: &snapshot) { store.data = snapshot; error = store.lastSaveError } else { error = "Der Plan hat sich geändert. Bitte prüfe ihn erneut." }
+            }
+            Button("Bis zum nächsten regulären Duschtag", systemImage: "calendar") { pendingSkip = occurrence }
+            Button("Heute auslassen", systemImage: "minus.circle") { pendingSkip = occurrence }
+        } label: { Label("Verschieben / auslassen", systemImage: "ellipsis.circle") }.buttonStyle(.bordered)
+    }
+    private func resolve(_ occurrence: RoutineOccurrence, outcome: RoutineOutcome) {
+        var snapshot = store.data
+        if RoutineDayMutation.resolve(occurrence, outcome: outcome, note: outcome == .skipped ? "Bis zum nächsten regulären Duschtag" : "", in: &snapshot) { store.data = snapshot; error = store.lastSaveError } else { error = "Dieser Duschtag ist nicht mehr offen." }
+    }
+}
 struct ShowerDaysView: View {
     @EnvironmentObject private var store: AppStore
     @State private var routine: DailyRoutine?
     @State private var entry: ShowerEntry?
     @State private var deleting: ShowerEntry?
-    private var planned: [RoutineCompletion] {
-        store.data.routineCompletions.filter { entry in
-            guard entry.outcome == .done else { return false }
-            let routine = store.data.routines.first { $0.id == entry.routineID }
-            return routine?.symbol == "shower.fill" || (entry.routineTitle ?? routine?.title ?? "").localizedCaseInsensitiveContains("dusch")
-        }.sorted { $0.recordedAt > $1.recordedAt }
-    }
-    private var lastDate: Date? { (store.data.showerEntries.map(\.date) + planned.map(\.recordedAt)).max() }
+    @State private var weekOffset = 0
+    private var week: Date { Calendar.therapyCalendar.date(byAdding: .weekOfYear, value: weekOffset, to: Date()) ?? Date() }
+    private var weekStart: Date { Calendar.therapyCalendar.dateInterval(of: .weekOfYear, for: week)?.start ?? week }
+    private var planned: [RoutineCompletion] { store.data.routineCompletions.filter { ShowerPlanner.isShower($0, data: store.data) }.sorted { $0.recordedAt > $1.recordedAt } }
     var body: some View {
         TherapyScreen {
             VStack(alignment: .leading, spacing: 18) {
-                GlassCard(emphasized: true) {
+                ShowerTodayCard(showDetailsLink: false)
+                GlassCard {
                     VStack(alignment: .leading, spacing: 14) {
-                        SectionHeader(title: "Meine Duschtage", icon: "shower.fill", subtitle: "Fest planen oder flexibel festhalten. Beides ist möglich.")
-                        if let lastDate { Text("Zuletzt: " + lastDate.formatted(date: .abbreviated, time: .shortened)).font(.title3.bold()) }
-                        Button("Duschtag festhalten", systemImage: "plus.circle") { entry = ShowerEntry() }.buttonStyle(.borderedProminent)
-                        Button("Feste Duschtage planen", systemImage: "calendar") { routine = DailyRoutine(title: "Duschen", symbol: "shower.fill", times: [RoutineTime(weekdays: [2, 4, 6], hour: 19, minute: 0)]) }.buttonStyle(.bordered)
-                        Text("Beim festen Plan bestätigst du Tage und Uhrzeit im Routine-Editor. Flexible Einträge lösen keine Erinnerung aus.").font(.caption).foregroundStyle(.secondary)
-                        NavigationLink { RoutineHubView() } label: { Label("Geplante Routinen bearbeiten", systemImage: "checkmark.circle") }
+                        SectionHeader(title: "Mein Wochenziel", icon: "calendar", subtitle: "Dein persönliches Ziel. Bestätigte Duschtage zählen einmal pro Tag; Auslassen zählt nicht.")
+                        Stepper("\(store.data.showerPreferences.weeklyGoal) Duschtage pro Woche", value: $store.data.showerPreferences.weeklyGoal, in: 1...7)
+                        HStack {
+                            Button("Vorherige Woche", systemImage: "chevron.left") { weekOffset -= 1 }.labelStyle(.iconOnly)
+                            Spacer(); Text(ArchiveGrouping.week.title(for: week)).font(.headline); Spacer()
+                            Button("Nächste Woche", systemImage: "chevron.right") { weekOffset += 1 }.labelStyle(.iconOnly)
+                        }
+                        ForEach(0..<7, id: \.self) { offset in
+                            if let day = Calendar.therapyCalendar.date(byAdding: .day, value: offset, to: weekStart) { weekRow(day) }
+                        }
+                        let count = ShowerPlanner.weekCount(store.data, at: week)
+                        Text("\(count) bestätigte Tage · \(max(0, store.data.showerPreferences.weeklyGoal - count)) fehlen zum Ziel").font(.subheadline.bold()).foregroundStyle(Color.accentColor)
                     }
                 }
+                GlassCard {
+                    VStack(alignment: .leading, spacing: 12) {
+                        SectionHeader(title: "Mein Rhythmus", icon: "repeat")
+                        ForEach(store.data.routines.filter(ShowerPlanner.isShower)) { value in
+                            Button { routine = value } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(value.title + (value.enabled ? "" : " · pausiert")).font(.headline)
+                                    Text(value.repeatEveryDays == 2 ? "Alle zwei Tage ab " + (value.recurrenceAnchor ?? value.createdAt).formatted(date: .abbreviated, time: .omitted) : value.times.map { $0.weekdays.sorted().map { Calendar.current.shortWeekdaySymbols[$0 - 1] }.joined(separator: ", ") + String(format: " · %02d:%02d", $0.hour, $0.minute) }.joined(separator: " / ")).font(.caption)
+                                }
+                            }.buttonStyle(.plain)
+                        }
+                        if store.data.routines.filter(ShowerPlanner.isShower).isEmpty {
+                            Button("Montag, Mittwoch, Freitag planen", systemImage: "calendar.badge.plus") { routine = ShowerPlanner.defaultRoutine() }.buttonStyle(.bordered)
+                            Button("Alle zwei Tage planen", systemImage: "repeat") { routine = ShowerPlanner.defaultRoutine(everyTwoDays: true) }.buttonStyle(.bordered)
+                        }
+                        Text("Tage und Uhrzeit bestätigst du im Editor. Bestehende Pläne werden weiterverwendet.").font(.caption).foregroundStyle(.secondary)
+                        NavigationLink { RoutineHubView() } label: { Label("Routinen & Erinnerungen bearbeiten", systemImage: "pencil") }
+                    }
+                }
+                Text("Verlauf · auch außerhalb der Reihe").font(.title3.bold())
                 ForEach(store.data.showerEntries.sorted { $0.date > $1.date }) { item in
                     GlassCard {
                         VStack(alignment: .leading, spacing: 10) {
-                            Text(item.date.formatted(date: .complete, time: .shortened)).font(.headline)
+                            Label(item.date.formatted(date: .complete, time: .shortened), systemImage: "shower.fill").font(.headline)
                             if !item.note.isEmpty { Text(item.note) }
                             HStack { Button("Bearbeiten") { entry = item }; Spacer(); Button("Löschen", role: .destructive) { deleting = item } }
                         }
                     }
                 }
-                if !planned.isEmpty {
+                ForEach(planned.prefix(40)) { log in
                     GlassCard {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Label("Bestätigte Duschroutinen", systemImage: "checkmark.circle.fill").font(.headline).foregroundStyle(Color.accentColor)
-                            ForEach(planned.prefix(30)) { completion in
-                                NavigationLink { RoutineDetailView(routineID: completion.routineID) } label: {
-                                    VStack(alignment: .leading, spacing: 4) { Text(completion.recordedAt.formatted(date: .abbreviated, time: .shortened)); if !completion.note.isEmpty { Text(completion.note).font(.caption) } }
-                                }
-                            }
-                            NavigationLink { RoutineHistoryView() } label: { Text("Gesamten Verlauf öffnen") }
+                        VStack(alignment: .leading, spacing: 5) {
+                            Label(log.outcome == .done ? "Geduscht" : "Ausgelassen", systemImage: log.outcome == .done ? "checkmark.circle.fill" : "minus.circle").font(.headline)
+                            Text(log.recordedAt.formatted(date: .abbreviated, time: .shortened)).font(.caption)
+                            if !log.note.isEmpty { Text(log.note).font(.caption).foregroundStyle(.secondary) }
                         }
                     }
                 }
-                if store.data.showerEntries.isEmpty && planned.isEmpty { Text("Dein Verlauf füllt sich, wenn du Duschtage selbst bestätigst.").foregroundStyle(.secondary) }
+                NavigationLink { RoutineHistoryView() } label: { Text("Vollständigen Verlauf und Korrekturen öffnen") }
             }
         }.navigationTitle("Duschtage").navigationBarTitleDisplayMode(.inline)
             .sheet(item: $routine) { RoutineEditorView(routine: $0) }
             .sheet(item: $entry) { ShowerEntryEditor(entry: $0) }
             .alert("Duschtag löschen?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) { Button("Abbrechen", role: .cancel) { deleting = nil }; Button("Löschen", role: .destructive) { if let deleting { store.data.showerEntries.removeAll { $0.id == deleting.id } }; deleting = nil } }
     }
+    private func weekRow(_ day: Date) -> some View {
+        let done = ShowerPlanner.dates(store.data).contains { Calendar.current.isDate($0, inSameDayAs: day) }
+        let skipped = planned.contains { $0.outcome == .skipped && Calendar.current.isDate($0.scheduledAt, inSameDayAs: day) }
+        let moved = store.data.routineDeferrals.contains { deferral in Calendar.current.isDate(deferral.scheduledAt, inSameDayAs: day) && store.data.routines.first { $0.id == deferral.routineID }.map(ShowerPlanner.isShower) == true }
+        let plannedDay = !ShowerPlanner.today(store.data, at: day).isEmpty
+        return HStack {
+            Text(day.formatted(.dateTime.weekday(.wide).day().month())).frame(maxWidth: .infinity, alignment: .leading)
+            Label(done ? "Geduscht" : skipped ? "Ausgelassen" : moved ? "Verschoben" : plannedDay ? "Geplant" : "Frei", systemImage: done ? "checkmark.circle.fill" : skipped ? "minus.circle" : moved ? "arrow.right.circle" : plannedDay ? "shower.fill" : "circle.dotted").font(.caption.bold()).foregroundStyle(done || plannedDay ? Color.accentColor : Color.secondary)
+        }.accessibilityElement(children: .combine)
+    }
 }
-private struct ShowerEntryEditor: View {
+struct ShowerEntryEditor: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
     @State var entry: ShowerEntry
@@ -263,7 +368,11 @@ private struct ShowerEntryEditor: View {
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { dismiss() } }
                     ToolbarItem(placement: .confirmationAction) { Button("Speichern") {
-                        var snapshot = store.data; snapshot.showerEntries.removeAll { $0.id == entry.id }; snapshot.showerEntries.insert(entry, at: 0); store.data = snapshot; if store.lastSaveError == nil { dismiss() }
+                        var snapshot = store.data
+                        if !snapshot.showerEntries.contains(where: { $0.id == entry.id }), Calendar.current.isDateInToday(entry.date), let occurrence = ShowerPlanner.today(snapshot).first(where: { !RoutinePlanner.resolved($0, completions: snapshot.routineCompletions) }) {
+                            _ = RoutineDayMutation.resolve(occurrence, outcome: .done, note: entry.note, in: &snapshot)
+                        } else { snapshot.showerEntries.removeAll { $0.id == entry.id }; snapshot.showerEntries.insert(entry, at: 0) }
+                        store.data = snapshot; if store.lastSaveError == nil { dismiss() }
                     } }
                 }
         }

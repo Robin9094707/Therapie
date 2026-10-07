@@ -46,7 +46,7 @@ extension AppStore {
               !RoutinePlanner.resolved(occurrence, completions: data.routineCompletions), occurrence.due <= Date() else { return }
         var snapshot = data
         let routine = snapshot.routines.first { $0.id == occurrence.routineID }!
-        snapshot.routineCompletions.insert(RoutineCompletion(routineID: occurrence.routineID, timeID: occurrence.timeID, scheduledAt: occurrence.due, outcome: outcome, note: note, routineTitle: routine.title, timeTitle: routine.times.first { $0.id == occurrence.timeID }?.title), at: 0)
+        snapshot.routineCompletions.insert(RoutineCompletion(routineID: occurrence.routineID, timeID: occurrence.timeID, scheduledAt: occurrence.scheduledAt, outcome: outcome, note: note, routineTitle: routine.title, timeTitle: routine.times.first { $0.id == occurrence.timeID }?.title), at: 0)
         snapshot.routineSnoozes.removeAll { $0.id == occurrence.id }
         data = snapshot
     }

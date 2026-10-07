@@ -18,6 +18,9 @@ with zipfile.ZipFile(sys.argv[1]) as archive:
     assert data["emergencyPlan"]["imageID"] == data["media"][0]["id"]
     assert data["groundingPractices"][0]["answers"][0] == ["Fenster"]
     assert data["showerEntries"][0]["note"] == "Flexibel"
+    assert data["showerPreferences"]["weeklyGoal"] == 2
+    assert len(data["routineDeferrals"]) == 1
+    assert data["routines"][0]["repeatEveryDays"] == 2
     for key in ("copingMethods", "groundingPractices", "showerEntries"):
         record = data[key][0]
         assert f"Eintraege/{key}/{record['id'].upper()}.txt" in names

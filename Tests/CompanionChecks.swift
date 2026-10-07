@@ -21,7 +21,7 @@ import Foundation
         object["schemaVersion"] = 6
         for key in ["guidedCheckIns", "routines", "routineCompletions", "routineSnoozes", "companionSettings"] { object.removeValue(forKey: key) }
         let migrated = try BackupArchiveCompatible.decode(JSONSerialization.data(withJSONObject: object))
-        try expect(migrated.schemaVersion == 15 && migrated.routines.isEmpty && migrated.guidedCheckIns.isEmpty, "Schema 6 migration defaults")
+        try expect(migrated.schemaVersion == 16 && migrated.routines.isEmpty && migrated.guidedCheckIns.isEmpty, "Schema 6 migration defaults")
         entry.mood = nil; entry.batteryPercent = nil; data.guidedCheckIns = [entry]
         try expect(try BackupArchiveCompatible.decode(BackupArchiveCompatible.encode(data)).guidedCheckIns[0].batteryPercent == nil, "Skipped answers stay absent")
         var mutationData = AppData()
@@ -120,7 +120,7 @@ import Foundation
         var legacySettings = legacyObject["companionSettings"] as! [String: Any]
         legacySettings.removeValue(forKey: "checkInReminders"); legacyObject["companionSettings"] = legacySettings
         let oldSettings = try BackupArchiveCompatible.decode(JSONSerialization.data(withJSONObject: legacyObject))
-        try expect(oldSettings.companionSettings.checkInReminders == nil && oldSettings.schemaVersion == 15, "Previous schema-7 settings decode with reminders off")
+        try expect(oldSettings.companionSettings.checkInReminders == nil && oldSettings.schemaVersion == 16, "Previous schema-7 settings decode with reminders off")
         let originalLog = RoutineCompletion(routineID: routine.id, timeID: time.id, scheduledAt: now, recordedAt: now, outcome: .done)
         companion.routines = [routine]; companion.routineCompletions = [originalLog]
         RoutineHistoryMutation.preserveTitles(in: &companion, routine: routine)

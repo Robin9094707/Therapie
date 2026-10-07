@@ -26,7 +26,7 @@ struct ModelChecks {
         fixture["schemaVersion"] = 1
         for key in ["moodCheckIns", "batteryPoints", "weekReviews", "wellnessSettings", "therapyFolders", "therapyTopics", "therapyGoals", "sessionTemplates", "currentSession", "sessionHistory", "sessionPreferences", "weeklyEnergyReviews", "reminderPreferences"] { fixture.removeValue(forKey: key) }
         let migrated = try decoder.decode(AppData.self, from: JSONSerialization.data(withJSONObject: fixture))
-        try expect(migrated.schemaVersion == 15, "Schema migration")
+        try expect(migrated.schemaVersion == 16, "Schema migration")
         try expect(migrated.entryLocations.isEmpty && migrated.buddySuggestions.isEmpty && migrated.captureEntryLocation == nil && migrated.suggestionsEnabled == nil, "Legacy defaults never invent locations or suggestions")
         try expect(migrated.profile == old.profile && migrated.notes == old.notes, "Names and notes preserved")
         try expect(migrated.weeklyTasks == old.weeklyTasks && migrated.media == old.media, "Tasks and media paths preserved")
@@ -163,6 +163,41 @@ struct ModelChecks {
         try expect(widget.accentName == supportData.accentTheme.rawValue, "Widget receives the selected app accent")
         let widgetText = String(decoding: try encoder.encode(widget), as: UTF8.self)
         try expect(!widgetText.contains("Meine Notiz"), "Widget snapshot never exports diary content")
+
+        var oldShower = try JSONSerialization.jsonObject(with: encoder.encode(supportData)) as! [String: Any]
+        oldShower["schemaVersion"] = 15
+        oldShower.removeValue(forKey: "showerPreferences"); oldShower.removeValue(forKey: "routineDeferrals")
+        let showerMigrated = try decoder.decode(AppData.self, from: JSONSerialization.data(withJSONObject: oldShower))
+        try expect(showerMigrated.showerPreferences.weeklyGoal == 3 && showerMigrated.routineDeferrals.isEmpty && showerMigrated.showerEntries == supportData.showerEntries, "Schema15 shower history survives new scheduling defaults")
+        let monday = date("2026-10-05T10:00:00Z"), tuesday = date("2026-10-06T17:00:00Z")
+        var showerData = AppData(); showerData.profile.onboardingCompleted = true
+        let showerRoutine = ShowerPlanner.defaultRoutine(at: monday)
+        showerData.routines = [showerRoutine]
+        let showerOccurrence = ShowerPlanner.today(showerData, at: monday).first!
+        try expect(showerOccurrence.due > monday, "Shower day visible before scheduled clock")
+        try expect(RoutineDayMutation.postpone(showerOccurrence, until: tuesday, in: &showerData, at: monday), "Single shower occurrence can move to tomorrow")
+        try expect(ShowerPlanner.today(showerData, at: monday).isEmpty && ShowerPlanner.today(showerData, at: tuesday).first?.id == showerOccurrence.id, "Deferral hides original day and preserves occurrence identity tomorrow")
+        try expect(showerData.routines[0].times[0].weekdays == [2,4,6] && ShowerPlanner.today(showerData, at: date("2026-10-07T10:00:00Z")).count == 1, "One-day deferral preserves regular weekdays")
+        let deferred = ShowerPlanner.today(showerData, at: tuesday).first!
+        let deferredWidget = TherapyWidgetSnapshotBuilder.make(data: showerData, now: tuesday.addingTimeInterval(60))
+        try expect(deferredWidget.reminders.contains { $0.id == showerOccurrence.id }, "Deferred off-weekday reaches widget and reminder inventory")
+        try expect(RoutineDayMutation.resolve(deferred, outcome: .done, note: "", in: &showerData, at: tuesday), "Deferred occurrence resolves using original scheduled identity")
+        let afterShower = showerData
+        try expect(!RoutineDayMutation.resolve(deferred, outcome: .done, note: "", in: &showerData, at: tuesday) && showerData == afterShower, "Repeated shower tap is idempotent")
+        showerData.showerEntries = [ShowerEntry(date: tuesday, note: "Extra")]
+        try expect(ShowerPlanner.weekCount(showerData, at: tuesday) == 1, "Week target counts unique completed days, not duplicate logs")
+        try expect(RoutinePlanner.slots(data: showerData, now: tuesday).allSatisfy { $0.occurrence.id != showerOccurrence.id }, "Resolved deferral cancels all remaining reminders")
+        var merged = AppData(); merged.routines = [showerRoutine]
+        try expect(RoutineDayMutation.postpone(showerOccurrence, until: date("2026-10-07T17:00:00Z"), in: &merged, at: monday), "Move to official shower day accepted")
+        try expect(merged.routineDeferrals.isEmpty && merged.routineCompletions.first?.outcome == .skipped && ShowerPlanner.today(merged, at: date("2026-10-07T10:00:00Z")).count == 1, "Moving to next official day creates no duplicate obligation")
+        try expect(ShowerPlanner.weekCount(merged, at: monday) == 0, "Skipping never counts as showering")
+        var interval = AppData(); interval.routines = [ShowerPlanner.defaultRoutine(at: date("2026-10-24T10:00:00Z"), everyTwoDays: true)]
+        let intervalDates = RoutinePlanner.occurrences(data: interval, now: date("2026-10-24T00:00:00Z"), days: 5).map(\.due)
+        try expect(intervalDates == [date("2026-10-24T17:00:00Z"), date("2026-10-26T18:00:00Z"), date("2026-10-28T18:00:00Z")], "Every-two-days rhythm retains local clock across autumn DST")
+        let snapshotWithShower = TherapyWidgetSnapshotBuilder.make(data: showerData, now: tuesday)
+        try expect(snapshotWithShower.showerWeekCount == 1 && snapshotWithShower.showerWeekGoal == 3 && snapshotWithShower.showerDays?.first?.status == "done", "Minimal widget cache receives real shower state and goal")
+        let profileXML = "<?xml version=\"1.0\"?><plist version=\"1.0\"><dict><key>Entitlements</key><dict><key>com.apple.security.application-groups</key><array><string>group.signer.therapie</string><string>group.unrelated</string></array></dict></dict></plist>"
+        try expect(TherapyWidgetStorage.candidates(profile: Data(profileXML.utf8)) == [TherapyWidgetSnapshot.appGroup, "group.signer.therapie"], "Signed group discovery uses only related declared groups")
         print("Passed \(checks) migration, streak, chart aggregation and export checks.")
     }
 }

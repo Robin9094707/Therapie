@@ -67,6 +67,8 @@ struct TodoTimelineItem: Identifiable {
     var taskID: UUID?
     var discussionID: String?
     var occurrence: RoutineOccurrence?
+    var checkInSlotID: UUID?
+    var goalID: UUID?
 }
 enum TodoTimeline {
     static func items(_ data: AppData, now: Date = Date()) -> [TodoTimelineItem] {
@@ -80,8 +82,20 @@ enum TodoTimeline {
             let discussed = data.therapyDiscussionAcknowledgedIDs.contains(point.id)
             return TodoTimelineItem(id: "discussion-" + point.id, date: discussed ? point.date : therapy, title: point.text, detail: point.source + (discussed ? " · besprochen, ursprünglicher Eintrag " : " · für den nächsten Termin, erfasst ") + point.date.formatted(date: .abbreviated, time: .omitted), kind: "Therapie", completed: discussed, discussionID: point.id)
         }
-        values += RoutinePlanner.occurrences(data.routines, settings: data.companionSettings, now: now).map { occurrence in
-            .init(id: "routine-" + occurrence.id, date: occurrence.due, title: data.routines.first { $0.id == occurrence.routineID }?.title ?? "Routine", detail: "Geplanter Zeitpunkt", kind: "Routinen", completed: RoutinePlanner.resolved(occurrence, completions: data.routineCompletions), occurrence: occurrence)
+        values += RoutinePlanner.occurrences(data: data, now: now).map { occurrence in
+            let routine = data.routines.first { $0.id == occurrence.routineID }
+            let category = routine.map { ShowerPlanner.isShower($0) ? "Duschen" : ($0.symbol == "pills.fill" || $0.title.localizedCaseInsensitiveContains("tablett") ? "Tabletten" : "Routinen") } ?? "Routinen"
+            let log = data.routineCompletions.first { $0.routineID == occurrence.routineID && $0.timeID == occurrence.timeID && $0.scheduledAt == occurrence.scheduledAt }
+            let detail = log.map { $0.outcome == .done ? "Erledigt" : "Ausgelassen" } ?? (occurrence.originalDue == nil ? "Noch offen" : "Einmalig verschoben")
+            return .init(id: "routine-" + occurrence.id, date: occurrence.due, title: routine?.title ?? "Routine", detail: detail, kind: category, completed: log != nil, occurrence: occurrence)
+        }
+        for slot in DayCheckInPolicy.slots(data.companionSettings) where slot.enabled {
+            let entry = DayCheckInPolicy.entry(slot, at: now)
+            let existing = DayCheckInPolicy.existing(for: entry, in: data)
+            values.append(.init(id: "checkin-" + slot.id.uuidString, date: now, title: slot.title, detail: slot.windowText + (existing?.isDraft == false ? " · erfasst" : existing != nil ? " · Entwurf fortsetzen" : " · noch nicht erfasst"), kind: "Check-ins", completed: existing?.isDraft == false, checkInSlotID: slot.id))
+        }
+        values += data.therapyGoals.map { goal in
+            .init(id: "goal-" + goal.id.uuidString, date: goal.dueDate ?? now, title: goal.title, detail: "\(goal.progress) % · " + goal.status.rawValue + (goal.smallStep.isEmpty ? "" : " · " + goal.smallStep), kind: "Ziele", completed: goal.status == .completed, goalID: goal.id)
         }
         return values.sorted { $0.date == $1.date ? $0.id < $1.id : $0.date < $1.date }
     }
@@ -98,5 +112,30 @@ enum EntryLocator {
         let valid = data.entryLocations.filter { $0.valid && ids.contains($0.id) }
         let groups = Dictionary(grouping: valid) { String(format: "%.2f, %.2f", $0.latitude, $0.longitude) }
         return "Standortstatistik nur erfasster Einträge (ungefähre Koordinaten, keine erfundenen Ortsnamen): " + groups.sorted { $0.value.count > $1.value.count }.prefix(8).map { $0.key + ": " + String($0.value.count) + " Einträge" }.joined(separator: "; ") + ". Nicht erfasste / alte Einträge fehlen in dieser Auswertung."
+    }
+}
+
+
+/// Current actionable IDs are independent of the journal's date window.
+enum BuddyCapabilities {
+    static func context(_ data: AppData, question: String, now: Date) -> String {
+        let q = question.lowercased(), formatter = ISO8601DateFormatter()
+        let words = q.components(separatedBy: .alphanumerics.inverted).filter { $0.count >= 4 }
+        var lines = ["Aktionstypen: " + AIBuddyActionKind.allCases.map { $0.rawValue + "=" + $0.label }.joined(separator: "; "), "Wochenziel Duschen: \(data.showerPreferences.weeklyGoal); bestätigt: \(ShowerPlanner.weekCount(data, at: now))"]
+        for occurrence in ShowerPlanner.today(data, at: now) where !RoutinePlanner.resolved(occurrence, completions: data.routineCompletions) {
+            lines.append("Duschtag heute: " + occurrence.id + " | " + formatter.string(from: occurrence.due))
+        }
+        let records = ArchiveRecord.all(in: data).filter { record in
+            if !data.aiSettings.includeJournal, case .note = record { return false }
+            if case .media = record { return false }
+            return words.contains { (record.title + " " + record.subtitle).lowercased().contains($0) }
+        }.sorted { $0.date > $1.date }
+        for record in records.prefix(10) { lines.append("Eintrag: " + record.id + " | UUID=" + String(record.id.suffix(36)) + " | " + record.title + " | " + String(record.subtitle.prefix(160))) }
+        for goal in data.therapyGoals.prefix(8) { lines.append("Ziel-UUID: " + goal.id.uuidString + " | " + goal.title + " | \(goal.progress)% | " + goal.status.rawValue) }
+        for method in data.copingMethods.prefix(8) { lines.append("Methode-UUID: " + method.id.uuidString + " | " + method.title + " | " + method.kind.rawValue + " | " + String(method.details.prefix(180))) }
+        for point in TherapyDiscussionPlanner.points(in: data).prefix(8) { lines.append("Gesprächspunkt-ID: " + point.id + " | " + String(point.text.prefix(160))) }
+        lines.append("Methoden-Stufen: " + MethodStage.allCases.map { $0.rawValue + "=" + $0.title }.joined(separator: ", "))
+        lines.append("Akku-Kategorien: " + BatteryCategory.allCases.map { $0.rawValue + "=" + $0.title }.joined(separator: ", "))
+        return BuddyInteraction.completeLines(lines.joined(separator: "\n"), limit: 6500)
     }
 }

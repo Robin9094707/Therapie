@@ -7,7 +7,7 @@ struct TherapyHomeEntry: TimelineEntry {
     var manual = false
 }
 struct TherapyHomeProvider: AppIntentTimelineProvider {
-    func placeholder(in context: Context) -> TherapyHomeEntry { TherapyHomeEntry(date: .now, snapshot: preview()) }
+    func placeholder(in context: Context) -> TherapyHomeEntry { TherapyHomeEntry(date: .now, snapshot: TherapyWidgetSnapshot(cacheProblem: "App öffnen · Übersicht bereitstellen")) }
     func snapshot(for configuration: TherapyWidgetOptions, in context: Context) async -> TherapyHomeEntry {
         TherapyHomeEntry(date: .now, snapshot: context.isPreview ? preview() : read(configuration), manual: configuration.source == .manual)
     }
@@ -23,12 +23,7 @@ struct TherapyHomeProvider: AppIntentTimelineProvider {
     }
     private func read(_ configuration: TherapyWidgetOptions) -> TherapyWidgetSnapshot {
         if let manual = configuration.snapshot(at: Date()) { return manual }
-        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: TherapyWidgetSnapshot.appGroup) else { return TherapyWidgetSnapshot(cacheProblem: "Gemeinsamer App-Zugriff fehlt. App mit Widget-Berechtigung signieren oder Widget manuell einstellen.") }
-        let fileData = try? Data(contentsOf: container.appendingPathComponent(TherapyWidgetSnapshot.fileName))
-        let sharedData = UserDefaults(suiteName: TherapyWidgetSnapshot.appGroup)?.data(forKey: TherapyWidgetSnapshot.fileName)
-        guard fileData != nil || sharedData != nil else { return TherapyWidgetSnapshot(cacheProblem: "App einmal öffnen, damit deine Übersicht bereitsteht.") }
-        let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
-        var snapshot = [fileData, sharedData].compactMap { $0 }.compactMap { try? decoder.decode(TherapyWidgetSnapshot.self, from: $0) }.max { $0.generatedAt < $1.generatedAt } ?? TherapyWidgetSnapshot(cacheProblem: "Widget-Daten nicht lesbar. App öffnen und Übersicht aktualisieren.")
+        var snapshot = TherapyWidgetStorage.read()
         if let filter = configuration.filter?.trimmingCharacters(in: .whitespacesAndNewlines), !filter.isEmpty { if snapshot.showsPersonalTitles == true { snapshot.reminders = snapshot.reminders.filter { $0.title.localizedCaseInsensitiveContains(filter) } } else { snapshot.cacheProblem = "Titelfilter benötigt die Titel-Freigabe in der App." } }
         return snapshot
     }
@@ -39,15 +34,15 @@ struct TherapyHomeProvider: AppIntentTimelineProvider {
 }
 
 enum TherapyHomeWidgetKind: String {
-    case overview, appointment, routines, reminders, session
+    case overview, appointment, routines, reminders, session, showers
     var title: String {
-        switch self { case .overview: "Heute im Blick"; case .appointment: "Nächste Therapie"; case .routines: "Meine Routinen"; case .reminders: "Meine Erinnerungen"; case .session: "Meine Therapiestunde" }
+        switch self { case .showers: "Meine Duschtage"; case .overview: "Heute im Blick"; case .appointment: "Nächste Therapie"; case .routines: "Meine Routinen"; case .reminders: "Meine Erinnerungen"; case .session: "Meine Therapiestunde" }
     }
     var symbol: String {
-        switch self { case .overview: "sun.max.fill"; case .appointment: "calendar.badge.clock"; case .routines: "checkmark.circle.fill"; case .reminders: "bell.fill"; case .session: "timer" }
+        switch self { case .showers: "shower.fill"; case .overview: "sun.max.fill"; case .appointment: "calendar.badge.clock"; case .routines: "checkmark.circle.fill"; case .reminders: "bell.fill"; case .session: "timer" }
     }
     var route: String {
-        switch self { case .appointment: "therapie://appointments"; case .routines: "therapie://routines"; case .reminders: "therapie://reminders"; case .session: "therapie://session"; case .overview: "therapie://today" }
+        switch self { case .showers: "therapie://showers"; case .appointment: "therapie://appointments"; case .routines: "therapie://routines"; case .reminders: "therapie://reminders"; case .session: "therapie://session"; case .overview: "therapie://today" }
     }
 }
 struct TherapyOverviewWidget: Widget {
@@ -79,6 +74,7 @@ enum TherapyHomeWidgetConfiguration {
     }
     private static func description(for category: TherapyHomeWidgetKind) -> String {
         switch category {
+        case .showers: "Dein Duschtag heute und dein persönliches Wochenziel."
         case .overview: "Therapietermin und fällige Routinen auf einen Blick."
         case .appointment: "Dein nächster Termin, mit Absagen und Urlaubspausen."
         case .routines: "Fällige und kommende Routinen. Tippen öffnet die Bestätigung in der App."
@@ -94,12 +90,13 @@ struct TherapyHomeWidgetView: View {
     private var compact: Bool { family == .accessoryRectangular }
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 4 : 10) {
-            Label(category.title, systemImage: category.symbol).font(compact ? .caption.bold() : .subheadline.bold()).foregroundStyle(entry.snapshot.accentColor).lineLimit(1)
+            Label(category.title, systemImage: category.symbol).font(compact ? .caption.bold() : .subheadline.bold()).foregroundStyle(entry.snapshot.accentColor).lineLimit(1).unredacted()
             if !entry.snapshot.configured {
-                Text("Widget einrichten").font(.headline)
-                if !compact { Text(entry.snapshot.cacheProblem ?? "Gedrückt halten → Widget bearbeiten. Ein manueller Termin ist ebenfalls möglich.").font(.caption).foregroundStyle(.secondary) }
+                Text("App-Daten prüfen").font(.headline).unredacted()
+                if !compact { Text(entry.snapshot.cacheProblem ?? "Gedrückt halten → Widget bearbeiten. Ein manueller Termin ist ebenfalls möglich.").font(.caption).foregroundStyle(.secondary).unredacted() }
             } else {
                 switch category {
+                case .showers: shower
                 case .appointment: appointment
                 case .overview:
                     appointment
@@ -109,8 +106,8 @@ struct TherapyHomeWidgetView: View {
                 case .session: if entry.manual { appointment } else { session }
                 }
             }
-            if let problem = entry.snapshot.cacheProblem, entry.snapshot.configured, !compact { Text(problem).font(.caption2).foregroundStyle(.secondary).lineLimit(2) }
-            if !compact { Spacer(minLength: 0); Text(entry.manual ? "Manuell eingestellt · keine Live-Daten" : "Therapie · Für dich").font(.caption2).foregroundStyle(.secondary) }
+            if let problem = entry.snapshot.cacheProblem, entry.snapshot.configured, !compact { Text(problem).font(.caption2).foregroundStyle(.secondary).lineLimit(2).unredacted() }
+            if !compact { Spacer(minLength: 0); Text(entry.manual ? "Manuell eingestellt · keine Live-Daten" : "Therapie · Für dich").font(.caption2).foregroundStyle(.secondary).unredacted() }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .widgetURL(URL(string: entry.snapshot.configured ? category.route : "therapie://widgetsetup"))
@@ -143,6 +140,14 @@ struct TherapyHomeWidgetView: View {
             }
         } else { Text(kind == "routine" ? "Keine Routinen geplant" : "Keine offenen Erinnerungen").font(.caption).foregroundStyle(.secondary) }
     }
+    @ViewBuilder private var shower: some View {
+        let day = entry.snapshot.showerDays?.first { Calendar.current.isDate($0.date, inSameDayAs: entry.date) }
+        Text(day?.status == "done" ? "Heute geduscht ✓" : day?.status == "skipped" ? "Heute ausgelassen" : day?.status == "planned" ? "Heute ist Duschtag" : "Heute kein Duschtag").font(compact ? .caption.bold() : .headline).privacySensitive()
+        if !compact {
+            Text("Woche: \(entry.snapshot.showerWeekCount ?? 0) / \(entry.snapshot.showerWeekGoal ?? 3)").font(.title2.bold()).privacySensitive()
+            Text("Tippen: abhaken, verschieben oder zusätzlich eintragen").font(.caption).foregroundStyle(.secondary).unredacted()
+        }
+    }
     @ViewBuilder private var session: some View {
         if let session = entry.snapshot.session, session.paused || session.end > entry.date {
             if session.paused {
@@ -158,5 +163,33 @@ struct TherapyHomeWidgetView: View {
 extension TherapyWidgetSnapshot {
     var accentColor: Color {
         switch accentName { case "blue": .blue; case "purple": .purple; case "red": .red; case "teal": .teal; case "green": .green; case "rose": .pink; case "amber": .orange; default: .indigo }
+    }
+}
+
+
+/// A plain TimelineProvider offers an independent entry point without AppIntent resolution.
+struct TherapyDirectProvider: TimelineProvider {
+    func placeholder(in context: Context) -> TherapyHomeEntry { .init(date: .now, snapshot: TherapyWidgetSnapshot(cacheProblem: "App öffnen · Übersicht bereitstellen")) }
+    func getSnapshot(in context: Context, completion: @escaping (TherapyHomeEntry) -> Void) { completion(.init(date: .now, snapshot: TherapyWidgetStorage.read())) }
+    func getTimeline(in context: Context, completion: @escaping (Timeline<TherapyHomeEntry>) -> Void) {
+        let now = Date(), snapshot = TherapyWidgetStorage.read()
+        var dates = [now, now.addingTimeInterval(15 * 60)]
+        dates += snapshot.reminders.flatMap { [$0.due, $0.expiresAt] }.filter { $0 > now && $0 < now.addingTimeInterval(30 * 60) }
+        dates += snapshot.nextAppointments.filter { $0 > now && $0 < now.addingTimeInterval(30 * 60) }.map { $0.addingTimeInterval(1) }
+        if let midnight = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: now)), midnight < now.addingTimeInterval(30 * 60) { dates.append(midnight) }
+        completion(Timeline(entries: Set(dates).sorted().map { .init(date: $0, snapshot: snapshot) }, policy: .after(now.addingTimeInterval(30 * 60))))
+    }
+}
+struct TherapyDirectOverviewWidget: Widget {
+    var body: some WidgetConfiguration { TherapyDirectConfiguration.make(.overview, kind: "TherapyHome.direct", title: "Heute · direkt") }
+}
+struct TherapyDirectShowerWidget: Widget {
+    var body: some WidgetConfiguration { TherapyDirectConfiguration.make(.showers, kind: "TherapyHome.showerDirect", title: "Duschtage · direkt") }
+}
+enum TherapyDirectConfiguration {
+    static func make(_ category: TherapyHomeWidgetKind, kind: String, title: String) -> some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: TherapyDirectProvider()) { entry in
+            TherapyHomeWidgetView(entry: entry, category: category).containerBackground(for: .widget) { entry.snapshot.accentColor.opacity(0.12) }
+        }.configurationDisplayName(title).description("App-Daten direkt anzeigen. Tippen öffnet die passenden Aktionen in der App.").supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular])
     }
 }

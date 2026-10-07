@@ -387,6 +387,37 @@ final class BuddyMockProtocol: URLProtocol {
         timelineData.entryLocations = [EntryLocation(id: "task-" + timelineData.weeklyTasks[0].id.uuidString, capturedAt: now, latitude: 52.5, longitude: 13.4, accuracy: 80), EntryLocation(id: "removed", capturedAt: now, latitude: 52.5, longitude: 13.4, accuracy: 80)]
         try expect(EntryLocator.summary(timelineData).contains("1 Einträge") && !EntryLocation(id: "bad", capturedAt: now, latitude: 200, longitude: 13, accuracy: 1).valid, "Location summaries exclude deleted and invalid records")
         }
+
+        var multi = AppData()
+        let multiNow = date("2026-10-05T10:00:00Z")
+        multi.routines = [ShowerPlanner.defaultRoutine(at: multiNow)]
+        let showerID = ShowerPlanner.today(multi, at: multiNow).first!.id
+        multi.weeklyTasks = [WeeklyTask(weekOfYear: 41, yearForWeekOfYear: 2026, title: "Spazieren", details: "")]
+        let proposals: [AIBuddyAction] = [
+            .init(kind: .shower, title: "Duschen", text: "", targetID: showerID, weekdays: []),
+            .init(kind: .completeTask, title: "Spazieren", text: "", targetID: multi.weeklyTasks[0].id.uuidString, weekdays: []),
+            .init(kind: .thoughtStop, title: "Mein Stoppsatz", text: "Ich mache eine Pause.", weekdays: [], options: .init(stages: ["contain"], categories: [BatteryCategory.rest.rawValue], steps: ["Atmen"], situation: "Grübeln")),
+            .init(kind: .setting, title: "Zwei Duschtage", text: "", targetID: "showers.weeklyGoal", weekdays: [], options: .init(valueInt: 2))]
+        multi.aiMessages = [AIBuddyMessage(role: "assistant", text: "Bitte einzeln prüfen", reply: .init(title: "Dein Plan", message: "Möchtest du diese Aktionen bestätigen?", sections: [], actions: proposals, suggestedDays: nil))]
+        let multiID = multi.aiMessages[0].id
+        try expect(multi.aiMessages[0].reply!.valid, "Several contexts produce valid independent action buttons")
+        let contextBefore = AIBuddyContext.make(data: multi, days: 1, end: multiNow, question: "Ich habe geduscht und bin spazieren gewesen. Bitte Gedankenstopp und Wochenziel ändern.", clock: multiNow)
+        try expect(contextBefore.text.contains(showerID) && contextBefore.text.contains(multi.weeklyTasks[0].id.uuidString) && contextBefore.text.contains("thoughtStop"), "Multi-intent context includes current shower, task and complete capability IDs")
+        for proposal in proposals { try AIBuddyMutation.apply(proposal, originalID: proposal.id, messageID: multiID, to: &multi, now: multiNow) }
+        try expect(multi.weeklyTasks[0].completed && ShowerPlanner.weekCount(multi, at: multiNow) == 1 && multi.showerPreferences.weeklyGoal == 2 && multi.copingMethods[0].kind == .thoughtStop && multi.aiMessages[0].appliedActionIDs.count == 4, "Confirmed multi-context actions persist native records independently")
+        let multiAfter = multi
+        do { try AIBuddyMutation.apply(proposals[0], originalID: proposals[0].id, messageID: multiID, to: &multi, now: multiNow); throw Failure.assertion("Shower replay allowed") } catch is AIBuddyAPIError { count += 1 }
+        try expect(multi == multiAfter, "Shower action replay cannot mutate existing data")
+        let fakeMethod = AIBuddyAction(kind: .deleteMethod, title: "Nicht vorhanden", text: "", targetID: UUID().uuidString, weekdays: [])
+        do { try AIBuddyMutation.apply(fakeMethod, originalID: fakeMethod.id, messageID: multiID, to: &multi, now: multiNow); throw Failure.assertion("Unknown method deleted") } catch is AIBuddyAPIError { count += 1 }
+        try expect(multi == multiAfter, "Unknown new targets fail atomically")
+        multi.therapyGoals = [TherapyGoal(title: "Mein Ziel")]
+        let progress = AIBuddyAction(kind: .goalProgress, title: "Mein Ziel", text: "", targetID: multi.therapyGoals[0].id.uuidString, weekdays: [], options: .init(valueInt: 100))
+        try AIBuddyMutation.apply(progress, originalID: progress.id, messageID: multiID, to: &multi, now: multiNow)
+        try expect(multi.therapyGoals[0].progress == 100 && multi.therapyGoals[0].status == .completed, "Goal progress accepts full completion")
+        let validTwelve = (0..<12).map { AIBuddyAction(kind: .note, title: "Punkt \($0)", text: "", weekdays: []) }
+        try expect(AIBuddyReply(title: "Mehrere Wünsche", message: "Prüfen", sections: [], actions: validTwelve, suggestedDays: nil).valid, "Up to twelve explicit proposals retain strict validation")
+        try expect(!AIBuddyAction(kind: .postponeRoutine, title: "Verschieben", text: "", targetID: showerID, weekdays: []).valid, "Routine postponement requires a concrete date")
         print("Passed \(count) duplicate, flexible recurrence, therapy discussion, alarm lifecycle, AI privacy/action and offline network checks.")
     }
 }

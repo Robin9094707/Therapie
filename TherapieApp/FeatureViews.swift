@@ -54,13 +54,19 @@ private struct BuddyChatRoute: Identifiable { var id: UUID }
 struct TodoTimelineView: View {
     @EnvironmentObject private var store: AppStore
     @State private var kind = "Alle"
+    @State private var horizon = "7 Tage"
     @State private var onlyOpen = true
     @State private var search = ""
     @State private var limit = 50
     @State private var editing: ArchiveRecord?
     @State private var routine: RoutineOccurrence?
     @State private var confirmRoutine = false
-    private var items: [TodoTimelineItem] { TodoTimeline.items(store.data).filter { (kind == "Alle" || $0.kind == kind) && (!onlyOpen || !$0.completed) && (search.isEmpty || ($0.title + " " + $0.detail).localizedStandardContains(search)) } }
+    private var scoped: [TodoTimelineItem] {
+        let now = Date(), calendar = Calendar.current
+        let end = calendar.date(byAdding: .day, value: horizon == "Heute" ? 1 : 7, to: calendar.startOfDay(for: now)) ?? now
+        return TodoTimeline.items(store.data).filter { horizon == "Alle" || $0.date < end }
+    }
+    private var items: [TodoTimelineItem] { scoped.filter { (kind == "Alle" || $0.kind == kind) && (!onlyOpen || !$0.completed) && (search.isEmpty || ($0.title + " " + $0.detail).localizedStandardContains(search)) } }
     private var groups: [(date: Date, values: [TodoTimelineItem])] {
         let values = Dictionary(grouping: Array(items.prefix(limit))) { Calendar.current.startOfDay(for: $0.date) }
         return values.keys.sorted().map { ($0, values[$0] ?? []) }
@@ -68,9 +74,19 @@ struct TodoTimelineView: View {
     var body: some View {
         TherapyScreen {
             LazyVStack(alignment: .leading, spacing: 14) {
-                Picker("Inhalt", selection: $kind) { ForEach(["Alle", "Aufgaben", "Therapie", "Routinen"], id: \.self) { Text($0).tag($0) } }.pickerStyle(.segmented)
+                SectionHeader(title: "Was noch offen ist", icon: "checklist", subtitle: "Aufgaben und Alltag nach Kategorie. Ältere offene Aufgaben bleiben sichtbar.")
+                Picker("Zeitraum", selection: $horizon) { ForEach(["Heute", "7 Tage", "Alle"], id: \.self) { Text($0).tag($0) } }.pickerStyle(.segmented)
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 10) {
+                    ForEach(["Aufgaben", "Tabletten", "Duschen", "Routinen", "Therapie", "Check-ins", "Ziele"], id: \.self) { category in
+                        let open = scoped.filter { $0.kind == category && !$0.completed }.count
+                        Button { kind = kind == category ? "Alle" : category } label: {
+                            VStack(alignment: .leading, spacing: 5) { Text(category).font(.subheadline.bold()); Text(open == 0 ? "Nichts offen" : "\(open) noch offen").font(.caption) }.frame(maxWidth: .infinity, alignment: .leading).padding(12).background(Color.accentColor.opacity(kind == category ? 0.2 : 0.07), in: RoundedRectangle(cornerRadius: 14))
+                        }.buttonStyle(.plain).accessibilityAddTraits(kind == category ? .isSelected : [])
+                    }
+                }
+                if kind != "Alle" { Button("Alle Kategorien anzeigen") { kind = "Alle" }.font(.caption) }
                 Toggle("Nur offen", isOn: $onlyOpen)
-                Text("\(items.count) passende Punkte · Therapiefragen sind am nächsten Termin verankert. Routinen: nächste sieben Tage.").font(.caption).foregroundStyle(.secondary)
+                Text("\(items.count) passende Punkte · \(scoped.filter { !$0.completed }.count) insgesamt offen. Ziele und Check-ins öffnen ihren Editor; bestätigte und ausgelassene Termine sind getrennt beschriftet.").font(.caption).foregroundStyle(.secondary)
                 if items.isEmpty { ContentUnavailableView("Hier ist alles frei", systemImage: "checkmark.seal") }
                 ForEach(groups, id: \.date) { group in
                     Text(group.date.formatted(date: .complete, time: .omitted)).font(.headline).padding(.top, 8)
@@ -78,7 +94,7 @@ struct TodoTimelineView: View {
                 }
                 if items.count > limit { Button("Weitere 50 Punkte laden") { limit += 50 }.buttonStyle(.bordered) }
             }
-        }.navigationTitle("To-do-Timeline").searchable(text: $search, prompt: "Aufgabe oder Thema suchen")
+        }.navigationTitle("Meine Aufgaben").searchable(text: $search, prompt: "Aufgabe oder Thema suchen")
             .onChange(of: kind) { _, _ in limit = 50 }.onChange(of: search) { _, _ in limit = 50 }
             .sheet(item: $editing) { ArchiveRecordEditor(record: $0) }
             .alert("Routine wirklich erledigt?", isPresented: $confirmRoutine) {
@@ -89,8 +105,9 @@ struct TodoTimelineView: View {
     private func row(_ item: TodoTimelineItem) -> some View {
         GlassCard {
             HStack(alignment: .top, spacing: 12) {
-                Button { toggle(item) } label: { Image(systemName: item.completed ? "checkmark.circle.fill" : "circle").font(.title2).frame(width: 44, height: 44) }.accessibilityLabel(item.completed ? "Wieder öffnen" : "Als erledigt markieren").disabled(item.occurrence != nil && (item.completed || item.date > Date()))
+                Button { toggle(item) } label: { Image(systemName: item.completed ? "checkmark.circle.fill" : item.goalID != nil || item.checkInSlotID != nil ? "arrow.up.right.circle" : "circle").font(.title2).frame(width: 44, height: 44) }.accessibilityLabel(item.completed ? "Wieder öffnen" : "Als erledigt markieren").disabled(item.occurrence != nil && (item.completed || item.date > Date()))
                 VStack(alignment: .leading, spacing: 5) {
+                    Text(item.kind).font(.caption2.bold()).foregroundStyle(Color.accentColor)
                     Text(item.title).font(.headline).lineLimit(4).strikethrough(item.completed)
                     Text(item.detail).font(.caption).foregroundStyle(.secondary).lineLimit(3)
                     Label(item.date.formatted(date: .abbreviated, time: .shortened), systemImage: item.kind == "Therapie" ? "text.bubble" : "clock").font(.caption).foregroundStyle(item.date < Date() && !item.completed ? Color.orange : Color.secondary)
@@ -101,7 +118,9 @@ struct TodoTimelineView: View {
         }
     }
     private func toggle(_ item: TodoTimelineItem) {
-        if let id = item.taskID { store.toggleTask(id) }
+        if let id = item.goalID, let goal = store.data.therapyGoals.first(where: { $0.id == id }) { editing = .goal(goal) }
+        else if let id = item.checkInSlotID, let slot = DayCheckInPolicy.slots(store.data.companionSettings).first(where: { $0.id == id }) { store.openDailyCheckIn(slot.kind, slotID: slot.id) }
+        else if let id = item.taskID { store.toggleTask(id) }
         else if let id = item.discussionID { if item.completed { store.data.therapyDiscussionAcknowledgedIDs.removeAll { $0 == id } } else { store.data.therapyDiscussionAcknowledgedIDs.append(id) } }
         else if let value = item.occurrence { routine = value; confirmRoutine = true }
     }
@@ -120,7 +139,8 @@ struct WeeklyTasksHomeCard: View {
                     Spacer()
                 } }
                 if tasks.isEmpty { Text("Noch keine Aufgabe für diese Woche.").font(.subheadline).foregroundStyle(.secondary) }
-                NavigationLink { TasksView() } label: { Label("Alle Aufgaben / hinzufügen", systemImage: "arrow.right.circle") }
+                NavigationLink { TodoTimelineView() } label: { Label("Alle Kategorien & offene Schritte", systemImage: "checklist") }
+                NavigationLink { TasksView() } label: { Label("Aufgaben hinzufügen / bearbeiten", systemImage: "plus.circle") }
             }
         }.sheet(item: $editing) { WeeklyTaskEditorView(task: $0) }
     }

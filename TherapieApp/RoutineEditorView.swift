@@ -62,7 +62,12 @@ struct RoutineEditorView: View {
                 }
                 if let error { Section { Text(error).foregroundStyle(.red) } }
                 Section("Wiederholung & Zeitraum") {
-                    Stepper("Alle \(routine.repeatEveryWeeks ?? 1) Wochen", value: Binding(get: { routine.repeatEveryWeeks ?? 1 }, set: { routine.repeatEveryWeeks = $0; if routine.recurrenceAnchor == nil { routine.recurrenceAnchor = Date() } }), in: 1...52)
+                    Toggle("Rhythmus in Tagen", isOn: Binding(get: { routine.repeatEveryDays != nil }, set: { enabled in
+                        routine.repeatEveryDays = enabled ? 2 : nil; routine.repeatEveryWeeks = nil
+                        if enabled { routine.recurrenceAnchor = Calendar.current.startOfDay(for: Date()); for index in routine.times.indices { routine.times[index].weekdays = Array(1...7) } }
+                    }))
+                    if routine.repeatEveryDays != nil { Stepper("Alle \(routine.repeatEveryDays ?? 2) Tage", value: Binding(get: { routine.repeatEveryDays ?? 2 }, set: { routine.repeatEveryDays = $0 }), in: 1...30); Text("Zählt Kalendertage ab dem Startdatum. Alle Wochentage sollten ausgewählt sein.").font(.caption).foregroundStyle(.secondary) }
+                    else { Stepper("Alle \(routine.repeatEveryWeeks ?? 1) Wochen", value: Binding(get: { routine.repeatEveryWeeks ?? 1 }, set: { routine.repeatEveryWeeks = $0; if routine.recurrenceAnchor == nil { routine.recurrenceAnchor = Date() } }), in: 1...52) }
                     if routine.recurrenceAnchor != nil { DatePicker("Start", selection: Binding(get: { routine.recurrenceAnchor ?? Date() }, set: { routine.recurrenceAnchor = $0 })) }
                     Toggle("Enddatum", isOn: Binding(get: { routine.endsAt != nil }, set: { routine.endsAt = $0 ? Date().addingTimeInterval(28 * 86400) : nil }))
                     if routine.endsAt != nil { DatePicker("Letzter Termin bis", selection: Binding(get: { routine.endsAt ?? Date() }, set: { routine.endsAt = $0 })) }

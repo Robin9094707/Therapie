@@ -7,6 +7,8 @@ enum AIBuddyMutation {
         let title = AIBuddyText.plain(action.title), text = AIBuddyText.plain(action.text)
         let date = action.date ?? now
         switch action.kind {
+        case .shower, .skipRoutine, .postponeRoutine, .reopenTask, .postponeTask, .method, .thoughtStop, .updateMethod, .deleteMethod, .emergencyPlan, .updateNote, .deleteNote, .updateTopic, .deleteTopic, .updateGoal, .deleteGoal, .goalProgress, .discussTopic, .editEntry:
+            try applyExtended(action, to: &snapshot, now: now)
         case .battery:
             guard let percent = action.moodPercent else { throw AIBuddyAPIError(message: "Bitte wähle deinen Akkuwert.") }
             snapshot.energyEntries.insert(EnergyEntry(createdAt: min(date, now), level: MoodBarometer.score(percent), percent: percent, givesEnergy: "", takesEnergy: "", note: text), at: 0)
@@ -59,9 +61,7 @@ enum AIBuddyMutation {
             guard let id = action.targetID.flatMap({ UUID(uuidString: $0.hasPrefix("task-") ? String($0.dropFirst(5)) : $0) }), let index = snapshot.weeklyTasks.firstIndex(where: { $0.id == id && !$0.completed }) else { throw AIBuddyAPIError(message: "Die Aufgabe ist nicht mehr offen. Aktualisiere die Übersicht.") }
             snapshot.weeklyTasks[index].toggleCompletion(at: now); snapshot.weeklyTasks[index].reminderShiftedAt = nil
         case .completeRoutine:
-            guard let occurrence = RoutinePlanner.due(data: snapshot, now: now).first(where: { $0.id == action.targetID }), let routine = snapshot.routines.first(where: { $0.id == occurrence.routineID }) else { throw AIBuddyAPIError(message: "Die Routine ist nicht mehr fällig. Aktualisiere die Übersicht.") }
-            snapshot.routineCompletions.insert(RoutineCompletion(routineID: routine.id, timeID: occurrence.timeID, scheduledAt: occurrence.due, recordedAt: now, note: text, routineTitle: routine.title, timeTitle: routine.times.first { $0.id == occurrence.timeID }?.title), at: 0)
-            snapshot.routineSnoozes.removeAll { $0.id == occurrence.id }
+            guard let occurrence = RoutinePlanner.occurrences(data: snapshot, now: Calendar.current.startOfDay(for: now), days: 1).first(where: { $0.id == action.targetID }), RoutineDayMutation.resolve(occurrence, outcome: .done, note: text, in: &snapshot, at: now) else { throw AIBuddyAPIError(message: "Die Routine ist nicht mehr offen. Aktualisiere die Übersicht.") }
         case .guidedCheckIn: throw AIBuddyAPIError(message: "Der Check-in wird direkt geöffnet.")
         case .energy:
             snapshot.batteryPoints.insert(BatteryPoint(date: min(date, now), title: AIEnergyKeywords.title(title), direction: action.targetID == "takes" ? .takes : .gives, impact: action.options?.valueInt ?? 3, note: text, impactConfirmed: action.options?.valueInt != nil), at: 0)
@@ -100,6 +100,10 @@ enum AIBuddyMutation {
         case .setting:
             let value = action.options?.valueBool ?? false
             switch action.targetID {
+            case "showers.weeklyGoal": snapshot.showerPreferences.weeklyGoal = action.options?.valueInt ?? snapshot.showerPreferences.weeklyGoal
+            case "dashboard.welcomeFirst": snapshot.dashboard.welcomeFirst = value
+            case "dashboard.showFeatureLinks": snapshot.dashboard.showFeatureLinks = value
+            case "dashboard.showAIImpulse": snapshot.dashboard.showAIImpulse = value
             case "appearance.accent": snapshot.accentTheme = action.options?.valueString.flatMap(AppAccent.init(rawValue:)) ?? snapshot.accentTheme
             case "ai.speakReplies": snapshot.aiSettings.speakReplies = value
             case "ai.contextDays": snapshot.aiSettings.contextDays = action.options?.valueInt ?? snapshot.aiSettings.contextDays
@@ -119,6 +123,8 @@ enum AIBuddyMutation {
         data = snapshot
     }
     static func configure(_ routine: inout DailyRoutine, action: AIBuddyAction, start: Date) {
+        if let every = action.options?.repeatEveryDays { routine.repeatEveryDays = every; routine.repeatEveryWeeks = nil; routine.recurrenceAnchor = start; for index in routine.times.indices { routine.times[index].weekdays = Array(1...7) } }
+        if action.options?.repeatEveryWeeks != nil { routine.repeatEveryDays = nil }
         if let enabled = action.options?.enabled { routine.enabled = enabled }
         if let enabled = action.options?.remindersEnabled { routine.remindersEnabled = enabled }
         if let alarm = action.options?.alarmEnabled { routine.urgentAlarm = alarm }
@@ -126,7 +132,7 @@ enum AIBuddyMutation {
         if let retry = action.options?.retryMinutes { routine.retryMinutes = retry }
         if action.kind == .routine || action.options?.repeatEveryWeeks != nil || action.options?.repeatCount != nil {
             routine.recurrenceAnchor = start
-            routine.repeatEveryWeeks = action.options?.repeatEveryWeeks ?? 1
+            routine.repeatEveryWeeks = routine.repeatEveryDays == nil ? action.options?.repeatEveryWeeks ?? 1 : nil
             if let count = action.options?.repeatCount {
                 let calendar = Calendar.current
                 let week = calendar.dateInterval(of: .weekOfYear, for: start)?.start ?? calendar.startOfDay(for: start)
@@ -140,10 +146,95 @@ enum AIBuddyMutation {
         let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
         let id = action.targetID.flatMap(UUID.init(uuidString:))
         switch action.kind {
-        case .updateTask, .deleteTask, .completeTask: return data.weeklyTasks.first { $0.id == id }.flatMap { try? encoder.encode($0) }
+        case .updateTask, .deleteTask, .completeTask, .reopenTask, .postponeTask: return data.weeklyTasks.first { $0.id == id }.flatMap { try? encoder.encode($0) }
         case .updateRoutine, .deleteRoutine: return data.routines.first { $0.id == id }.flatMap { try? encoder.encode($0) }
+        case .updateMethod, .deleteMethod: return data.copingMethods.first { $0.id == id }.flatMap { try? encoder.encode($0) }
+        case .updateNote, .deleteNote: return data.notes.first { $0.id == id }.flatMap { try? encoder.encode($0) }
+        case .updateTopic, .deleteTopic: return data.therapyTopics.first { $0.id == id }.flatMap { try? encoder.encode($0) }
+        case .updateGoal, .deleteGoal, .goalProgress: return data.therapyGoals.first { $0.id == id }.flatMap { try? encoder.encode($0) }
+        case .emergencyPlan: return try? encoder.encode(data.emergencyPlan)
+        case .shower, .skipRoutine, .postponeRoutine, .completeRoutine: return try? encoder.encode(data.routines) + encoder.encode(data.routineCompletions) + encoder.encode(data.routineDeferrals)
+        case .discussTopic: return try? encoder.encode(data.therapyDiscussionAcknowledgedIDs)
         case .setting: return Data(AIBuddySettingsChange.value(action.targetID ?? "", data: data).utf8)
         default: return nil
         }
+    }
+}
+
+
+extension AIBuddyMutation {
+    static func applyExtended(_ action: AIBuddyAction, to data: inout AppData, now: Date) throws {
+        let id = action.targetID.flatMap(UUID.init(uuidString:)), title = AIBuddyText.plain(action.title), text = AIBuddyText.plain(action.text)
+        func missing() -> AIBuddyAPIError { AIBuddyAPIError(message: "Der Eintrag ist nicht mehr verfügbar oder bereits erledigt. Bitte den Vorschlag aktualisieren.") }
+        switch action.kind {
+        case .editEntry: throw AIBuddyAPIError(message: "Der native Editor wird direkt geöffnet.")
+        case .shower:
+            if let target = action.targetID {
+                guard let occurrence = ShowerPlanner.today(data, at: now).first(where: { $0.id == target }), RoutineDayMutation.resolve(occurrence, outcome: .done, note: text, in: &data, at: now) else { throw missing() }
+            } else {
+                guard let date = action.date, date <= now else { throw AIBuddyAPIError(message: "Ein Duschtag kann erst nach dem Duschen bestätigt werden. Bitte Datum prüfen.") }
+                data.showerEntries.insert(ShowerEntry(date: date, note: text), at: 0)
+            }
+        case .skipRoutine, .postponeRoutine:
+            guard let occurrence = RoutinePlanner.occurrences(data: data, now: Calendar.current.startOfDay(for: now), days: 1).first(where: { $0.id == action.targetID }) else { throw missing() }
+            if action.kind == .skipRoutine {
+                guard RoutineDayMutation.resolve(occurrence, outcome: .skipped, note: text, in: &data, at: now) else { throw missing() }
+            } else {
+                guard let date = action.date, RoutineDayMutation.postpone(occurrence, until: date, in: &data, at: now) else { throw AIBuddyAPIError(message: "Der neue Zeitpunkt muss später liegen und der Termin noch offen sein.") }
+            }
+        case .reopenTask, .postponeTask:
+            guard let index = data.weeklyTasks.firstIndex(where: { $0.id == id }) else { throw missing() }
+            if action.kind == .reopenTask {
+                guard data.weeklyTasks[index].completed else { throw missing() }
+                data.weeklyTasks[index].toggleCompletion(at: now)
+                data.weeklyTasks[index].reminderShiftedAt = nil
+            } else {
+                guard let date = action.date, date > now, !data.weeklyTasks[index].completed else { throw missing() }
+                TaskReminderPlanner.postpone(&data.weeklyTasks[index], schedule: data.schedule, minutes: max(1, Int(ceil(date.timeIntervalSince(now) / 60))), now: now)
+                data.weeklyTasks[index].dueDate = date; data.weeklyTasks[index].reminderShiftedAt = date
+            }
+        case .method, .thoughtStop:
+            var method = CopingMethod(createdAt: now, updatedAt: now, title: title, kind: action.kind == .thoughtStop ? .thoughtStop : .method, details: text)
+            configureMethod(&method, action: action); data.copingMethods.insert(method, at: 0)
+        case .updateMethod, .deleteMethod:
+            guard let index = data.copingMethods.firstIndex(where: { $0.id == id }) else { throw missing() }
+            if action.kind == .deleteMethod { data.copingMethods.remove(at: index); data.emergencyPlan.methodIDs.removeAll { $0 == id } }
+            else { data.copingMethods[index].title = title; data.copingMethods[index].details = text; data.copingMethods[index].updatedAt = now; configureMethod(&data.copingMethods[index], action: action) }
+        case .emergencyPlan:
+            switch action.targetID ?? "firstStep" {
+            case "firstStep": data.emergencyPlan.firstStep = text
+            case "warningSigns": data.emergencyPlan.warningSigns = text
+            case "support": data.emergencyPlan.support = text
+            case "steps": data.emergencyPlan.steps = action.options?.steps ?? text.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            case "title": data.emergencyPlan.title = text
+            default: throw missing()
+            }
+            data.emergencyPlan.updatedAt = now
+        case .updateNote, .deleteNote:
+            guard let index = data.notes.firstIndex(where: { $0.id == id }) else { throw missing() }
+            if action.kind == .deleteNote { data.notes.remove(at: index) }
+            else { data.notes[index].title = title; data.notes[index].text = text; data.notes[index].updatedAt = now }
+        case .updateTopic, .deleteTopic:
+            guard let index = data.therapyTopics.firstIndex(where: { $0.id == id }) else { throw missing() }
+            if action.kind == .deleteTopic { data.therapyTopics.remove(at: index) }
+            else { data.therapyTopics[index].title = title; data.therapyTopics[index].description = text }
+        case .updateGoal, .deleteGoal, .goalProgress:
+            guard let index = data.therapyGoals.firstIndex(where: { $0.id == id }) else { throw missing() }
+            if action.kind == .deleteGoal { data.therapyGoals.remove(at: index) }
+            else if action.kind == .goalProgress {
+                guard let percent = action.options?.valueInt else { throw missing() }
+                data.therapyGoals[index].progress = percent; data.therapyGoals[index].status = percent == 100 ? .completed : .active
+            } else { data.therapyGoals[index].title = title; data.therapyGoals[index].why = text; if let date = action.date { data.therapyGoals[index].dueDate = date }; if let priority = action.options?.priority { data.therapyGoals[index].priority = priority } }
+        case .discussTopic:
+            guard let target = action.targetID, TherapyDiscussionPlanner.points(in: data).contains(where: { $0.id == target }) else { throw missing() }
+            data.therapyDiscussionAcknowledgedIDs.append(target)
+        default: throw AIBuddyAPIError(message: "Diese Aktion ist nicht bekannt.")
+        }
+    }
+    static func configureMethod(_ method: inout CopingMethod, action: AIBuddyAction) {
+        if let situation = action.options?.situation { method.situation = situation }
+        if let steps = action.options?.steps { method.steps = steps }
+        if let stages = action.options?.stages { method.stages = Array(Set(stages.compactMap(MethodStage.init(rawValue:)))).sorted { $0.rawValue < $1.rawValue } }
+        if let categories = action.options?.categories { method.categories = Array(Set(categories.compactMap(BatteryCategory.init(rawValue:)))).sorted { $0.rawValue < $1.rawValue } }
     }
 }
