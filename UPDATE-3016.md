@@ -39,7 +39,7 @@ Drei Alternativen:
 
 ## Kurzbefehle und Home
 
-Zehn App-Schnellzugriffe plus parametrisierbare Kurzbefehle für Routine-Bestätigung/-Auslassen und Wecker-Aktivierung/-Deaktivierung/nächsten Termin aussetzen. Deep Links z. B. `therapie://emergency`, `therapie://medicalpass`, `therapie://alarms`, `therapie://grounding`.
+Zehn getrennte direkt zugeordnete App-Schnellzugriffe mit deutscher Siri-Registrierung plus parametrisierbare Kurzbefehle für Routine-Bestätigung/-Auslassen und Wecker-Aktivierung/-Deaktivierung/nächsten Termin aussetzen. Deep Links z. B. `therapie://emergency`, `therapie://medicalpass`, `therapie://alarms`, `therapie://grounding`.
 
 HomeKit ist optional und benötigt ein passendes Signaturprofil mit `com.apple.developer.homekit`. Nur nach Laden/Freigeben werden Szenen abgefragt. Szenen pro Routine oder Wecker auswählen; sie laufen beim Öffnen des fälligen Termins oder per bewusst gestarteter Shortcut-Aktion. Hintergrundausführung beim Klingeln wird nicht garantiert. Für zeitgebundene Home-Automationen die Apple-Apps Home/Kurzbefehle verwenden. Szenen-IDs und Systemberechtigungen bleiben gerätegebunden und werden nicht exportiert.
 

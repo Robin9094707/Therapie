@@ -1,5 +1,6 @@
 name: Therapie
 options:
+  developmentLanguage: de
   bundleIdPrefix: eu.rjuhas
   deploymentTarget:
     iOS: "26.1"

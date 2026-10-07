@@ -1,12 +1,15 @@
 """Validate the built app, not merely the source configuration."""
 from pathlib import Path
 import plistlib
+import json
 import sys
 
 app = Path(sys.argv[1])
 info = plistlib.loads((app / "Info.plist").read_bytes())
 assert info["CFBundleShortVersionString"] == "3016.0.0"
 assert info["CFBundleIdentifier"] == "eu.rjuhas.therapie", "Existing app identity must be preserved"
+assert info["CFBundleDevelopmentRegion"] == "de"
+assert "de" in info["CFBundleLocalizations"]
 assert info["CFBundleVersion"] == "24", "Expected release build number"
 assert "therapie" in info["CFBundleURLTypes"][0]["CFBundleURLSchemes"], "Widget deep-link scheme missing"
 assert info["UIDeviceFamily"] == [1], "Expected a native iPhone target"
@@ -27,7 +30,11 @@ assert (extension / "Metadata.appintents" / "extract.actionsdata").is_file(), "W
 assert widget["CFBundleIdentifier"] == "eu.rjuhas.therapie.liveactivity"
 assert widget["CFBundleShortVersionString"] == info["CFBundleShortVersionString"]
 assert (extension / widget["CFBundleExecutable"]).is_file(), "Compiled Live Activity executable missing"
-assert (app / "Metadata.appintents" / "extract.actionsdata").is_file(), "App Shortcuts metadata missing"
+metadata = json.loads((app / "Metadata.appintents" / "extract.actionsdata").read_bytes())
+shortcuts = metadata["autoShortcuts"]
+assert len(shortcuts) == 10 and len({item["actionIdentifier"] for item in shortcuts}) == 10, "Each direct App Shortcut must have its own action"
+assert any(item["actionIdentifier"] == "OpenEmergencyShortcutIntent" for item in shortcuts), "Direct emergency Shortcut missing"
+assert (app / "de.lproj" / "AppShortcuts.strings").is_file(), "German Siri phrase localization missing"
 primary = info["CFBundleIcons"]["CFBundlePrimaryIcon"]
 assert primary["CFBundleIconName"] == "AppIcon"
 assert primary.get("CFBundleIconFiles"), "SpringBoard icon registration missing"

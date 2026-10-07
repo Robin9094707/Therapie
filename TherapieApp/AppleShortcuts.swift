@@ -99,17 +99,107 @@ struct PerformWakeShortcutIntent: AppIntent {
         return .result(dialog:"Dein Wecker wurde angepasst.")
     }
 }
+struct OpenEmergencyShortcutIntent: AppIntent {
+    static var title: LocalizedStringResource = "Notfallplan öffnen"
+    static var openAppWhenRun = true
+    func perform() async throws -> some IntentResult {
+        UserDefaults.standard.set("page|emergency", forKey:"therapy.apple.shortcut")
+        return .result()
+    }
+}
+
+struct OpenMedicalPassShortcutIntent: AppIntent {
+    static var title: LocalizedStringResource = "Therapiepass öffnen"
+    static var openAppWhenRun = true
+    func perform() async throws -> some IntentResult {
+        UserDefaults.standard.set("page|medicalpass", forKey:"therapy.apple.shortcut")
+        return .result()
+    }
+}
+
+struct OpenAlarmsShortcutIntent: AppIntent {
+    static var title: LocalizedStringResource = "Wecker öffnen"
+    static var openAppWhenRun = true
+    func perform() async throws -> some IntentResult {
+        UserDefaults.standard.set("page|alarms", forKey:"therapy.apple.shortcut")
+        return .result()
+    }
+}
+
+struct OpenMethodsShortcutIntent: AppIntent {
+    static var title: LocalizedStringResource = "Methoden öffnen"
+    static var openAppWhenRun = true
+    func perform() async throws -> some IntentResult {
+        UserDefaults.standard.set("page|methods", forKey:"therapy.apple.shortcut")
+        return .result()
+    }
+}
+
+struct OpenGroundingShortcutIntent: AppIntent {
+    static var title: LocalizedStringResource = "Sinnesübung starten"
+    static var openAppWhenRun = true
+    func perform() async throws -> some IntentResult {
+        UserDefaults.standard.set("page|grounding", forKey:"therapy.apple.shortcut")
+        return .result()
+    }
+}
+
+struct OpenShowersShortcutIntent: AppIntent {
+    static var title: LocalizedStringResource = "Duschtage öffnen"
+    static var openAppWhenRun = true
+    func perform() async throws -> some IntentResult {
+        UserDefaults.standard.set("page|showers", forKey:"therapy.apple.shortcut")
+        return .result()
+    }
+}
+
+struct OpenRoutinesShortcutIntent: AppIntent {
+    static var title: LocalizedStringResource = "Routinen öffnen"
+    static var openAppWhenRun = true
+    func perform() async throws -> some IntentResult {
+        UserDefaults.standard.set("page|routines", forKey:"therapy.apple.shortcut")
+        return .result()
+    }
+}
+
+struct OpenTodayShortcutIntent: AppIntent {
+    static var title: LocalizedStringResource = "Heute öffnen"
+    static var openAppWhenRun = true
+    func perform() async throws -> some IntentResult {
+        UserDefaults.standard.set("page|today", forKey:"therapy.apple.shortcut")
+        return .result()
+    }
+}
+
+struct OpenTasksShortcutIntent: AppIntent {
+    static var title: LocalizedStringResource = "Aufgaben öffnen"
+    static var openAppWhenRun = true
+    func perform() async throws -> some IntentResult {
+        UserDefaults.standard.set("page|reminders", forKey:"therapy.apple.shortcut")
+        return .result()
+    }
+}
+
+struct OpenSessionShortcutIntent: AppIntent {
+    static var title: LocalizedStringResource = "Therapie-Timer öffnen"
+    static var openAppWhenRun = true
+    func perform() async throws -> some IntentResult {
+        UserDefaults.standard.set("page|session", forKey:"therapy.apple.shortcut")
+        return .result()
+    }
+}
+
 struct TherapyAppShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
-        AppShortcut(intent:OpenTherapyPageIntent(page:.emergency), phrases:["Öffne den Notfallplan in \(.applicationName)"], shortTitle:"Notfallplan", systemImageName:"lifepreserver.fill")
-        AppShortcut(intent:OpenTherapyPageIntent(page:.medicalpass), phrases:["Öffne meinen Pass in \(.applicationName)"], shortTitle:"Therapiepass", systemImageName:"person.text.rectangle")
-        AppShortcut(intent:OpenTherapyPageIntent(page:.alarms), phrases:["Öffne die Wecker in \(.applicationName)"], shortTitle:"Wecker", systemImageName:"alarm.fill")
-        AppShortcut(intent:OpenTherapyPageIntent(page:.methods), phrases:["Öffne die Methoden in \(.applicationName)"], shortTitle:"Methoden", systemImageName:"sparkles")
-        AppShortcut(intent:OpenTherapyPageIntent(page:.grounding), phrases:["Starte die Sinnesübung in \(.applicationName)"], shortTitle:"5-4-3-2-1", systemImageName:"hand.raised.fill")
-        AppShortcut(intent:OpenTherapyPageIntent(page:.showers), phrases:["Öffne die Duschtage in \(.applicationName)"], shortTitle:"Duschtage", systemImageName:"shower.fill")
-        AppShortcut(intent:OpenTherapyPageIntent(page:.routines), phrases:["Öffne die Routinen in \(.applicationName)"], shortTitle:"Routinen", systemImageName:"checklist")
-        AppShortcut(intent:OpenTherapyPageIntent(page:.today), phrases:["Öffne heute in \(.applicationName)"], shortTitle:"Heute", systemImageName:"sun.max.fill")
-        AppShortcut(intent:OpenTherapyPageIntent(page:.reminders), phrases:["Öffne die Aufgaben in \(.applicationName)"], shortTitle:"Aufgaben", systemImageName:"checkmark.circle")
-        AppShortcut(intent:OpenTherapyPageIntent(page:.session), phrases:["Öffne den Timer in \(.applicationName)"], shortTitle:"Therapie-Timer", systemImageName:"timer")
+        AppShortcut(intent:OpenEmergencyShortcutIntent(), phrases:["Öffne den Notfallplan in \(.applicationName)"], shortTitle:"Notfallplan", systemImageName:"lifepreserver.fill")
+        AppShortcut(intent:OpenMedicalPassShortcutIntent(), phrases:["Öffne meinen Pass in \(.applicationName)"], shortTitle:"Therapiepass", systemImageName:"person.text.rectangle")
+        AppShortcut(intent:OpenAlarmsShortcutIntent(), phrases:["Öffne die Wecker in \(.applicationName)"], shortTitle:"Wecker", systemImageName:"alarm.fill")
+        AppShortcut(intent:OpenMethodsShortcutIntent(), phrases:["Öffne die Methoden in \(.applicationName)"], shortTitle:"Methoden", systemImageName:"sparkles")
+        AppShortcut(intent:OpenGroundingShortcutIntent(), phrases:["Starte die Sinnesübung in \(.applicationName)"], shortTitle:"5-4-3-2-1", systemImageName:"hand.raised.fill")
+        AppShortcut(intent:OpenShowersShortcutIntent(), phrases:["Öffne die Duschtage in \(.applicationName)"], shortTitle:"Duschtage", systemImageName:"shower.fill")
+        AppShortcut(intent:OpenRoutinesShortcutIntent(), phrases:["Öffne die Routinen in \(.applicationName)"], shortTitle:"Routinen", systemImageName:"checklist")
+        AppShortcut(intent:OpenTodayShortcutIntent(), phrases:["Öffne heute in \(.applicationName)"], shortTitle:"Heute", systemImageName:"sun.max.fill")
+        AppShortcut(intent:OpenTasksShortcutIntent(), phrases:["Öffne die Aufgaben in \(.applicationName)"], shortTitle:"Aufgaben", systemImageName:"checkmark.circle")
+        AppShortcut(intent:OpenSessionShortcutIntent(), phrases:["Öffne den Timer in \(.applicationName)"], shortTitle:"Therapie-Timer", systemImageName:"timer")
     }
 }
