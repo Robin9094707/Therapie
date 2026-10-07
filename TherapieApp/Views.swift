@@ -79,7 +79,7 @@ struct RootView: View {
             while !Task.isCancelled {
                 store.resumeProtectedStorage()
                 if store.storageReady && scenePhase == .active { store.sessionController.reconcile(); store.consumeRoutineAlarmRoute(); presentRequested() }
-                if Date().timeIntervalSince(lastReminderRefresh) >= 300 && store.storageReady && store.lastSaveError == nil {
+                if scenePhase == .active && Date().timeIntervalSince(lastReminderRefresh) >= 300 && store.storageReady && store.lastSaveError == nil {
                     lastReminderRefresh = Date()
                     AppleRemindersService.shared.refresh(store)
                     store.pruneUndo()

@@ -10,7 +10,9 @@ final class AppStore: ObservableObject {
             save()
             if lastSaveError == nil {
                 if !data.aiSettings.enabled && selectedTab == 5 { selectedTab = 4 }
-                AppleRemindersService.shared.refresh(self)
+                if AppleReminderSyncPolicy.inputsChanged(from: oldValue, to: data) {
+                    AppleRemindersService.shared.refresh(self)
+                }
                 captureLocations(from: oldValue)
                 rememberChange(from: oldValue, to: data)
                 TherapyEffects.shared.changed(from: oldValue, to: data)

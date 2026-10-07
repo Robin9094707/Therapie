@@ -499,6 +499,22 @@ struct OwnedReminderDraft: Equatable, Identifiable {
     var routineOccurrence: RoutineOccurrence?
     var taskID: UUID?
 }
+enum AppleReminderSyncPolicy {
+    // EventKit can add a calendar, time zone and zero seconds when it reads back
+    // a due date. Compare our floating, minute-based clock, not that metadata.
+    static func sameDueClock(_ existing: DateComponents?, _ desired: DateComponents) -> Bool {
+        guard let existing else { return false }
+        return existing.year == desired.year && existing.month == desired.month
+            && existing.day == desired.day && existing.hour == desired.hour
+            && existing.minute == desired.minute && (existing.second ?? 0) == (desired.second ?? 0)
+    }
+    static func inputsChanged(from old: AppData, to new: AppData) -> Bool {
+        old.appleIntegration != new.appleIntegration || old.routines != new.routines
+            || old.routineCompletions != new.routineCompletions || old.routineSnoozes != new.routineSnoozes
+            || old.routineDeferrals != new.routineDeferrals || old.companionSettings != new.companionSettings
+            || old.weeklyTasks != new.weeklyTasks
+    }
+}
 enum AppleReminderPlanner {
     static func drafts(data: AppData, now: Date = Date(), calendar: Calendar = .current) -> [OwnedReminderDraft] {
         guard data.appleIntegration.remindersEnabled else { return [] }

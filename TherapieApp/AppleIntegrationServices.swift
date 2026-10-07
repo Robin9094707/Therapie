@@ -11,6 +11,7 @@ final class AppleRemindersService {
     private var worker: Task<Void, Never>?
     private var queued = false
     private var observed = false
+    private var lastRefreshStarted = Date.distantPast
     private weak var store: AppStore?
     var authorized: Bool { EKEventStore.authorizationStatus(for: .reminder) == .fullAccess }
     func connect(_ store: AppStore) async {
@@ -22,6 +23,8 @@ final class AppleRemindersService {
     }
     func refresh(_ store: AppStore) {
         self.store = store
+        // A never-connected app has nothing to reconcile or observe.
+        guard store.data.appleIntegration.remindersEnabled || UserDefaults.standard.string(forKey: calendarKey) != nil else { return }
         if !observed {
             observed = true
             NotificationCenter.default.addObserver(forName: .EKEventStoreChanged, object: events, queue: .main) { [weak self] _ in
@@ -33,10 +36,20 @@ final class AppleRemindersService {
         worker = Task { @MainActor [weak self, weak store] in
             guard let self, let store else { return }
             defer { self.worker = nil }
-            // EventKit emits changes from our own writes too. Idempotent writes settle the queue.
-            do { try await Task.sleep(for: .milliseconds(400)) } catch { return }
-            repeat { self.queued = false; await self.reconcile(store) } while self.queued && !Task.isCancelled
+            // Every pass yields, including notifications caused by our own commit.
+            // Bursts collapse into one queued pass instead of an unbounded hot loop.
+            repeat {
+                let delay = max(0.4, 3 - Date().timeIntervalSince(self.lastRefreshStarted))
+                do { try await Task.sleep(for: .seconds(delay)) } catch { return }
+                self.queued = false
+                self.lastRefreshStarted = Date()
+                await self.reconcile(store)
+            } while self.queued && !Task.isCancelled
         }
+    }
+    private func status(_ message: String, in store: AppStore) {
+        // Publishing the same status still invalidates every EnvironmentObject view.
+        if store.appleReminderStatus != message { store.appleReminderStatus = message }
     }
     private func ownedCalendar(create: Bool) throws -> EKCalendar? {
         if let id = UserDefaults.standard.string(forKey: calendarKey), let existing = events.calendar(withIdentifier: id), existing.allowedEntityTypes.contains(.reminder) { return existing }
@@ -53,7 +66,7 @@ final class AppleRemindersService {
     }
     private func reconcile(_ store: AppStore) async {
         guard store.storageReady, store.lastSaveError == nil else { return }
-        guard authorized else { if store.data.appleIntegration.remindersEnabled { store.appleReminderStatus = "Apple-Erinnerungen benötigen vollen Zugriff. Verbinde die Liste in Apple-Integration." }; return }
+        guard authorized else { if store.data.appleIntegration.remindersEnabled { status("Apple-Erinnerungen benötigen vollen Zugriff. Verbinde die Liste in Apple-Integration.", in: store) }; return }
         do {
             guard let calendar = try ownedCalendar(create: store.data.appleIntegration.remindersEnabled) else { return }
             let fetched: [EKReminder] = await withCheckedContinuation { continuation in
@@ -64,7 +77,8 @@ final class AppleRemindersService {
             func key(_ reminder: EKReminder) -> String { String((reminder.notes ?? "").dropFirst(marker.count)).components(separatedBy: "\n")[0] }
             let drafts = AppleReminderPlanner.drafts(data: store.data)
             let byID = Dictionary(drafts.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-            if store.data.appleIntegration.remindersEnabled {
+            var importedCompletion = false
+            if store.data.appleIntegration.remindersEnabled && owned.contains(where: \.isCompleted) {
                 var snapshot = store.data
                 for reminder in owned where reminder.isCompleted {
                     guard let draft = byID[key(reminder)] else { continue }
@@ -73,24 +87,29 @@ final class AppleRemindersService {
                         snapshot.routineCompletions.insert(.init(routineID: occurrence.routineID, timeID: occurrence.timeID, scheduledAt: occurrence.scheduledAt,
                             recordedAt: reminder.completionDate ?? Date(), outcome: .done, note: "In Apple-Erinnerungen bestätigt", routineTitle: routine.title), at: 0)
                         snapshot.routineSnoozes.removeAll { $0.id == occurrence.id }
+                        importedCompletion = true
                     }
                     if let id = draft.taskID, let index = snapshot.weeklyTasks.firstIndex(where: { $0.id == id && !$0.completed }) {
                         snapshot.weeklyTasks[index].completed = true; snapshot.weeklyTasks[index].completedAt = reminder.completionDate ?? Date()
+                        importedCompletion = true
                     }
                 }
-                if snapshot != store.data { store.data = snapshot; guard store.lastSaveError == nil else { return } }
+                if importedCompletion { store.data = snapshot; guard store.lastSaveError == nil else { return } }
             }
-            let desired = AppleReminderPlanner.drafts(data: store.data)
+            let desired = importedCompletion ? AppleReminderPlanner.drafts(data: store.data) : drafts
             let valid = Set(desired.map(\.id))
             var existing = Dictionary(owned.map { (key($0), $0) }, uniquingKeysWith: { first, _ in first })
+            var hasWrites = false
             for reminder in owned where !valid.contains(key(reminder)) {
                 if !store.data.appleIntegration.remindersEnabled || store.data.appleIntegration.removeFinishedReminders {
                     try events.remove(reminder, commit: false)
+                    hasWrites = true
                 } else if !reminder.isCompleted {
                     let id = key(reminder)
                     let wasResolved = store.data.routineCompletions.contains { id == "routine.\($0.routineID).\($0.timeID).\(Int($0.scheduledAt.timeIntervalSince1970))" } || store.data.weeklyTasks.contains { id == "task.\($0.id)" && $0.completed }
                     if wasResolved { reminder.isCompleted = true; try events.save(reminder, commit: false) }
                     else { try events.remove(reminder, commit: false) }
+                    hasWrites = true
                 }
             }
             for draft in desired {
@@ -99,16 +118,18 @@ final class AppleRemindersService {
                 if isNew { reminder.calendar = calendar }
                 let parts = Calendar.current.dateComponents([.year,.month,.day,.hour,.minute], from: draft.due)
                 let url = URL(string: "therapie://" + draft.route)
-                if isNew || reminder.title != draft.title || reminder.dueDateComponents != parts || reminder.url != url || reminder.isCompleted {
+                if isNew || reminder.title != draft.title || !AppleReminderSyncPolicy.sameDueClock(reminder.dueDateComponents, parts) || reminder.url != url || reminder.isCompleted {
                     reminder.title = draft.title; reminder.notes = marker + draft.id
                     reminder.dueDateComponents = parts; reminder.url = url; reminder.isCompleted = false
                     reminder.alarms = [EKAlarm(absoluteDate: draft.due)]
                     try events.save(reminder, commit: false)
+                    hasWrites = true
                 }
             }
-            try events.commit()
-            store.appleReminderStatus = store.data.appleIntegration.remindersEnabled ? "\(desired.count) Einträge in „Therapie · Routinen“. Zuletzt abgeglichen: \(Date().formatted(date: .omitted, time: .shortened))." : "Verwaltete Erinnerungen entfernt. Andere Listen bleiben erhalten."
-        } catch { events.reset(); store.appleReminderStatus = "Abgleich fehlgeschlagen: " + error.localizedDescription }
+            // A read-only refresh must not write back into the observed database.
+            if hasWrites { try events.commit() }
+            status(store.data.appleIntegration.remindersEnabled ? "\(desired.count) Einträge in „Therapie · Routinen“ abgeglichen." : "Verwaltete Erinnerungen entfernt. Andere Listen bleiben erhalten.", in: store)
+        } catch { events.reset(); status("Abgleich fehlgeschlagen: " + error.localizedDescription, in: store) }
     }
 }
 

@@ -5,11 +5,15 @@ import WidgetKit
 enum TherapyWidgetBridge {
     private static var lastCache: Data?
     private static var lastRefresh = Date.distantPast
+    private static var lastMissingGroupReload = Date.distantPast
     static func refresh(_ store: AppStore, force: Bool = false) {
         guard store.loadError == nil, store.lastSaveError == nil else { return }
         guard let storage = TherapyWidgetStorage.container() else {
-            store.widgetStatus = "Widgets sind vorbereitet. Der gemeinsame Zugriff benötigt beim Signieren die App-Gruppe group.eu.rjuhas.therapie für App und Erweiterung."
-            WidgetCenter.shared.reloadAllTimelines()
+            setStatus("Widgets sind vorbereitet. Der gemeinsame Zugriff benötigt beim Signieren die App-Gruppe group.eu.rjuhas.therapie für App und Erweiterung.", in: store)
+            if force || Date().timeIntervalSince(lastMissingGroupReload) >= 30 * 60 {
+                lastMissingGroupReload = Date()
+                WidgetCenter.shared.reloadAllTimelines()
+            }
             return
         }
         do {
@@ -25,7 +29,10 @@ enum TherapyWidgetBridge {
                 lastCache = signature; lastRefresh = Date()
                 WidgetCenter.shared.reloadAllTimelines()
             }
-            store.widgetStatus = "Widget-Daten geschrieben: " + Date().formatted(date: .omitted, time: .shortened) + " · Zugriff: " + storage.group + " · „Heute · direkt“ und „Duschtage · direkt“ benötigen keine Konfiguration."
-        } catch { store.widgetStatus = "Widgets konnten noch nicht aktualisiert werden: " + error.localizedDescription }
+            setStatus("Widget-Daten geschrieben: " + lastRefresh.formatted(date: .omitted, time: .shortened) + " · Zugriff: " + storage.group + " · „Heute · direkt“ und „Duschtage · direkt“ benötigen keine Konfiguration.", in: store)
+        } catch { setStatus("Widgets konnten noch nicht aktualisiert werden: " + error.localizedDescription, in: store) }
+    }
+    private static func setStatus(_ message: String, in store: AppStore) {
+        if store.widgetStatus != message { store.widgetStatus = message }
     }
 }

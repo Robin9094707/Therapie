@@ -242,6 +242,32 @@ struct ModelChecks {
         var invalidCopy = copySource; invalidCopy.reminders[0].route = "https://example.com"
         let invalidCode = try encoder.encode(invalidCopy).base64EncodedString()
         try expect(TherapyWidgetStorage.copiedSnapshot(invalidCode) == nil, "Widget copy cannot supply external deep links")
+        // EventKit readback metadata must converge after one actual write.
+        let dueClock = DateComponents(year: 2026, month: 10, day: 7, hour: 18, minute: 30)
+        var readback = dueClock
+        readback.calendar = Calendar(identifier: .gregorian)
+        readback.timeZone = TimeZone(identifier: "Europe/Berlin")
+        readback.second = 0; readback.nanosecond = 0
+        try expect(readback != dueClock && AppleReminderSyncPolicy.sameDueClock(readback, dueClock), "EventKit metadata normalization must not trigger another write")
+        try expect((0..<1000).allSatisfy { _ in AppleReminderSyncPolicy.sameDueClock(readback, dueClock) }, "Repeated read-only refreshes converge without rewritten reminders")
+        readback.minute = 31
+        try expect(!AppleReminderSyncPolicy.sameDueClock(readback, dueClock), "A real due-minute change still updates the reminder")
+        readback = dueClock; readback.day = 8
+        try expect(!AppleReminderSyncPolicy.sameDueClock(readback, dueClock), "A real due-day change still updates the reminder")
+        try expect(!AppleReminderSyncPolicy.sameDueClock(nil, dueClock), "A missing due date is repaired")
+        readback = dueClock; readback.second = 15
+        try expect(!AppleReminderSyncPolicy.sameDueClock(readback, dueClock), "Nonzero due seconds are a real clock change")
+        var unrelated = appleData
+        unrelated.notes.append(TherapyNote(title: "Neue Notiz", text: "Kein Erinnerungsabgleich nötig", tags: []))
+        unrelated.medicalPass.notes = "Pass bearbeiten"
+        unrelated.aiSettings.enabled = true
+        try expect(!AppleReminderSyncPolicy.inputsChanged(from: appleData, to: unrelated), "Notes, medical pass and AI settings do not reconcile system reminders")
+        var relevant = appleData; relevant.appleIntegration.remindersEnabled.toggle()
+        try expect(AppleReminderSyncPolicy.inputsChanged(from: appleData, to: relevant), "Disabling integration still cleans up managed reminders")
+        relevant = appleData; relevant.routines[0].title += " angepasst"
+        try expect(AppleReminderSyncPolicy.inputsChanged(from: appleData, to: relevant), "Routine edits still refresh managed reminders")
+        relevant = appleData; relevant.weeklyTasks.append(WeeklyTask(weekOfYear: 41, yearForWeekOfYear: 2026, title: "Neue Aufgabe", details: "", dueDate: now))
+        try expect(AppleReminderSyncPolicy.inputsChanged(from: appleData, to: relevant), "Dated task edits still refresh managed reminders")
         print("Passed \(checks) migration, streak, chart aggregation and export checks.")
     }
 }
