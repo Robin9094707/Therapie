@@ -7,6 +7,7 @@ swiftc -parse-as-library -emit-library -emit-module -enable-testing -module-name
   TherapieApp/Models.swift TherapieApp/FeatureModels.swift TherapieApp/AIBuddyModels.swift TherapieApp/TherapyDiscussionModels.swift \
   TherapieApp/DashboardModels.swift TherapieApp/ArchiveModels.swift TherapieApp/WellnessModels.swift \
   TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift TherapieApp/CompanionModels.swift \
+  Shared/WidgetSnapshot.swift TherapieApp/WidgetSnapshotBuilder.swift \
   TherapieApp/InsightsModels.swift TherapieApp/AIBuddyAPI.swift TherapieApp/AIBuddyActions.swift \
   TherapieApp/BackupArchive.swift TherapieApp/ReadableBackup.swift \
   -emit-module-path "$CHECK_ROOT/TherapyDomain.swiftmodule" -o "$CHECK_ROOT/libTherapyDomain.dylib"

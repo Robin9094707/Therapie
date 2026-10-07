@@ -88,7 +88,7 @@ import Foundation
         var legacy = try JSONSerialization.jsonObject(with: JSONEncoder().encode(AppData())) as! [String: Any]
         legacy["schemaVersion"] = 7
         let restored = try JSONDecoder().decode(AppData.self, from: JSONSerialization.data(withJSONObject: legacy))
-        try expect(restored.schemaVersion == 13 && restored.companionSettings.dayCheckInSlots == nil && restored.companionSettings.taskAlarmsEnabled == nil, "Schema 7 adds safe optional defaults")
+        try expect(restored.schemaVersion == 15 && restored.companionSettings.dayCheckInSlots == nil && restored.companionSettings.taskAlarmsEnabled == nil, "Schema 7 adds safe optional defaults")
         print("Passed \(count) insights, timed check-in, atomic battery, alarm inventory and PDF selection checks.")
     }
 }

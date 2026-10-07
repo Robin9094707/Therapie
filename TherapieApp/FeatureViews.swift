@@ -6,11 +6,12 @@ struct FeatureHubLinks: View {
     var body: some View {
         GlassCard {
             ViewThatFits(in: .horizontal) {
-                HStack { timeline; Spacer(); map }
-                VStack(alignment: .leading, spacing: 12) { timeline; map }
+                HStack { methods; Spacer(); timeline; Spacer(); map }
+                VStack(alignment: .leading, spacing: 12) { methods; timeline; map }
             }
         }
     }
+    private var methods: some View { NavigationLink { MethodsHubView() } label: { Label("Meine Methoden", systemImage: "sparkles") } }
     private var timeline: some View { NavigationLink { TodoTimelineView() } label: { Label("To-do-Timeline", systemImage: "calendar.day.timeline.left") } }
     private var map: some View { NavigationLink { EntryMapView() } label: { Label("Meine Eintragskarte", systemImage: "map") } }
 }

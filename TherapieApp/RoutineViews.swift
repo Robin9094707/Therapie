@@ -29,6 +29,7 @@ struct RoutineHubView: View {
                         Text("Nur Routinen mit aktivierter Urlaubspause pausieren. Die Uhrzeiten und deine Ziele bleiben gespeichert.").font(.caption).foregroundStyle(.secondary)
                     }
                 }
+                NavigationLink { ShowerDaysView() } label: { Label("Meine Duschtage · fest oder flexibel", systemImage: "shower.fill") }.buttonStyle(.bordered)
                 Button("Gesamten Routinenverlauf ansehen", systemImage: "clock.arrow.circlepath") { showHistory = true }.buttonStyle(.bordered)
                 RoutinePermissionCard()
                 SwiftUI.TimelineView(.periodic(from: .now, by: 30)) { context in

@@ -255,3 +255,70 @@ enum WellnessExport {
         return "\"" + safe.replacingOccurrences(of: "\"", with: "\"\"") + "\""
     }
 }
+
+// MARK: - Personal methods and support (schema 15, entirely portable)
+enum MethodStage: String, Codable, CaseIterable, Identifiable {
+    case prevent, contain, calm
+    var id: String { rawValue }
+    var title: String { switch self { case .prevent: "Vorbeugen"; case .contain: "Eindämmen"; case .calm: "Beruhigen" } }
+    var symbol: String { switch self { case .prevent: "shield.lefthalf.filled"; case .contain: "hand.raised.fill"; case .calm: "leaf.fill" } }
+}
+enum CopingMethodKind: String, Codable, CaseIterable, Identifiable {
+    case method, thoughtStop
+    var id: String { rawValue }
+    var title: String { self == .method ? "Methode" : "Gedankenstopp" }
+}
+struct CopingMethod: Codable, Equatable, Identifiable {
+    var id = UUID()
+    var createdAt = Date()
+    var updatedAt = Date()
+    var title = ""
+    var kind: CopingMethodKind = .method
+    var situation = ""
+    var details = ""
+    var steps: [String] = []
+    var categories: [BatteryCategory] = []
+    var stages: [MethodStage] = [.calm]
+    var batteryPointIDs: [UUID] = []
+    var favorite = false
+    static var asmrExample: CopingMethod {
+        CopingMethod(title: "ASMR", situation: "Geräusche oder Musik werden mir zu laut", details: "Wenn es mir hilft: Reize reduzieren und vertrautes ASMR leise hören. Ich darf jederzeit stoppen oder lieber Stille wählen.", steps: ["Einen ruhigeren Ort suchen", "Vertrautes ASMR leise starten, wenn ich es möchte", "Prüfen: Ist es angenehmer? Sonst stoppen"], categories: [.sensory, .rest], stages: [.contain, .calm])
+    }
+    static var thoughtStopExample: CopingMethod {
+        CopingMethod(title: "Mein Gedankenstopp", kind: .thoughtStop, situation: "Ich gerate ins Grübeln", details: "Stopp. Ich muss das gerade nicht lösen. Ich richte meine Aufmerksamkeit auf einen ruhigen nächsten Schritt.", steps: ["Den Gedanken bemerken", "Meinen Stoppsatz freundlich sagen", "Eine kleine Handlung im Hier und Jetzt wählen"], categories: [.rest], stages: [.contain, .calm])
+    }
+    func matches(category: BatteryCategory?, stage: MethodStage?, query: String, data: AppData) -> Bool {
+        let linked = data.batteryPoints.filter { batteryPointIDs.contains($0.id) }
+        let fitsCategory = category == nil || categories.contains(category!) || linked.contains { $0.category == category }
+        let text = ([title, situation, details] + steps + linked.map(\.title)).joined(separator: " ")
+        return fitsCategory && (stage == nil || stages.contains(stage!)) && (query.isEmpty || text.localizedStandardContains(query))
+    }
+}
+struct PersonalEmergencyPlan: Codable, Equatable {
+    var title = "Mein Notfallplan"
+    var warningSigns = ""
+    var firstStep = ""
+    var steps: [String] = []
+    var support = ""
+    var imageID: UUID?
+    var methodIDs: [UUID] = []
+    var updatedAt: Date?
+    var hasContent: Bool { !firstStep.isEmpty || !steps.isEmpty || !support.isEmpty || imageID != nil || !methodIDs.isEmpty }
+}
+struct GroundingPractice: Codable, Equatable, Identifiable {
+    var id = UUID()
+    var date = Date()
+    var answers: [[String]] = Array(repeating: [], count: 5)
+    var note = ""
+}
+struct ShowerEntry: Codable, Equatable, Identifiable {
+    var id = UUID()
+    var date = Date()
+    var note = ""
+}
+enum GroundingGuide {
+    static let counts = [5, 4, 3, 2, 1]
+    static let titles = ["Fünf Dinge, die du siehst", "Vier Dinge, die du spürst", "Drei Dinge, die du hörst", "Zwei Dinge, die du riechst", "Eine Sache, die du schmeckst"]
+    static let symbols = ["eye.fill", "hand.raised.fill", "ear.fill", "nose", "mouth.fill"]
+    static let hints = ["Schau dich in deinem Tempo um. Zum Beispiel eine Farbe oder eine Form.", "Zum Beispiel deine Füße am Boden, den Stuhl oder die Kleidung auf deiner Haut.", "Nur angenehme oder neutrale Geräusche. Du musst nichts extra abspielen.", "Wenn gerade kein Geruch da ist, denke an etwas Vertrautes oder überspringe den Schritt.", "Zum Beispiel einen vorhandenen Geschmack. Du brauchst nichts zu essen oder zu trinken."]
+}

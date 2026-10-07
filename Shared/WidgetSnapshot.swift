@@ -10,6 +10,7 @@ struct TherapyWidgetSnapshot: Codable, Equatable {
     var session: TherapyWidgetSession?
     var configured = false
     var showsPersonalTitles: Bool?
+    var accentName: String?
     var cacheProblem: String?
     var nextAppointment: Date? { appointment(after: Date()) }
     func appointment(after now: Date) -> Date? { nextAppointments.first { $0 >= now } }

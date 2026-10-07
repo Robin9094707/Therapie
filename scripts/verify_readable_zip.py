@@ -11,7 +11,17 @@ with zipfile.ZipFile(sys.argv[1]) as archive:
     data = json.loads(archive.read("therapy-data.json"))
     manifest = json.loads(archive.read("manifest.json"))
     assert data == manifest["data"]
-    assert data["schemaVersion"] == 14
+    assert data["schemaVersion"] == 15
+    assert len(data["copingMethods"]) == 2
+    assert data["copingMethods"][1]["kind"] == "thoughtStop"
+    assert data["emergencyPlan"]["firstStep"] == "Reize reduzieren"
+    assert data["emergencyPlan"]["imageID"] == data["media"][0]["id"]
+    assert data["groundingPractices"][0]["answers"][0] == ["Fenster"]
+    assert data["showerEntries"][0]["note"] == "Flexibel"
+    for key in ("copingMethods", "groundingPractices", "showerEntries"):
+        record = data[key][0]
+        assert f"Eintraege/{key}/{record['id'].upper()}.txt" in names
+    assert "Reize reduzieren" in archive.read("Eintraege/Einstellungen/emergencyPlan.txt").decode()
     assert data["accentTheme"] == "purple"
     assert data["wellbeingPreferences"] == {"estimateBattery": True, "hourlyDecline": 2}
     assert data["aiSettings"]["speakReplies"] is True

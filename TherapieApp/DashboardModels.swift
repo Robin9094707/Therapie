@@ -1,10 +1,11 @@
 import Foundation
 
 enum HomeCard: String, CaseIterable, Identifiable {
-    case appointment, discussion, checkIns, routines, overview, quickActions, session, pinned, wellness, therapy, week, task, latest, reminders, goals, welcome
+    case welcome, methods, appointment, discussion, checkIns, routines, overview, quickActions, session, pinned, wellness, therapy, week, task, latest, reminders, goals
     var id: String { rawValue }
     var title: String {
         switch self {
+        case .methods: "Mein Methodenkoffer"
         case .discussion: "Gesprächsliste am Therapietag"
         case .appointment: "Nächste Therapie"
         case .checkIns: "Check-ins"
@@ -25,6 +26,7 @@ enum HomeCard: String, CaseIterable, Identifiable {
     }
     var symbol: String {
         switch self {
+        case .methods: "sparkles"
         case .discussion: "text.bubble"
         case .appointment: "calendar.badge.clock"
         case .checkIns: "sparkles"
@@ -51,10 +53,18 @@ struct DashboardPreferences: Codable, Equatable {
     var pinnedRecordIDs: [String] = []
     var compactCards = false
     var showWidgetTitles = false
+    var welcomeFirst = true
+    var showFeatureLinks = true
+    var showAIImpulse = true
+    var welcomeMessage = ""
     init() {}
-    enum CodingKeys: String, CodingKey { case cardOrder, hiddenCards, pinnedCards, pinnedRecordIDs, compactCards, showWidgetTitles }
+    enum CodingKeys: String, CodingKey { case welcomeFirst, showFeatureLinks, showAIImpulse, welcomeMessage, cardOrder, hiddenCards, pinnedCards, pinnedRecordIDs, compactCards, showWidgetTitles }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        welcomeFirst = try c.decodeIfPresent(Bool.self, forKey: .welcomeFirst) ?? true
+        showFeatureLinks = try c.decodeIfPresent(Bool.self, forKey: .showFeatureLinks) ?? true
+        showAIImpulse = try c.decodeIfPresent(Bool.self, forKey: .showAIImpulse) ?? true
+        welcomeMessage = try c.decodeIfPresent(String.self, forKey: .welcomeMessage) ?? ""
         cardOrder = try c.decodeIfPresent([String].self, forKey: .cardOrder) ?? HomeCard.allCases.map(\.rawValue)
         hiddenCards = try c.decodeIfPresent([String].self, forKey: .hiddenCards) ?? []
         pinnedCards = try c.decodeIfPresent([String].self, forKey: .pinnedCards) ?? []
@@ -70,7 +80,8 @@ struct DashboardPreferences: Codable, Equatable {
     }
     var visibleCards: [HomeCard] {
         let visible = orderedCards.filter { !hiddenCards.contains($0.rawValue) }
-        return visible.filter { pinnedCards.contains($0.rawValue) } + visible.filter { !pinnedCards.contains($0.rawValue) }
+        let ordered = visible.filter { pinnedCards.contains($0.rawValue) } + visible.filter { !pinnedCards.contains($0.rawValue) }
+        return welcomeFirst && visible.contains(.welcome) ? [.welcome] + ordered.filter { $0 != .welcome } : ordered
     }
 }
 

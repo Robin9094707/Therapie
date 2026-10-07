@@ -124,9 +124,9 @@ struct WellnessHubView: View {
 
     private var actions: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 135))], spacing: 10) {
-            Button { moodDraft = MoodCheckIn() } label: { actionLabel("Check-in", "face.smiling", .indigo) }
+            Button { moodDraft = MoodCheckIn() } label: { actionLabel("Check-in", "face.smiling", Color.accentColor) }
                 .accessibilityIdentifier("wellness.new-checkin")
-            Button { pointDraft = BatteryPoint() } label: { actionLabel("Akku-Punkt", "battery.100percent", .teal) }
+            Button { pointDraft = BatteryPoint() } label: { actionLabel("Akku-Punkt", "battery.100percent", Color.accentColor) }
                 .accessibilityIdentifier("wellness.new-point")
             Button { openReview(Date().therapyAddingWeeks(-1)) } label: { actionLabel("Wochenblick", "calendar.badge.checkmark", .orange) }
         }.buttonStyle(.plain)
@@ -280,7 +280,7 @@ struct WellnessProgressCard: View {
                 }
                 Text(streak.thisWeekRecorded ? "Diese Woche hast du dir Zeit für dich genommen." : "Diese Woche ist noch offen. Ein kleiner Eintrag reicht.")
                     .font(.subheadline).foregroundStyle(.secondary)
-                ProgressView(value: Double(min(days, store.data.wellnessSettings.weeklyGoal)), total: Double(max(1, store.data.wellnessSettings.weeklyGoal))).tint(.teal)
+                ProgressView(value: Double(min(days, store.data.wellnessSettings.weeklyGoal)), total: Double(max(1, store.data.wellnessSettings.weeklyGoal))).tint(Color.accentColor)
                 Text("\(days) von \(store.data.wellnessSettings.weeklyGoal) Check-in-Tagen · Längste Serie: \(streak.longest) Wochen").font(.caption).foregroundStyle(.secondary)
                 Text("Die Serie zählt jede Woche mit Check-in, Akku-Punkt oder Rückblick. Das Tagesziel ist davon unabhängig.").font(.caption2).foregroundStyle(.secondary)
             }

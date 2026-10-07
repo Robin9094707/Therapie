@@ -3,6 +3,7 @@ import Foundation
 enum TherapyWidgetSnapshotBuilder {
     static func make(data: AppData, now: Date = Date(), calendar: Calendar = .current) -> TherapyWidgetSnapshot {
         var result = TherapyWidgetSnapshot(generatedAt: now, configured: data.profile.onboardingCompleted)
+        result.accentName = data.accentTheme.rawValue
         result.showsPersonalTitles = data.dashboard.showWidgetTitles
         let privateTitles = !data.dashboard.showWidgetTitles
         var cursor = now
@@ -18,13 +19,14 @@ enum TherapyWidgetSnapshotBuilder {
         }
         for task in data.weeklyTasks where !task.completed {
             let slots = TaskReminderPlanner.slots(tasks: [task], schedule: data.schedule, now: now)
-            guard !slots.isEmpty else { continue }
+            let taskWeek = Calendar.therapyCalendar.date(from: DateComponents(weekOfYear: task.weekOfYear, yearForWeekOfYear: task.yearForWeekOfYear))
+            guard taskWeek.map({ $0 <= now }) ?? false else { continue }
             var candidates: [Date] = []
             for slot in slots {
                 var parts = DateComponents(); parts.hour = slot.hour; parts.minute = slot.minute; parts.second = 0; parts.weekday = slot.weekday
                 if let date = calendar.nextDate(after: now.addingTimeInterval(-1), matching: parts, matchingPolicy: .nextTime, repeatedTimePolicy: .first) { candidates.append(date) }
             }
-            guard let due = task.dueDate ?? candidates.min() else { continue }
+            let due = task.dueDate ?? candidates.min() ?? now
             result.reminders.append(TherapyWidgetReminder(id: task.id.uuidString, kind: "task", title: privateTitles ? "Offene Aufgabe" : task.title, due: due, expiresAt: now.addingTimeInterval(8 * 86400), route: "therapie://task/" + task.id.uuidString))
         }
         if let session = data.currentSession, session.endedAt == nil {

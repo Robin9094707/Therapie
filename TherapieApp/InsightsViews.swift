@@ -13,7 +13,7 @@ struct MoodBarometerControl: View {
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     Capsule().fill(LinearGradient(colors: [.red.opacity(0.75), .orange.opacity(0.7), .yellow.opacity(0.65), .green], startPoint: .leading, endPoint: .trailing))
-                    Circle().fill(.white).overlay { Circle().strokeBorder(.indigo, lineWidth: 3) }.frame(width: 28, height: 28).offset(x: max(0, geometry.size.width - 28) * CGFloat(max(0, min(100, percent))) / 100)
+                    Circle().fill(.white).overlay { Circle().strokeBorder(Color.accentColor, lineWidth: 3) }.frame(width: 28, height: 28).offset(x: max(0, geometry.size.width - 28) * CGFloat(max(0, min(100, percent))) / 100)
                 }.contentShape(Rectangle()).gesture(DragGesture(minimumDistance: 0).onChanged { value in percent = max(0, min(100, Int(value.location.x / max(1, geometry.size.width) * 100))) })
             }.frame(height: 28).accessibilityHidden(true)
             Slider(value: Binding(get: { Double(percent) }, set: { percent = Int($0) }), in: 0...100, step: 1).accessibilityLabel("Stimmungsbarometer").accessibilityValue("\(percent) von 100, \(MoodBarometer.title(percent))")
@@ -191,7 +191,7 @@ struct PersonalWelcomeCard: View {
         SwiftUI.TimelineView(.periodic(from: .now, by: 60)) { context in
             VStack(alignment: .leading, spacing: 8) {
                 Text(PersonalGreeting.title(at: context.date, name: store.data.profile.userName)).font(.system(.title, design: .rounded, weight: .bold))
-                Text(PersonalGreeting.sentence(at: context.date)).font(.subheadline).foregroundStyle(.secondary)
+                Text(store.data.dashboard.welcomeMessage.isEmpty ? PersonalGreeting.sentence(at: context.date) : store.data.dashboard.welcomeMessage).font(.subheadline).foregroundStyle(.secondary)
             }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
                 .opacity(appeared ? 1 : 0).offset(y: appeared || reduceMotion ? 0 : 8)
         }

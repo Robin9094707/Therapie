@@ -63,7 +63,7 @@ struct RootView: View {
             default: break
             }
         }
-        .onChange(of: scenePhase) { _, phase in if phase == .active { store.resumeProtectedStorage(); if store.storageReady { store.sessionController.synchronize(); store.consumeRoutineAlarmRoute(); store.refreshTherapyCalendar(force: false); TaskNotificationCoordinator.shared.refresh(store); TherapyWidgetBridge.refresh(store); presentRequested() } } }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { store.resumeProtectedStorage(); if store.storageReady { store.sessionController.synchronize(); store.consumeRoutineAlarmRoute(); store.refreshTherapyCalendar(force: false); TaskNotificationCoordinator.shared.refresh(store); TherapyWidgetBridge.refresh(store, force: true); presentRequested() } } }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in store.resumeProtectedStorage(); presentRequested() }
         .onChange(of: store.waitingForProtectedData) { _, waiting in if !waiting { presentRequested() } }
         .onChange(of: presentationRequestKey) { _, _ in presentRequested() }
@@ -79,6 +79,7 @@ struct RootView: View {
                     lastReminderRefresh = Date()
                     store.pruneUndo()
                     TaskNotificationCoordinator.shared.refresh(store)
+                    TherapyWidgetBridge.refresh(store)
                     if modal == nil { await store.aiController.refreshWeeklyReview(); await store.aiController.refreshSuggestion() }
                 }
                 do { try await Task.sleep(for: .seconds(1)) } catch { break }
@@ -187,7 +188,7 @@ struct AppBackground: View {
         ZStack {
             Color(uiColor: .systemGroupedBackground)
             if !calmInterface && !reduceTransparency {
-                LinearGradient(colors: [.indigo.opacity(0.12), .cyan.opacity(0.05), .clear],
+                LinearGradient(colors: [Color.accentColor.opacity(0.12), Color.accentColor.opacity(0.05), .clear],
                                startPoint: .topLeading, endPoint: .bottomTrailing)
             }
         }
@@ -484,9 +485,10 @@ struct DashboardView: View {
         NavigationStack {
             TherapyScreen {
                 LazyVStack(spacing: store.data.dashboard.compactCards ? 10 : 18) {
-                    FeatureHubLinks()
-                    if store.data.aiSettings.enabled && store.data.suggestionsEnabled != false { BuddySuggestionsCard(controller: store.aiController) }
-                    ForEach(store.data.dashboard.visibleCards) { card in
+                    if store.data.dashboard.welcomeFirst && store.data.dashboard.visibleCards.contains(.welcome) { PersonalWelcomeCard() }
+                    if store.data.dashboard.showFeatureLinks { FeatureHubLinks() }
+                    if store.data.dashboard.showAIImpulse && store.data.aiSettings.enabled && store.data.suggestionsEnabled != false { BuddySuggestionsCard(controller: store.aiController) }
+                    ForEach(store.data.dashboard.visibleCards.filter { !(store.data.dashboard.welcomeFirst && $0 == .welcome) }) { card in
                         dashboardCard(card)
                             .contextMenu {
                                 Button(store.data.dashboard.pinnedCards.contains(card.rawValue) ? "Karte lösen" : "Karte oben anpinnen", systemImage: "pin") {
@@ -509,6 +511,7 @@ struct DashboardView: View {
             .navigationBarTitleDisplayMode(.large)
             .sheet(isPresented: $customize) { DashboardCustomizationView(preferences: store.data.dashboard) }
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) { NavigationLink { EmergencyPlanView() } label: { Label("Notfallplan", systemImage: "lifepreserver.fill") } }
                 ToolbarItem(placement: .topBarLeading) { Button("Heute gestalten", systemImage: "slider.horizontal.3") { customize = true }.accessibilityIdentifier("today.customize") }
                 ToolbarItem(placement: .topBarTrailing) {
                     if store.data.aiSettings.enabled { NavigationLink { AIBuddyView() } label: { Label("KI-Begleiter", systemImage: "sparkles") }.accessibilityIdentifier("today.ai") }
@@ -542,6 +545,7 @@ struct DashboardView: View {
 
     @ViewBuilder private func dashboardCard(_ card: HomeCard) -> some View {
         switch card {
+        case .methods: MethodsHomeCard()
         case .appointment: TherapyAppointmentCard()
         case .discussion: TherapyDiscussionCard()
         case .checkIns: CompanionTodayCard()

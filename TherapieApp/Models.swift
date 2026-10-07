@@ -153,7 +153,7 @@ struct TherapySessionReflection: Identifiable, Codable, Equatable {
 }
 
 struct AppData: Codable, Equatable {
-    var schemaVersion = 14
+    var schemaVersion = 15
     var profile = UserProfile()
     var schedule = TherapySchedule()
     var preferences = AppPreferences()
@@ -185,6 +185,10 @@ struct AppData: Codable, Equatable {
     var dashboard = DashboardPreferences()
     var archivePreferences = ArchivePreferences()
     var therapyDiscussionAcknowledgedIDs: [String] = []
+    var copingMethods: [CopingMethod] = []
+    var emergencyPlan = PersonalEmergencyPlan()
+    var groundingPractices: [GroundingPractice] = []
+    var showerEntries: [ShowerEntry] = []
     var wellbeingPreferences = WellbeingPreferences()
     var accentTheme = AppAccent.indigo
     var aiSettings = AIBuddySettings()
@@ -201,6 +205,7 @@ struct AppData: Codable, Equatable {
     init() {}
 
     enum CodingKeys: String, CodingKey {
+        case copingMethods, emergencyPlan, groundingPractices, showerEntries
         case entryLocations, captureEntryLocation, buddySuggestions, suggestionsEnabled, lastSuggestionAttempt
         case wellbeingPreferences, accentTheme, editorDrafts, dashboard, archivePreferences, therapyDiscussionAcknowledgedIDs, aiSettings, aiMessages, aiConversations, hashtagCatalog
         case schemaVersion, profile, schedule, preferences, weeklyTasks, notes, energyEntries, media, reflections
@@ -213,10 +218,14 @@ struct AppData: Codable, Equatable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let version = try c.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
-        guard (1...14).contains(version) else {
+        guard (1...15).contains(version) else {
             throw DecodingError.dataCorruptedError(forKey: .schemaVersion, in: c,
                                                    debugDescription: "Diese Daten benötigen eine neuere App-Version.")
         }
+        copingMethods = try c.decodeIfPresent([CopingMethod].self, forKey: .copingMethods) ?? []
+        emergencyPlan = try c.decodeIfPresent(PersonalEmergencyPlan.self, forKey: .emergencyPlan) ?? PersonalEmergencyPlan()
+        groundingPractices = try c.decodeIfPresent([GroundingPractice].self, forKey: .groundingPractices) ?? []
+        showerEntries = try c.decodeIfPresent([ShowerEntry].self, forKey: .showerEntries) ?? []
         entryLocations = try c.decodeIfPresent([EntryLocation].self, forKey: .entryLocations) ?? []
         captureEntryLocation = try c.decodeIfPresent(Bool.self, forKey: .captureEntryLocation)
         buddySuggestions = try c.decodeIfPresent([BuddySuggestion].self, forKey: .buddySuggestions) ?? []
@@ -238,7 +247,7 @@ struct AppData: Codable, Equatable {
         accentTheme = try c.decodeIfPresent(AppAccent.self, forKey: .accentTheme) ?? .indigo
         aiSettings = try c.decodeIfPresent(AIBuddySettings.self, forKey: .aiSettings) ?? AIBuddySettings()
         aiMessages = try c.decodeIfPresent([AIBuddyMessage].self, forKey: .aiMessages) ?? []
-        schemaVersion = 14
+        schemaVersion = 15
         profile = try c.decode(UserProfile.self, forKey: .profile)
         schedule = try c.decodeIfPresent(TherapySchedule.self, forKey: .schedule) ?? TherapySchedule()
         preferences = try c.decodeIfPresent(AppPreferences.self, forKey: .preferences) ?? AppPreferences()

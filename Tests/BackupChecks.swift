@@ -33,6 +33,14 @@ struct BackupChecks {
         let root = base.appendingPathComponent("Therapie")
         for directory in ["Media", "Recordings"] { try fm.createDirectory(at: root.appendingPathComponent(directory), withIntermediateDirectories: true) }
         var data = AppData()
+        let supportClock = Date(timeIntervalSince1970: 1_790_000_000)
+        data.copingMethods = [.asmrExample, .thoughtStopExample]
+        for index in data.copingMethods.indices { data.copingMethods[index].createdAt = supportClock; data.copingMethods[index].updatedAt = supportClock }
+        data.emergencyPlan = PersonalEmergencyPlan(firstStep: "Reize reduzieren", steps: ["Eine Pause machen"], support: "Meine eigene Kontaktperson", methodIDs: [data.copingMethods[0].id], updatedAt: supportClock)
+        data.groundingPractices = [GroundingPractice(date: supportClock, answers: [["Fenster"], ["Boden"], [], [], []], note: "In meinem Tempo")]
+        data.showerEntries = [ShowerEntry(date: supportClock, note: "Flexibel")]
+        data.dashboard.welcomeMessage = "Ein kleiner Schritt reicht."
+        data.dashboard.showFeatureLinks = false
         data.dashboard.cardOrder = ["routines", "appointment", "checkIns"]
         data.dashboard.hiddenCards = ["welcome"]
         data.dashboard.pinnedCards = ["routines"]
@@ -105,6 +113,7 @@ struct BackupChecks {
             try bytes.write(to: root.appendingPathComponent(path))
             data.media.append(MediaItem(kind: kind, title: kind.displayName, note: "Metadaten bleiben erhalten", tags: ["Therapie"], relativePath: path, folderID: folder.id, topicID: topic.id))
         }
+        data.emergencyPlan.imageID = data.media.first?.id
         data.notes[0].mediaIDs = data.media.map(\.id)
         data.notes[0].updatedAt = Date()
         data.moodCheckIns = [MoodCheckIn(mood: 4, battery: 3, moodPercent: 76)]
@@ -140,6 +149,8 @@ struct BackupChecks {
         try expect(original.range(of: Data(data.notes[0].title.utf8)) == nil, "Notes encrypted")
         try expect(original.range(of: Data("Media/photo.jpg".utf8)) == nil, "Filenames encrypted")
         let prepared = try BackupArchive.prepareImport(url: archive, password: password)
+        try expect(prepared.manifest.data.copingMethods == data.copingMethods && prepared.manifest.data.emergencyPlan == data.emergencyPlan, "Methods, thought stops and emergency image references round-trip")
+        try expect(prepared.manifest.data.groundingPractices == data.groundingPractices && prepared.manifest.data.showerEntries == data.showerEntries, "Grounding answers and flexible shower dates round-trip")
         defer { prepared.discard() }
         try expect(try json(prepared.manifest.data) == json(data.portableSnapshot), "All AppData fields round-trip")
         try expect(prepared.manifest.data.dashboard == data.dashboard && prepared.manifest.data.archivePreferences == data.archivePreferences, "Encrypted restore retains cards, pins and archive settings")
@@ -231,13 +242,15 @@ struct BackupChecks {
         prefs.apply(defaults)
         try expect(PortablePreferences.capture(defaults) == prefs, "Appearance, calm, haptics and confetti restored")
         var oldJSON = try JSONSerialization.jsonObject(with: BackupArchive.encoder().encode(data)) as! [String: Any]
-        for version in 1...12 {
+        for version in 1...14 {
             oldJSON["schemaVersion"] = version
             let migrated = try BackupArchive.decoder().decode(AppData.self, from: JSONSerialization.data(withJSONObject: oldJSON))
-            try expect(migrated.schemaVersion == 14 && migrated.notes.count == 1 && migrated.media[0].attachmentOmitted == nil, "Schema \(version) migrates for backups")
+            try expect(migrated.schemaVersion == 15 && migrated.notes.count == 1 && migrated.media[0].attachmentOmitted == nil, "Schema \(version) migrates for backups")
         }
         oldJSON["schemaVersion"] = 12; oldJSON.removeValue(forKey: "accentTheme"); oldJSON.removeValue(forKey: "wellbeingPreferences")
+        for key in ["copingMethods", "emergencyPlan", "groundingPractices", "showerEntries"] { oldJSON.removeValue(forKey: key) }
         let pre3011 = try BackupArchive.decoder().decode(AppData.self, from: JSONSerialization.data(withJSONObject: oldJSON))
+        try expect(pre3011.copingMethods.isEmpty && !pre3011.emergencyPlan.hasContent && pre3011.groundingPractices.isEmpty && pre3011.showerEntries.isEmpty, "Older backups receive empty support defaults")
         try expect(pre3011.accentTheme == .indigo && !pre3011.wellbeingPreferences.estimateBattery, "Actual schema12 defaults to existing design and no fabricated live battery")
         oldJSON["schemaVersion"] = 8; oldJSON.removeValue(forKey: "dashboard"); oldJSON.removeValue(forKey: "archivePreferences")
         let oldWithoutSettings = try BackupArchive.decoder().decode(AppData.self, from: JSONSerialization.data(withJSONObject: oldJSON))

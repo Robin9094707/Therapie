@@ -46,6 +46,11 @@ struct TherapyWidgetOptions: WidgetConfigurationIntent {
                 dates.append(next); cursor = next.addingTimeInterval(1)
             }
         } else if let date { dates = [date] }
+        else {
+            let calendar = Calendar.current
+            let parts = DateComponents(hour: max(0, min(23, hour)), minute: max(0, min(59, minute)), second: 0)
+            if let next = calendar.nextDate(after: now, matching: parts, matchingPolicy: .nextTime, repeatedTimePolicy: .first) { dates = [next] }
+        }
         let reminders = dates.flatMap { date in
             [TherapyWidgetReminder(id: "manual-routine-\(Int(date.timeIntervalSince1970))", kind: "routine", title: String(label.prefix(100)), due: date, expiresAt: date.addingTimeInterval(86400), route: "therapie://routines"), TherapyWidgetReminder(id: "manual-task-\(Int(date.timeIntervalSince1970))", kind: "task", title: String(label.prefix(100)), due: date, expiresAt: date.addingTimeInterval(86400), route: "therapie://reminders")]
         }

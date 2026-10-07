@@ -26,7 +26,7 @@ struct ModelChecks {
         fixture["schemaVersion"] = 1
         for key in ["moodCheckIns", "batteryPoints", "weekReviews", "wellnessSettings", "therapyFolders", "therapyTopics", "therapyGoals", "sessionTemplates", "currentSession", "sessionHistory", "sessionPreferences", "weeklyEnergyReviews", "reminderPreferences"] { fixture.removeValue(forKey: key) }
         let migrated = try decoder.decode(AppData.self, from: JSONSerialization.data(withJSONObject: fixture))
-        try expect(migrated.schemaVersion == 14, "Schema migration")
+        try expect(migrated.schemaVersion == 15, "Schema migration")
         try expect(migrated.entryLocations.isEmpty && migrated.buddySuggestions.isEmpty && migrated.captureEntryLocation == nil && migrated.suggestionsEnabled == nil, "Legacy defaults never invent locations or suggestions")
         try expect(migrated.profile == old.profile && migrated.notes == old.notes, "Names and notes preserved")
         try expect(migrated.weeklyTasks == old.weeklyTasks && migrated.media == old.media, "Tasks and media paths preserved")
@@ -142,6 +142,27 @@ struct ModelChecks {
         try expect(hierarchy.therapyGoals[0].topicID == nil && hierarchy.notes[0].topicID == nil && hierarchy.weeklyTasks[0].topicID == nil, "Deleting topic detaches preserved linked records")
         let finalData = try decoder.decode(AppData.self, from: encoder.encode(hierarchy))
         try expect(finalData.notes[0].author == NoteAuthor.therapist.rawValue && finalData.notes[0].isImportant == true, "Important clinician contributions persist")
+        var supportData = old
+        supportData.copingMethods = [.asmrExample, .thoughtStopExample]
+        try expect(supportData.copingMethods[0].matches(category: .sensory, stage: .calm, query: "laut", data: supportData), "Personal method mapping matches situation, category and stage")
+        try expect(!supportData.copingMethods[0].matches(category: .work, stage: .prevent, query: "", data: supportData), "Methods do not invent unrelated assignments")
+        var previous = try JSONSerialization.jsonObject(with: encoder.encode(supportData)) as! [String: Any]
+        previous["schemaVersion"] = 14
+        for key in ["copingMethods", "emergencyPlan", "groundingPractices", "showerEntries"] { previous.removeValue(forKey: key) }
+        let migratedSupport = try decoder.decode(AppData.self, from: JSONSerialization.data(withJSONObject: previous))
+        try expect(migratedSupport.notes == old.notes && migratedSupport.copingMethods.isEmpty && !migratedSupport.emergencyPlan.hasContent, "Previous release preserves records and starts with empty support areas")
+        var dashboard = DashboardPreferences(); dashboard.pinnedCards = ["appointment"]
+        try expect(dashboard.visibleCards.first == .welcome, "Greeting is above all other cards by default")
+        dashboard.welcomeFirst = false
+        try expect(dashboard.visibleCards.first == .appointment, "User can move the greeting behind pinned cards")
+        let weekNow = now.therapyWeek
+        supportData.weeklyTasks = [WeeklyTask(weekOfYear: weekNow.week, yearForWeekOfYear: weekNow.year, title: "Visible without notifications", details: "", reminder: TaskReminder(enabled: false))]
+        supportData.profile.onboardingCompleted = true
+        let widget = TherapyWidgetSnapshotBuilder.make(data: supportData, now: now)
+        try expect(widget.reminders.contains { $0.kind == "task" }, "Widget shows open tasks even when notifications are disabled")
+        try expect(widget.accentName == supportData.accentTheme.rawValue, "Widget receives the selected app accent")
+        let widgetText = String(decoding: try encoder.encode(widget), as: UTF8.self)
+        try expect(!widgetText.contains("Meine Notiz"), "Widget snapshot never exports diary content")
         print("Passed \(checks) migration, streak, chart aggregation and export checks.")
     }
 }

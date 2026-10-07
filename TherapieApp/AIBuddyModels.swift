@@ -254,6 +254,9 @@ struct AIBuddyContext {
             text += "\nEINSTELLUNGEN:\n" + (AIBuddySettingsChange.booleanKeys + ["ai.contextDays", "appearance.accent"]).map { $0 + " | " + AIBuddySettingsChange.value($0, data: data) }.joined(separator: "\n")
         }
         text = BuddyInteraction.completeLines(text, limit: question.isEmpty ? 7000 : 5000)
+        if data.aiSettings.includeJournal && ["methode", "asmr", "gedankenstopp", "beruhig", "überforder", "notfall"].contains(where: intent.contains) {
+            text += "\nMEINE METHODEN (persönliche Zuordnungen, keine Wirksamkeitsgarantie):\n" + data.copingMethods.prefix(10).map { $0.title + " | " + $0.situation + " | " + $0.stages.map(\.title).joined(separator: ", ") + " | " + String($0.details.prefix(300)) }.joined(separator: "\n")
+        }
         text += "\nNative Bereiche: " + BuddyDestinations.catalogue + "\nEINTRÄGE:\n"
         var sent = 0
         for line in lines {
@@ -672,7 +675,7 @@ struct MoodEntryDraft: Codable, Equatable { var entry: MoodCheckIn; var points: 
 
 // Small, explicit capability catalogue: settings without a safe mutation open their native editor.
 enum BuddyDestinations {
-    static let names: [String: String] = ["today": "Heute", "insights": "Stimmung und Auswertung", "therapy": "Therapiethemen und Ziele", "archive": "Archiv", "session": "Therapierunde und Timer", "routines": "Routinen", "appointments": "Therapieintervalle und Termine", "reminders": "Erinnerungen", "settings": "Alle App-Einstellungen, Profil und Datenschutz", "appearance": "Design, Hell/Dunkel, Haptik und Konfetti", "dashboard": "Startseite und Widgets", "wellness": "Stimmungsziele und Freigaben", "backup": "Export und Import", "ai": "KI-Schlüssel, Modelle und Upload-Freigaben", "checkins": "Check-in-Rhythmus und Zeitfenster", "sessionSettings": "Timer, Phasen und Begleitung", "profile": "Aktueller Akku und Befinden"]
+    static let names: [String: String] = ["methods": "Methoden, Akkuthemen und Gedankenstopps", "emergency": "Persönlicher Notfallplan", "grounding": "Angeleitete 5-4-3-2-1-Uebung", "showers": "Feste und flexible Duschtage", "today": "Heute", "insights": "Stimmung und Auswertung", "therapy": "Therapiethemen und Ziele", "archive": "Archiv", "session": "Therapierunde und Timer", "routines": "Routinen", "appointments": "Therapieintervalle und Termine", "reminders": "Erinnerungen", "settings": "Alle App-Einstellungen, Profil und Datenschutz", "appearance": "Design, Hell/Dunkel, Haptik und Konfetti", "dashboard": "Startseite und Widgets", "wellness": "Stimmungsziele und Freigaben", "backup": "Export und Import", "ai": "KI-Schlüssel, Modelle und Upload-Freigaben", "checkins": "Check-in-Rhythmus und Zeitfenster", "sessionSettings": "Timer, Phasen und Begleitung", "profile": "Aktueller Akku und Befinden"]
     static var ids: [String] { names.keys.sorted() }
     static var catalogue: String { ids.map { $0 + ": " + (names[$0] ?? $0) }.joined(separator: "; ") }
 }

@@ -15,6 +15,14 @@ struct StorageReminderChecks {
         let legacy = support.appendingPathComponent("Therapie")
         for folder in ["Media", "Recordings"] { try fm.createDirectory(at: legacy.appendingPathComponent(folder), withIntermediateDirectories: true) }
         var data = AppData()
+        let supportClock = Date(timeIntervalSince1970: 1_790_000_000)
+        data.copingMethods = [.asmrExample, .thoughtStopExample]
+        for index in data.copingMethods.indices { data.copingMethods[index].createdAt = supportClock; data.copingMethods[index].updatedAt = supportClock }
+        data.emergencyPlan = PersonalEmergencyPlan(firstStep: "Reize reduzieren", steps: ["Eine Pause machen"], support: "Meine eigene Kontaktperson", methodIDs: [data.copingMethods[0].id], updatedAt: supportClock)
+        data.groundingPractices = [GroundingPractice(date: supportClock, answers: [["Fenster"], ["Boden"], [], [], []], note: "In meinem Tempo")]
+        data.showerEntries = [ShowerEntry(date: supportClock, note: "Flexibel")]
+        data.dashboard.welcomeMessage = "Ein kleiner Schritt reicht."
+        data.dashboard.showFeatureLinks = false
         data.dashboard.cardOrder = ["routines", "appointment", "checkIns"]
         data.dashboard.hiddenCards = ["welcome"]
         data.dashboard.pinnedCards = ["routines"]
@@ -63,6 +71,7 @@ struct StorageReminderChecks {
         try photo.write(to: legacy.appendingPathComponent("Media/p.jpg"))
         try Data().write(to: legacy.appendingPathComponent("Recordings/empty.m4a"))
         data.media = [MediaItem(kind: .photo, title: "Bild", note: "Wichtige Beschreibung", tags: ["Privat"], relativePath: "Media/p.jpg"), MediaItem(kind: .audio, title: "Leer", note: "", tags: [], relativePath: "Recordings/empty.m4a")]
+        data.emergencyPlan.imageID = data.media.first?.id
         data.notes[0].mediaIDs = data.media.map(\.id)
         data.notes[0].updatedAt = Date()
         data.moodCheckIns = [MoodCheckIn(mood: 4, battery: 3, moodPercent: 76)]
@@ -121,6 +130,8 @@ struct StorageReminderChecks {
         let zip = try ReadableBackup.export(data: data, root: root, preferences: preferences, options: BackupOptions(), version: "3003.0.0")
         defer { try? fm.removeItem(at: zip.deletingLastPathComponent()) }
         let prepared = try ReadableBackup.prepareImport(url: zip); defer { prepared.discard() }
+        try expect(prepared.manifest.data.copingMethods == data.copingMethods && prepared.manifest.data.emergencyPlan == data.emergencyPlan, "Methods, thought stops and emergency image references round-trip")
+        try expect(prepared.manifest.data.groundingPractices == data.groundingPractices && prepared.manifest.data.showerEntries == data.showerEntries, "Grounding answers and flexible shower dates round-trip")
         try expect(try BackupArchive.encoder().encode(prepared.manifest.data) == BackupArchive.encoder().encode(data.portableSnapshot), "Plain ZIP preserves all AppData fields")
         try expect(prepared.manifest.preferences == preferences, "Plain ZIP preserves portable settings")
         try expect(try Data(contentsOf: prepared.directory.appendingPathComponent("Media/p.jpg")) == photo, "ZIP streams multiple attachment blocks")

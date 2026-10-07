@@ -8,13 +8,24 @@ struct DashboardCustomizationView: View {
     private let initial: DashboardPreferences
     private let draftID = UUID(uuidString: "40000000-0000-0000-0000-000000000001")!
     @State private var reset = false
+    @State private var accent: AppAccent = .indigo
+    @State private var initialAccent: AppAccent?
     init(preferences: DashboardPreferences) { initial = preferences; _draft = State(initialValue: preferences) }
     var body: some View {
         NavigationStack {
             List {
                 Section {
                     Text("Ziehe die Karten in deine Reihenfolge. Blende Karten aus oder pinne sie ganz oben an. Deine Auswahl wird mit allen Backups gesichert.").font(.subheadline).foregroundStyle(.secondary)
+                    Toggle("Begrüßung immer ganz oben", isOn: $draft.welcomeFirst)
+                    TextField("Eigener Begrüßungssatz · optional", text: $draft.welcomeMessage, axis: .vertical).lineLimit(2...4)
+                    Toggle("Timeline & Karte anzeigen", isOn: $draft.showFeatureLinks)
+                    Toggle("KI-Impuls anzeigen", isOn: $draft.showAIImpulse)
+                    Picker("Einheitliche Hauptfarbe", selection: $accent) { ForEach(AppAccent.allCases) { Text($0.title).tag($0) } }
                     Toggle("Kompakte Kartenabstände", isOn: $draft.compactCards)
+                }
+                Section("Schnelle Layouts") {
+                    Button("Ruhig & übersichtlich") { draft.hiddenCards = HomeCard.allCases.filter { ![HomeCard.welcome, .methods, .appointment, .checkIns, .routines].contains($0) }.map(\.rawValue); draft.showAIImpulse = false; draft.showFeatureLinks = false; draft.welcomeFirst = true }
+                    Button("Alles im Blick") { draft.hiddenCards = []; draft.showFeatureLinks = true; draft.showAIImpulse = true; draft.welcomeFirst = true }
                 }
                 Section("Deine Heute-Karten") {
                     ForEach(draft.orderedCards) { card in
@@ -43,9 +54,9 @@ struct DashboardCustomizationView: View {
             .navigationTitle("Heute gestalten").navigationBarTitleDisplayMode(.inline)
             .environment(\.editMode, .constant(.active))
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { if draft != initial { confirmExit = true } else { dismiss() } } }
+                ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { if changed { confirmExit = true } else { dismiss() } } }
                 ToolbarItem(placement: .confirmationAction) { Button("Speichern") {
-                    store.data.dashboard = draft
+                    var snapshot = store.data; snapshot.dashboard = draft; snapshot.accentTheme = accent; store.data = snapshot
                     if store.lastSaveError == nil { store.removeEditorDraft(draftID); if store.lastSaveError == nil { dismiss() } }
                 }.bold() }
             }
@@ -53,13 +64,14 @@ struct DashboardCustomizationView: View {
                 Button("Abbrechen", role: .cancel) {}
                 Button("Zurücksetzen") { let records = draft.pinnedRecordIDs; draft = DashboardPreferences(); draft.pinnedRecordIDs = records }
             } message: { Text("Angepinnte Archiveinträge bleiben erhalten.") }
-        }.interactiveDismissDisabled(draft != initial)
+        }.onAppear { if initialAccent == nil { initialAccent = store.data.accentTheme; accent = store.data.accentTheme } }.interactiveDismissDisabled(changed)
             .alert("Einstellungen behalten?", isPresented: $confirmExit) {
                 Button("Weiter bearbeiten", role: .cancel) {}
                 Button("Als Entwurf speichern") { store.saveEditorDraft(draft, id: draftID, kind: "dashboard", title: "Meine Heute-Seite"); if store.lastSaveError == nil { dismiss() } }
                 Button("Verwerfen", role: .destructive) { store.removeEditorDraft(draftID); if store.lastSaveError == nil { dismiss() } }
             }
     }
+    private var changed: Bool { draft != initial || (initialAccent != nil && accent != initialAccent) }
     private func toggle(_ value: String, in values: inout [String]) {
         if values.contains(value) { values.removeAll { $0 == value } } else { values.append(value) }
     }
@@ -212,6 +224,7 @@ struct WidgetSetupHelpView: View {
                 }
                 Section("Am iPhone einstellen") {
                     Text("Halte das Widget gedrückt und wähle Widget bearbeiten. Aktuelle App-Daten zeigen Termine, fällige Routinen, offene Erinnerungen und den laufenden Timer. Du kannst Routinen/Erinnerungen nach einem Titel filtern.")
+                    Text("Manuelle Widgets zeigen auch ohne ausgewähltes Datum den nächsten eingestellten Uhrzeitpunkt. Ein Titelfilter wird bei neutralen Titeln nicht angewendet, damit Inhalte sichtbar bleiben.")
                     Text("Falls die Installation keinen gemeinsamen App-Gruppen-Zugriff erlaubt: Manuell eingestellter Termin / Hinweis wählen, Datum oder wöchentlichen Wochentag und Uhrzeit festlegen. Das Widget kennzeichnet diese Angaben als manuell und verändert deine App-Daten nicht.")
                 }
                 Section("Gemeinsame Daten") {

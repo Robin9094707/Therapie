@@ -24,10 +24,12 @@ struct TherapyHomeProvider: AppIntentTimelineProvider {
     private func read(_ configuration: TherapyWidgetOptions) -> TherapyWidgetSnapshot {
         if let manual = configuration.snapshot(at: Date()) { return manual }
         guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: TherapyWidgetSnapshot.appGroup) else { return TherapyWidgetSnapshot(cacheProblem: "Gemeinsamer App-Zugriff fehlt. App mit Widget-Berechtigung signieren oder Widget manuell einstellen.") }
-        guard let raw = try? Data(contentsOf: container.appendingPathComponent(TherapyWidgetSnapshot.fileName)) else { return TherapyWidgetSnapshot(cacheProblem: "App einmal öffnen, damit deine Übersicht bereitsteht.") }
+        let fileData = try? Data(contentsOf: container.appendingPathComponent(TherapyWidgetSnapshot.fileName))
+        let sharedData = UserDefaults(suiteName: TherapyWidgetSnapshot.appGroup)?.data(forKey: TherapyWidgetSnapshot.fileName)
+        guard fileData != nil || sharedData != nil else { return TherapyWidgetSnapshot(cacheProblem: "App einmal öffnen, damit deine Übersicht bereitsteht.") }
         let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
-        var snapshot = (try? decoder.decode(TherapyWidgetSnapshot.self, from: raw)) ?? TherapyWidgetSnapshot(cacheProblem: "Widget-Daten nicht lesbar. App öffnen und Übersicht aktualisieren.")
-        if let filter = configuration.filter?.trimmingCharacters(in: .whitespacesAndNewlines), !filter.isEmpty { snapshot.reminders = snapshot.reminders.filter { $0.title.localizedCaseInsensitiveContains(filter) } }
+        var snapshot = [fileData, sharedData].compactMap { $0 }.compactMap { try? decoder.decode(TherapyWidgetSnapshot.self, from: $0) }.max { $0.generatedAt < $1.generatedAt } ?? TherapyWidgetSnapshot(cacheProblem: "Widget-Daten nicht lesbar. App öffnen und Übersicht aktualisieren.")
+        if let filter = configuration.filter?.trimmingCharacters(in: .whitespacesAndNewlines), !filter.isEmpty { if snapshot.showsPersonalTitles == true { snapshot.reminders = snapshot.reminders.filter { $0.title.localizedCaseInsensitiveContains(filter) } } else { snapshot.cacheProblem = "Titelfilter benötigt die Titel-Freigabe in der App." } }
         return snapshot
     }
     private func preview() -> TherapyWidgetSnapshot {
@@ -68,7 +70,7 @@ enum TherapyHomeWidgetConfiguration {
         AppIntentConfiguration(kind: "TherapyHome." + category.rawValue, intent: TherapyWidgetOptions.self, provider: TherapyHomeProvider()) { entry in
             TherapyHomeWidgetView(entry: entry, category: category)
                 .containerBackground(for: .widget) {
-                    LinearGradient(colors: [.indigo.opacity(0.14), Color(uiColor: .systemBackground)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    LinearGradient(colors: [entry.snapshot.accentColor.opacity(0.14), Color(uiColor: .systemBackground)], startPoint: .topLeading, endPoint: .bottomTrailing)
                 }
         }
         .configurationDisplayName(category.title)
@@ -92,7 +94,7 @@ struct TherapyHomeWidgetView: View {
     private var compact: Bool { family == .accessoryRectangular }
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 4 : 10) {
-            Label(category.title, systemImage: category.symbol).font(compact ? .caption.bold() : .subheadline.bold()).foregroundStyle(.indigo).lineLimit(1)
+            Label(category.title, systemImage: category.symbol).font(compact ? .caption.bold() : .subheadline.bold()).foregroundStyle(entry.snapshot.accentColor).lineLimit(1)
             if !entry.snapshot.configured {
                 Text("Widget einrichten").font(.headline)
                 if !compact { Text(entry.snapshot.cacheProblem ?? "Gedrückt halten → Widget bearbeiten. Ein manueller Termin ist ebenfalls möglich.").font(.caption).foregroundStyle(.secondary) }
@@ -104,9 +106,10 @@ struct TherapyHomeWidgetView: View {
                     if !compact { Text("\(entry.snapshot.dueRoutines(at: entry.date).count) Routinen fällig").font(.caption.bold()) }
                 case .routines: reminders(kind: "routine")
                 case .reminders: reminders(kind: "task")
-                case .session: session
+                case .session: if entry.manual { appointment } else { session }
                 }
             }
+            if let problem = entry.snapshot.cacheProblem, entry.snapshot.configured, !compact { Text(problem).font(.caption2).foregroundStyle(.secondary).lineLimit(2) }
             if !compact { Spacer(minLength: 0); Text(entry.manual ? "Manuell eingestellt · keine Live-Daten" : "Therapie · Für dich").font(.caption2).foregroundStyle(.secondary) }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -149,5 +152,11 @@ struct TherapyHomeWidgetView: View {
                 if let phase = session.phase(at: entry.date) { Text(phase.title).privacySensitive(entry.snapshot.showsPersonalTitles != false).font(.caption).lineLimit(2) }
             }
         } else { Text("Keine Stunde aktiv").font(.headline); if !compact { Text("Therapiezeit in der App starten.").font(.caption).foregroundStyle(.secondary) } }
+    }
+}
+
+extension TherapyWidgetSnapshot {
+    var accentColor: Color {
+        switch accentName { case "blue": .blue; case "purple": .purple; case "red": .red; case "teal": .teal; case "green": .green; case "rose": .pink; case "amber": .orange; default: .indigo }
     }
 }

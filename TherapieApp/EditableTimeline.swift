@@ -47,8 +47,8 @@ struct TherapyEditableTimeline: View {
                     ForEach(group.values) { record in
                         HStack(alignment: .top, spacing: 10) {
                             VStack(spacing: 4) {
-                                Circle().fill(.indigo).frame(width: 8, height: 8)
-                                Rectangle().fill(.indigo.opacity(0.15)).frame(width: 2, height: 80)
+                                Circle().fill(Color.accentColor).frame(width: 8, height: 8)
+                                Rectangle().fill(Color.accentColor.opacity(0.15)).frame(width: 2, height: 80)
                             }.padding(.top, 20).accessibilityHidden(true)
                             ArchiveTimelineCard(record: record, open: { editing = record }, delete: {
                                 deleting = record; confirmDelete = true
