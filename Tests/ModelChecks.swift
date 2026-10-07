@@ -240,7 +240,8 @@ struct ModelChecks {
         let copyCode = try encoder.encode(copySource).base64EncodedString()
         try expect(TherapyWidgetStorage.copiedSnapshot(copyCode)?.reminders.first?.title == "Hinweis", "Copied widget data works independently of App Group storage")
         var invalidCopy = copySource; invalidCopy.reminders[0].route = "https://example.com"
-        try expect(TherapyWidgetStorage.copiedSnapshot(try encoder.encode(invalidCopy).base64EncodedString()) == nil, "Widget copy cannot supply external deep links")
+        let invalidCode = try encoder.encode(invalidCopy).base64EncodedString()
+        try expect(TherapyWidgetStorage.copiedSnapshot(invalidCode) == nil, "Widget copy cannot supply external deep links")
         print("Passed \(checks) migration, streak, chart aggregation and export checks.")
     }
 }

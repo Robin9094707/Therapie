@@ -118,6 +118,7 @@ final class TherapyHomeService: NSObject, ObservableObject, HMHomeManagerDelegat
     @Published var scenes: [HomeSceneChoice] = []
     @Published var status = "HomeKit ist optional."
     private var manager: HMHomeManager?
+    private var pendingRuns: [(UUID, String?)] = []
     private let bindingsKey = "therapy.home.scene.bindings"
     struct HomeSceneChoice: Identifiable { var id: String; var title: String; var home: HMHome; var scene: HMActionSet }
     private var signingAllowsHomeKit: Bool {
@@ -137,6 +138,8 @@ final class TherapyHomeService: NSObject, ObservableObject, HMHomeManagerDelegat
     nonisolated func homeManagerDidUpdateHomes(_ manager: HMHomeManager) { Task { @MainActor in self.update() } }
     private func update() {
         scenes = (manager?.homes ?? []).flatMap { home in home.actionSets.map { HomeSceneChoice(id: $0.uniqueIdentifier.uuidString, title: home.name + " · " + $0.name, home: home, scene: $0) } }.sorted { $0.title < $1.title }
+        let waiting = pendingRuns; pendingRuns = []
+        if !scenes.isEmpty { for (id, occurrence) in waiting { run(for:id,occurrenceID:occurrence) } }
         status = scenes.isEmpty ? "Noch keine freigegebenen Home-Szenen. Erlaube den Zugriff und lege eine Szene in Apple Home an." : "\(scenes.count) Home-Szenen verfügbar."
     }
     func binding(for id: UUID) -> String { (UserDefaults.standard.dictionary(forKey: bindingsKey) as? [String:String])?[id.uuidString] ?? "" }
@@ -149,7 +152,11 @@ final class TherapyHomeService: NSObject, ObservableObject, HMHomeManagerDelegat
         let sceneID = binding(for: id)
         guard !sceneID.isEmpty else { return }
         connect()
-        guard let choice = scenes.first(where: { $0.id == sceneID }) else { return }
+        guard let choice = scenes.first(where: { $0.id == sceneID }) else {
+            if scenes.isEmpty && manager != nil && !pendingRuns.contains(where: { $0.0 == id && $0.1 == occurrenceID }) { pendingRuns.append((id,occurrenceID)) }
+            else if !scenes.isEmpty { status = "Die verknüpfte Szene fehlt. Bitte wähle sie neu." }
+            return
+        }
         let doneKey = occurrenceID.map { "therapy.home.ran." + $0 }
         if let doneKey, UserDefaults.standard.bool(forKey: doneKey) { return }
         choice.home.executeActionSet(choice.scene) { error in
