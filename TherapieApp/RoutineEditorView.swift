@@ -40,10 +40,10 @@ struct RoutineEditorView: View {
                     Button("Weitere Uhrzeit", systemImage: "plus.circle") { routine.times.append(RoutineTime(hour: 20, minute: 30)) }
                 }
                 Section("Erinnern, bis du bestätigst") {
-                    Toggle("Mitteilungen", isOn: $routine.remindersEnabled)
+                    Toggle("Erinnerungen aktiv", isOn: $routine.remindersEnabled)
                     Toggle("Bis zum Abhaken erneut erinnern", isOn: Binding(get: { routine.repeatUntilDone ?? true }, set: { routine.repeatUntilDone = $0 }))
                     Stepper("Erneut nach \(routine.retryMinutes) Minuten", value: $routine.retryMinutes, in: 5...180, step: 5)
-                    Toggle("Abends häufiger erinnern", isOn: Binding(get: { routine.escalationHour != nil }, set: { routine.escalationHour = $0 ? 23 : nil }))
+                    Toggle("Ab einer Uhrzeit häufiger erinnern", isOn: Binding(get: { routine.escalationHour != nil }, set: { routine.escalationHour = $0 ? 23 : nil }))
                     if routine.escalationHour != nil {
                         Stepper("Häufiger ab \(routine.escalationHour ?? 23) Uhr", value: Binding(get: { routine.escalationHour ?? 23 }, set: { routine.escalationHour = $0 }), in: 0...23)
                         Stepper("Dann alle \(routine.escalationMinutes) Minuten", value: $routine.escalationMinutes, in: 5...60, step: 5)
@@ -54,7 +54,26 @@ struct RoutineEditorView: View {
                         Stepper("Ruhe bis \(routine.quietEndHour) Uhr", value: $routine.quietEndHour, in: 0...23)
                     }
                     Toggle("Zusätzlich dringender AlarmKit-Wecker", isOn: $routine.urgentAlarm)
-                    Text("Nach Erledigt oder Auslassen enden die Erinnerungen für diesen Termin. Verschieben gilt einmalig für eine Stunde. Ein unbestätigter Termin bleibt maximal bis zur gleichen Uhrzeit am Folgetag offen; danach beginnt ein neuer Termin. Die App protokolliert nichts automatisch als erledigt.").font(.caption).foregroundStyle(.secondary)
+                    Text("Nach Erledigt oder Auslassen enden die Erinnerungen für diesen Termin. Verschieben gilt für die unten eingestellte Dauer. Ein unbestätigter Termin bleibt maximal bis zur gleichen Uhrzeit am Folgetag offen; danach beginnt ein neuer Termin. Die App protokolliert nichts automatisch als erledigt.").font(.caption).foregroundStyle(.secondary)
+                }
+                Section("Apple-Erinnerungen & Wecker") {
+                    Toggle("Apple-Erinnerungen verwenden", isOn: Binding(get: { routine.appleReminders ?? true }, set: { routine.appleReminders = $0 }))
+                    NavigationLink("Apple-Zugriff und Abgleich einrichten") { AppleIntegrationView() }
+                    if routine.appleReminders != false {
+                        Stepper("Wecker nach \(routine.alarmDelayMinutes ?? store.data.appleIntegration.alarmDelayMinutes) Minuten", value: Binding(get: { routine.alarmDelayMinutes ?? store.data.appleIntegration.alarmDelayMinutes }, set: { routine.alarmDelayMinutes = $0 }), in: 0...180, step: 5)
+                        Text("Ohne rechtzeitigen Abgleich bei geöffneter App kann der Wecker trotz Erledigung in Apple-Erinnerungen klingeln.").font(.caption).foregroundStyle(.secondary)
+                    }
+                    TextField("Text des dringenden Weckers", text: Binding(get: { routine.alarmTitle ?? "" }, set: { routine.alarmTitle = $0 }))
+                }
+                Section("Meine Knöpfe in der App") {
+                    TextField("Erledigt", text: Binding(get: { routine.doneButtonTitle ?? "" }, set: { routine.doneButtonTitle = $0 }))
+                    TextField("Heute auslassen", text: Binding(get: { routine.skipButtonTitle ?? "" }, set: { routine.skipButtonTitle = $0 }))
+                    TextField("Später", text: Binding(get: { routine.snoozeButtonTitle ?? "" }, set: { routine.snoozeButtonTitle = $0 }))
+                    Stepper("Später: \(routine.snoozeMinutes ?? 60) Minuten", value: Binding(get: { routine.snoozeMinutes ?? 60 }, set: { routine.snoozeMinutes = $0 }), in: 1...180)
+                    Toggle("Schlummeranzahl begrenzen", isOn: Binding(get: { routine.maxSnoozes != nil }, set: { routine.maxSnoozes = $0 ? 3 : nil }))
+                    if routine.maxSnoozes != nil { Stepper("Maximal \(routine.maxSnoozes ?? 3) Mal", value: Binding(get: { routine.maxSnoozes ?? 3 }, set: { routine.maxSnoozes = $0 }), in: 0...10) }
+                    Text("Die Aktionen sind fest: erledigen, auslassen, einmalig verschieben. Der iOS-Wecker zeigt zusätzlich eine Taste zum Öffnen; den System-Stoppknopf legt Apple fest.").font(.caption).foregroundStyle(.secondary)
+                    HomeSceneBindingView(ownerID: routine.id)
                 }
                 Section("Privatsphäre & Check-ins") {
                     Toggle("Routinentitel auf dem Sperrbildschirm verbergen", isOn: $store.data.companionSettings.privateRoutineTitles)

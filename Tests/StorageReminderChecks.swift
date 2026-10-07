@@ -15,6 +15,10 @@ struct StorageReminderChecks {
         let legacy = support.appendingPathComponent("Therapie")
         for folder in ["Media", "Recordings"] { try fm.createDirectory(at: legacy.appendingPathComponent(folder), withIntermediateDirectories: true) }
         var data = AppData()
+        data.medicalPass = MedicalPass(name:"Testpass",medications:"Eigene Angaben")
+        data.appleIntegration.remindersEnabled = true
+        data.wakeAlarms = [WakeAlarm(title:"Testwecker")]
+        data.wakeRuns = [WakeRun(id:"portable-wake",alarmID:data.wakeAlarms[0].id,scheduledAt:Date(),outcome:.emergencyStopped)]
         let supportClock = Date(timeIntervalSince1970: 1_790_000_000)
         data.copingMethods = [.asmrExample, .thoughtStopExample]
         for index in data.copingMethods.indices { data.copingMethods[index].createdAt = supportClock; data.copingMethods[index].updatedAt = supportClock }

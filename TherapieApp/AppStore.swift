@@ -10,6 +10,7 @@ final class AppStore: ObservableObject {
             save()
             if lastSaveError == nil {
                 if !data.aiSettings.enabled && selectedTab == 5 { selectedTab = 4 }
+                AppleRemindersService.shared.refresh(self)
                 captureLocations(from: oldValue)
                 rememberChange(from: oldValue, to: data)
                 TherapyEffects.shared.changed(from: oldValue, to: data)
@@ -51,6 +52,8 @@ final class AppStore: ObservableObject {
     @Published var notificationReminders = false
     @Published var notificationShowers = false
     @Published var notificationWidgetSetup = false
+    @Published var notificationApplePage: String?
+    @Published var appleReminderStatus = "Noch nicht verbunden."
     @Published var widgetStatus = ""
     @Published var routineAlarmStatus = ""
     @Published var undoAvailable = false
@@ -204,8 +207,8 @@ final class AppStore: ObservableObject {
                 let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
                 loaded = try decoder.decode(AppData.self, from: raw)
                 let version = (try JSONSerialization.jsonObject(with: raw) as? [String: Any])?["schemaVersion"] as? Int ?? 1
-                if version < 16 {
-                    let beforeUpdate = rootURL.appendingPathComponent("therapy-data.pre-3015.json")
+                if version < 17 {
+                    let beforeUpdate = rootURL.appendingPathComponent("therapy-data.pre-3016.json")
                     if !fm.fileExists(atPath: beforeUpdate.path) { try raw.write(to: beforeUpdate, options: [.atomic, .completeFileProtection]) }
                 }
                 let snapshot = rootURL.appendingPathComponent("therapy-data.pre-3009.json")

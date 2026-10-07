@@ -53,8 +53,11 @@ extension AppStore {
     func snoozeRoutine(_ occurrence: RoutineOccurrence) {
         guard !RoutinePlanner.resolved(occurrence, completions: data.routineCompletions) else { return }
         var snapshot = data
+        guard let routine = data.routines.first(where: { $0.id == occurrence.routineID }) else { return }
+        let count = snapshot.routineSnoozes.first { $0.id == occurrence.id }?.count ?? 0
+        guard routine.maxSnoozes == nil || count < max(0, routine.maxSnoozes!) else { return }
         snapshot.routineSnoozes.removeAll { $0.id == occurrence.id }
-        snapshot.routineSnoozes.append(RoutineSnooze(id: occurrence.id, until: Date().addingTimeInterval(3600)))
+        snapshot.routineSnoozes.append(RoutineSnooze(id: occurrence.id, until: Date().addingTimeInterval(Double(max(1,min(180,routine.snoozeMinutes ?? 60))) * 60), count: count + 1))
         data = snapshot
     }
     func deleteRoutine(_ id: UUID) {
@@ -94,9 +97,23 @@ extension AppStore {
     }
     func consumeRoutineAlarmRoute() {
         guard storageReady else { return }
+        if let route = UserDefaults.standard.string(forKey: "therapy.apple.shortcut") {
+            UserDefaults.standard.removeObject(forKey: "therapy.apple.shortcut")
+            let page = route.replacingOccurrences(of: "page|", with: "")
+            switch page {
+            case "today": selectedTab = 0
+            case "archive": selectedTab = 3
+            case "showers": notificationShowers = true
+            case "routines": notificationRoutines = true
+            case "reminders": notificationReminders = true
+            case "session": notificationSession = true
+            default: notificationApplePage = page
+            }
+        }
         if let route = UserDefaults.standard.string(forKey: "therapy.companion.open") {
             UserDefaults.standard.removeObject(forKey: "therapy.companion.open")
             let parts = route.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+            if parts.first == "wake", parts.count == 3 { notificationApplePage = "wake|" + parts[1] + "|" + parts[2] }
             if parts.first == "therapy" { notificationTherapy = true }
             if parts.first == "energy" { openEnergyReview = true }
             if parts.first == "wellness" { notificationMood = true }

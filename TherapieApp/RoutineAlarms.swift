@@ -71,8 +71,15 @@ final class RoutineAlarmCoordinator {
         let candidates = CompanionAlarmPlanner.candidates(store.data)
         let desired = CompanionAlarmPlanner.admitted(candidates)
         var owned = UserDefaults.standard.dictionary(forKey: storageKey) as? [String: String] ?? [:]
+        func buttonTitle(_ slot: CompanionAlarmSlot) -> String {
+            let parts = slot.route.split(separator: "|")
+            if parts.count > 1, let id = UUID(uuidString: String(parts[1])) {
+                if parts[0] == "wake", let alarm = store.data.wakeAlarms.first(where: { $0.id == id }) { return alarm.buttonTitle.isEmpty ? "Aufgabe öffnen" : String(alarm.buttonTitle.prefix(30)) }
+            }
+            return "In App öffnen"
+        }
         func key(_ slot: CompanionAlarmSlot) -> String {
-            let digest = SHA256.hash(data: Data((slot.title + "|" + slot.route).utf8)).map { String(format: "%02x", $0) }.joined()
+            let digest = SHA256.hash(data: Data((slot.title + "|" + slot.route + "|" + buttonTitle(slot)).utf8)).map { String(format: "%02x", $0) }.joined()
             return slot.id + "." + digest
         }
         let valid = Set(desired.map(key))
@@ -106,8 +113,10 @@ final class RoutineAlarmCoordinator {
             for slot in desired where owned[key(slot)] == nil {
                 guard generation == revision else { return }
                 let id = UUID()
-                let attributes = AlarmAttributes(presentation: AlarmPresentation(alert: AlarmPresentation.Alert(title: LocalizedStringResource(stringLiteral: String(slot.title.prefix(100))))), metadata: TherapyAlarmMetadata(category: "companion", offsetMinutes: 0), tintColor: .indigo)
-                let configuration = AlarmManager.AlarmConfiguration<TherapyAlarmMetadata>.alarm(schedule: .fixed(slot.fireAt), attributes: attributes, stopIntent: OpenCompanionReminderIntent(route: slot.route))
+                let button = AlarmButton(text: LocalizedStringResource(stringLiteral: buttonTitle(slot)), textColor: .white, systemImageName: "arrow.up.forward.app")
+                let alert = AlarmPresentation.Alert(title: LocalizedStringResource(stringLiteral: String(slot.title.prefix(100))), secondaryButton: button, secondaryButtonBehavior: .custom)
+                let attributes = AlarmAttributes(presentation: AlarmPresentation(alert: alert), metadata: TherapyAlarmMetadata(category: "companion", offsetMinutes: 0), tintColor: store.data.accentTheme.color)
+                let configuration = AlarmManager.AlarmConfiguration<TherapyAlarmMetadata>.alarm(schedule: .fixed(slot.fireAt), attributes: attributes, stopIntent: OpenCompanionReminderIntent(route: slot.route), secondaryIntent: OpenCompanionReminderIntent(route: slot.route))
                 _ = try await AlarmManager.shared.schedule(id: id, configuration: configuration)
                 guard generation == revision else {
                     do { try AlarmManager.shared.cancel(id: id) }

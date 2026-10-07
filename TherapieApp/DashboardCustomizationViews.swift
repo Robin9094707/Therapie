@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct DashboardCustomizationView: View {
     @EnvironmentObject private var store: AppStore
@@ -222,8 +223,18 @@ struct WidgetSetupHelpView: View {
                     Button("App-Daten jetzt aktualisieren", systemImage: "arrow.clockwise") { TherapyWidgetBridge.refresh(store, force: true) }
                     Toggle("Titel in Widgets anzeigen", isOn: $store.data.dashboard.showWidgetTitles)
                 }
+                Section("Auch ohne App-Gruppen-Zugriff") {
+                    NavigationLink("Live-Liste über Apples Erinnerungen-Widget") { AppleIntegrationView() }
+                    Text("Verbinde die Erinnerungen-Liste. Füge das Widget von Apple-Erinnerungen hinzu und wähle „Therapie · Routinen“. Dort erscheinen die von der App synchronisierten Einträge.")
+                    Button("Aktuellen Widget-Daten-Code kopieren", systemImage: "doc.on.doc") {
+                        let snapshot = TherapyWidgetSnapshotBuilder.make(data: store.data)
+                        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
+                        if let bytes = try? encoder.encode(snapshot) { UIPasteboard.general.string = bytes.base64EncodedString() }
+                    }
+                    Text("Im konfigurierbaren Therapie-Widget als Datenquelle „Kopierter Datenstand“ wählen und den Code einfügen. Die Kopie enthält nur den Widget-Anzeigestand; nach Änderungen neu kopieren. Das ist keine automatische Live-Synchronisierung.").font(.footnote)
+                }
                 Section("Am iPhone einstellen") {
-                    Text("Bei Lade-Streifen das bisherige Widget entfernen und „Heute · direkt“ oder „Duschtage · direkt“ neu hinzufügen. Diese lesen App-Daten ohne konfigurierbare AppIntents. App vorher öffnen und oben aktualisieren.")
+                    Text("Bei Lade-Streifen das bisherige Widget entfernen und „Heute · direkt“ oder „Duschtage · direkt“ neu hinzufügen. Diese lesen App-Daten ohne konfigurierbare AppIntents. Das funktioniert nur bei freigegebenem gemeinsamem App-Speicher. Andernfalls oben eine Alternative wählen.")
                     Text("Halte das Widget gedrückt und wähle Widget bearbeiten. Aktuelle App-Daten zeigen Termine, fällige Routinen, offene Erinnerungen und den laufenden Timer. Du kannst Routinen/Erinnerungen nach einem Titel filtern.")
                     Text("Manuelle Widgets zeigen auch ohne ausgewähltes Datum den nächsten eingestellten Uhrzeitpunkt. Ein Titelfilter wird bei neutralen Titeln nicht angewendet, damit Inhalte sichtbar bleiben.")
                     Text("Falls die Installation keinen gemeinsamen App-Gruppen-Zugriff erlaubt: Manuell eingestellter Termin / Hinweis wählen, Datum oder wöchentlichen Wochentag und Uhrzeit festlegen. Das Widget kennzeichnet diese Angaben als manuell und verändert deine App-Daten nicht.")

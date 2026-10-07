@@ -9,7 +9,7 @@ struct TherapyHomeEntry: TimelineEntry {
 struct TherapyHomeProvider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> TherapyHomeEntry { TherapyHomeEntry(date: .now, snapshot: TherapyWidgetSnapshot(cacheProblem: "App öffnen · Übersicht bereitstellen")) }
     func snapshot(for configuration: TherapyWidgetOptions, in context: Context) async -> TherapyHomeEntry {
-        TherapyHomeEntry(date: .now, snapshot: context.isPreview ? preview() : read(configuration), manual: configuration.source == .manual)
+        TherapyHomeEntry(date: .now, snapshot: context.isPreview ? preview() : read(configuration), manual: configuration.source != .app)
     }
     func timeline(for configuration: TherapyWidgetOptions, in context: Context) async -> Timeline<TherapyHomeEntry> {
         let snapshot = read(configuration), now = Date(), end = now.addingTimeInterval(24 * 3600)
@@ -18,7 +18,7 @@ struct TherapyHomeProvider: AppIntentTimelineProvider {
         dates += snapshot.reminders.flatMap { [$0.due, $0.expiresAt] }.filter { $0 > now && $0 < end }
         dates += snapshot.session?.phases.flatMap { [$0.start, $0.end] }.filter { $0 > now && $0 < end } ?? []
         if let midnight = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: now)) { dates.append(midnight) }
-        let entries = Set(dates).sorted().prefix(120).map { TherapyHomeEntry(date: $0, snapshot: snapshot, manual: configuration.source == .manual) }
+        let entries = Set(dates).sorted().prefix(120).map { TherapyHomeEntry(date: $0, snapshot: snapshot, manual: configuration.source != .app) }
         return Timeline(entries: entries, policy: .after(now.addingTimeInterval(30 * 60)))
     }
     private func read(_ configuration: TherapyWidgetOptions) -> TherapyWidgetSnapshot {

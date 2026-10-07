@@ -51,7 +51,11 @@
 	<string>Therapie benötigt das Mikrofon, damit du private Sprachaufzeichnungen für deine Therapie speichern kannst.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Therapie lässt dich Fotos für Aufgaben, Pläne und Rückblicke auswählen.</string>
-	<key>NSAlarmKitUsageDescription</key>
+	<key>NSRemindersFullAccessUsageDescription</key><string>Therapie erstellt auf Wunsch eine eigene Apple-Erinnerungen-Liste und übernimmt bestätigte Routinen und Aufgaben.</string>
+    <key>NSHomeKitUsageDescription</key><string>Auf deinen Wunsch führt Therapie ausgewählte Home-Szenen beim Öffnen einer fälligen Routine oder eines Weckers aus.</string>
+    <key>NSCameraUsageDescription</key><string>Für eine von dir gewählte Wecker-Aufgabe nimmt Therapie ein frisches Foto in der App auf. Nur nach Bestätigung wird es zur KI-Prüfung gesendet.</string>
+    <key>NSMotionUsageDescription</key><string>Therapie zählt bei einer freiwilligen Wecker-Aufgabe sanfte Bewegungen oder Schritte, während die Aufgabe geöffnet ist.</string>
+    <key>NSAlarmKitUsageDescription</key>
 	<string>Therapie verwendet Alarme für wichtige Therapietermine und von dir aktivierte Aufgaben-Erinnerungen.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>

@@ -3,9 +3,9 @@ import WidgetKit
 import Foundation
 
 enum TherapyWidgetSource: String, AppEnum {
-    case app, manual
+    case app, manual, copied
     static var typeDisplayRepresentation: TypeDisplayRepresentation = "Datenquelle"
-    static var caseDisplayRepresentations: [TherapyWidgetSource: DisplayRepresentation] = [.app: "Aktuelle App-Daten", .manual: "Manuell eingestellter Termin / Hinweis"]
+    static var caseDisplayRepresentations: [TherapyWidgetSource: DisplayRepresentation] = [.copied: "Kopierter Datenstand aus der App", .app: "Aktuelle App-Daten", .manual: "Manuell eingestellter Termin / Hinweis"]
 }
 enum TherapyWidgetWeekday: String, AppEnum {
     case sunday, monday, tuesday, wednesday, thursday, friday, saturday
@@ -17,6 +17,7 @@ struct TherapyWidgetOptions: WidgetConfigurationIntent {
     static var title: LocalizedStringResource = "Therapie-Widget bearbeiten"
     static var description = IntentDescription("Aktuelle App-Daten anzeigen oder einen manuellen Termin einstellen. Manuelle Angaben ändern deine App-Daten nicht.")
     @Parameter(title: "Datenquelle", default: .app) var source: TherapyWidgetSource
+    @Parameter(title: "Kopierter Daten-Code") var copiedCode: String?
     @Parameter(title: "Nur Titel mit diesem Text") var filter: String?
     @Parameter(title: "Manuelle Bezeichnung", default: "Mein Termin") var label: String
     @Parameter(title: "Manuelles Datum") var date: Date?
@@ -26,6 +27,7 @@ struct TherapyWidgetOptions: WidgetConfigurationIntent {
     @Parameter(title: "Manuelle Minute", default: 0) var minute: Int
     static var parameterSummary: some ParameterSummary {
         Summary("\(\.$source)") {
+            \.$copiedCode
             \.$filter
             \.$label
             \.$date
@@ -36,6 +38,13 @@ struct TherapyWidgetOptions: WidgetConfigurationIntent {
         }
     }
     func snapshot(at now: Date) -> TherapyWidgetSnapshot? {
+        if source == .copied {
+            guard let copiedCode, copiedCode.count < 100_000, let bytes = Data(base64Encoded: copiedCode.trimmingCharacters(in: .whitespacesAndNewlines)), bytes.count < 75_000 else { return TherapyWidgetSnapshot(cacheProblem: "Daten-Code aus der Widget-Einrichtung einfügen.") }
+            let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+            guard var snapshot = try? decoder.decode(TherapyWidgetSnapshot.self, from: bytes), snapshot.configured else { return TherapyWidgetSnapshot(cacheProblem: "Daten-Code konnte nicht gelesen werden.") }
+            snapshot.cacheProblem = "Kopie vom " + snapshot.generatedAt.formatted(date: .abbreviated, time: .shortened)
+            return snapshot
+        }
         guard source == .manual else { return nil }
         var dates: [Date] = []
         if repeatsWeekly {

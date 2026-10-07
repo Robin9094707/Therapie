@@ -34,9 +34,15 @@ struct BackupChecks {
         for directory in ["Media", "Recordings"] { try fm.createDirectory(at: root.appendingPathComponent(directory), withIntermediateDirectories: true) }
         var data = AppData()
         let supportClock = Date(timeIntervalSince1970: 1_790_000_000)
+        data.medicalPass = MedicalPass(name: "Testpass", birthDate: Date(timeIntervalSince1970: 946684800), heightCM: 172, medications: "Eigene Angaben", allergies: "Test", contacts: "Kontakt")
+        data.appleIntegration = AppleIntegrationPreferences(remindersEnabled: true, removeFinishedReminders: false, privateReminderTitles: false, alarmDelayMinutes: 15)
+        let wake = WakeAlarm(title: "Testwecker", excludedDays: [supportClock], challenge: .steps)
+        data.wakeAlarms = [wake]
+        data.wakeRuns = [WakeRun(id: "wake-test", alarmID: wake.id, scheduledAt: supportClock, outcome: .completed, snoozes: 2, emergencySnoozeUsed: true, operandA: 7, operandB: 4)]
         data.copingMethods = [.asmrExample, .thoughtStopExample]
         for index in data.copingMethods.indices { data.copingMethods[index].createdAt = supportClock; data.copingMethods[index].updatedAt = supportClock }
         data.emergencyPlan = PersonalEmergencyPlan(firstStep: "Reize reduzieren", steps: ["Eine Pause machen"], support: "Meine eigene Kontaktperson", methodIDs: [data.copingMethods[0].id], updatedAt: supportClock)
+        data.emergencyPlan.panels = [EmergencyPanel(title: "Stopp", text: "Pause", methodID: data.copingMethods[1].id)]
         data.groundingPractices = [GroundingPractice(date: supportClock, answers: [["Fenster"], ["Boden"], [], [], []], note: "In meinem Tempo")]
         data.showerEntries = [ShowerEntry(date: supportClock, note: "Flexibel")]
         data.showerPreferences.weeklyGoal = 2
@@ -152,6 +158,7 @@ struct BackupChecks {
         try expect(original.range(of: Data(data.notes[0].title.utf8)) == nil, "Notes encrypted")
         try expect(original.range(of: Data("Media/photo.jpg".utf8)) == nil, "Filenames encrypted")
         let prepared = try BackupArchive.prepareImport(url: archive, password: password)
+        try expect(prepared.manifest.data.medicalPass == data.medicalPass && prepared.manifest.data.appleIntegration == data.appleIntegration && prepared.manifest.data.wakeAlarms == data.wakeAlarms && prepared.manifest.data.wakeRuns == data.wakeRuns, "Therapy pass, Apple preferences, wake alarms and run progress round-trip")
         try expect(prepared.manifest.data.copingMethods == data.copingMethods && prepared.manifest.data.emergencyPlan == data.emergencyPlan, "Methods, thought stops and emergency image references round-trip")
         try expect(prepared.manifest.data.showerPreferences == data.showerPreferences && prepared.manifest.data.routineDeferrals == data.routineDeferrals && prepared.manifest.data.routines[0].repeatEveryDays == 2, "Shower target, calendar-day rhythm and per-occurrence deferral round-trip")
         try expect(prepared.manifest.data.groundingPractices == data.groundingPractices && prepared.manifest.data.showerEntries == data.showerEntries, "Grounding answers and flexible shower dates round-trip")
@@ -246,10 +253,10 @@ struct BackupChecks {
         prefs.apply(defaults)
         try expect(PortablePreferences.capture(defaults) == prefs, "Appearance, calm, haptics and confetti restored")
         var oldJSON = try JSONSerialization.jsonObject(with: BackupArchive.encoder().encode(data)) as! [String: Any]
-        for version in 1...15 {
+        for version in 1...16 {
             oldJSON["schemaVersion"] = version
             let migrated = try BackupArchive.decoder().decode(AppData.self, from: JSONSerialization.data(withJSONObject: oldJSON))
-            try expect(migrated.schemaVersion == 16 && migrated.notes.count == 1 && migrated.media[0].attachmentOmitted == nil, "Schema \(version) migrates for backups")
+            try expect(migrated.schemaVersion == 17 && migrated.notes.count == 1 && migrated.media[0].attachmentOmitted == nil, "Schema \(version) migrates for backups")
         }
         oldJSON["schemaVersion"] = 12; oldJSON.removeValue(forKey: "accentTheme"); oldJSON.removeValue(forKey: "wellbeingPreferences")
         for key in ["copingMethods", "emergencyPlan", "groundingPractices", "showerEntries"] { oldJSON.removeValue(forKey: key) }

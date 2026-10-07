@@ -156,10 +156,14 @@ struct CompanionAlarmSlot: Equatable, Identifiable {
 }
 enum CompanionAlarmPlanner {
     static func candidates(_ data: AppData, now: Date = Date(), calendar: Calendar = .current) -> [CompanionAlarmSlot] {
-        var slots = RoutinePlanner.slots(data: data, now: now, calendar: calendar).compactMap { slot -> CompanionAlarmSlot? in
+        var slots = RoutinePlanner.slots(data: data, now: now.addingTimeInterval(-180 * 60), calendar: calendar).compactMap { slot -> CompanionAlarmSlot? in
             guard let routine = data.routines.first(where: { $0.id == slot.occurrence.routineID }), routine.urgentAlarm else { return nil }
             let detail = routine.times.first { $0.id == slot.occurrence.timeID }?.title ?? ""
-            return .init(id: slot.id, group: "routine.\(routine.id).\(slot.occurrence.timeID)", fireAt: slot.fireAt, title: data.companionSettings.alarmShowsActualTitles == false ? "Deine wichtige Routine" : routine.title + (detail.isEmpty ? "" : " · " + detail), route: "routine|\(routine.id)")
+            let appleFirst = data.appleIntegration.remindersEnabled && routine.appleReminders != false
+            let delay = appleFirst ? max(0,min(180,routine.alarmDelayMinutes ?? data.appleIntegration.alarmDelayMinutes)) : 0
+            let fire = slot.fireAt.addingTimeInterval(Double(delay) * 60)
+            guard fire > now, fire < slot.occurrence.end else { return nil }
+            return .init(id: slot.id + ".delay\(delay)", group: "routine.\(routine.id).\(slot.occurrence.timeID)", fireAt: fire, title: data.companionSettings.alarmShowsActualTitles == false ? "Deine wichtige Routine" : (routine.alarmTitle?.isEmpty == false ? routine.alarmTitle! : routine.title) + (detail.isEmpty ? "" : " · " + detail), route: "routine|\(routine.id)")
         }
         for slot in CheckInReminderPlanner.slots(data: data, now: now, calendar: calendar) {
             guard let reminder = data.companionSettings.checkInReminders?.first(where: { $0.id == slot.reminderID }), reminder.alarmEnabled == true else { continue }
@@ -213,10 +217,12 @@ enum CompanionAlarmPlanner {
                 }
             }
         }
+        slots += WakePlanner.slots(data: data, now: now, calendar: calendar)
         return slots.sorted { $0.fireAt == $1.fireAt ? $0.id < $1.id : $0.fireAt < $1.fireAt }
     }
     static func admitted(_ all: [CompanionAlarmSlot], budget: Int = 24) -> [CompanionAlarmSlot] {
         var groups = Set<String>(), ids = Set<String>(), selected: [CompanionAlarmSlot] = []
+        for slot in all where slot.group.hasPrefix("wake") && groups.insert(slot.group).inserted && selected.count < max(0,budget) { if ids.insert(slot.id).inserted { selected.append(slot) } }
         // Reserve the imminent running session boundaries before recurring inventories.
         for slot in all where slot.group.hasPrefix("session") && selected.count < max(0, budget) { if ids.insert(slot.id).inserted { selected.append(slot); groups.insert(slot.group) } }
         for slot in all where !slot.group.hasPrefix("session") && groups.insert(slot.group).inserted && selected.count < max(0, budget) {
@@ -230,8 +236,17 @@ enum CompanionAlarmPlanner {
 /// Device-independent decision, shared with alarm regression checks.
 enum AlarmOwnershipPolicy {
     static func keepAlerting(key: String, data: AppData, now: Date = Date()) -> Bool {
+        if key.hasPrefix("wake.") {
+            guard let occurrence = WakePlanner.occurrences(data: data, now: now).first(where: { key.hasPrefix($0.id + ".") }) else { return false }
+            if let run = data.wakeRuns.first(where: { $0.id == occurrence.id }) {
+                if run.outcome != nil || (run.snoozedUntil ?? .distantPast) > now { return false }
+                return key.hasPrefix(occurrence.id + ".r\(run.revision).")
+            }
+            return true
+        }
         if key.hasPrefix("therapy.routine.") {
             guard let routine = data.routines.first(where: { key.hasPrefix("therapy.routine.\($0.id).") }), routine.urgentAlarm else { return false }
+            if data.routineSnoozes.contains(where: { key.hasPrefix("therapy.routine." + $0.id + ".") && $0.until > now }) { return false }
             if let deferral = data.routineDeferrals.first(where: { key.hasPrefix("therapy.routine." + $0.occurrenceID + ".") }) {
                 guard let occurrence = RoutinePlanner.occurrences(data: data, now: now, days: 1).first(where: { $0.id == deferral.id }) else { return false }
                 return occurrence.due <= now && now < occurrence.end && !RoutinePlanner.resolved(occurrence, completions: data.routineCompletions) && RoutinePlanner.activeReminder(routine, occurrence: occurrence, settings: data.companionSettings, now: now)

@@ -4,48 +4,50 @@ import UIKit
 
 struct EmergencyPlanView: View {
     @EnvironmentObject private var store: AppStore
+    @Environment(\.dynamicTypeSize) private var textSize
     @State private var editing = false
     @State private var showAI = false
     private var plan: PersonalEmergencyPlan { store.data.emergencyPlan }
+    private var panels: [EmergencyPanel] { (plan.panels ?? []).filter(\.enabled) }
+    private var columns: [GridItem] { Array(repeating: GridItem(.flexible(), alignment: .top), count: textSize.isAccessibilitySize || plan.compactLayout == false ? 1 : 2) }
     var body: some View {
         TherapyScreen {
-            VStack(alignment: .leading, spacing: 22) {
-                GlassCard(emphasized: true) {
-                    VStack(alignment: .leading, spacing: 20) {
-                        Label(plan.title, systemImage: "lifepreserver.fill").font(.largeTitle.bold()).foregroundStyle(Color.accentColor)
-                        if !plan.hasContent {
-                            Text("Hier ist Platz für deinen persönlichen Plan.").font(.title2.bold())
-                            Text("Trage einen ersten Schritt, hilfreiche Informationen und bei Bedarf ein Bild ein.").font(.title3)
-                            Button("Meinen Plan gestalten", systemImage: "pencil") { editing = true }.buttonStyle(.borderedProminent).controlSize(.large)
-                        } else {
-                            if !plan.firstStep.isEmpty { Text("Mein erster Schritt").font(.headline).foregroundStyle(.secondary); Text(plan.firstStep).font(.system(.largeTitle, design: .rounded, weight: .bold)).textSelection(.enabled) }
-                            if let id = plan.imageID, let item = store.data.media.first(where: { $0.id == id }) { EmergencyPlanImage(item: item) }
-                            ForEach(Array(plan.steps.enumerated()), id: \.offset) { index, text in
-                                HStack(alignment: .top, spacing: 14) {
-                                    Text("\(index + 1)").font(.title2.bold()).foregroundStyle(Color.accentColor).frame(minWidth: 30)
-                                    Text(text).font(.title2).textSelection(.enabled)
-                                }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
-                            }
-                        }
-                    }.frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 12) {
+                HStack { Label(plan.title, systemImage: "lifepreserver.fill").font(.headline); Spacer(); Button("Anpassen", systemImage: "slider.horizontal.3") { editing = true }.labelStyle(.iconOnly) }
+                if !plan.hasContent {
+                    GlassCard { VStack(alignment: .leading, spacing: 12) { Text("Deine Hilfe auf einen Blick").font(.title3.bold()); Text("Lege Gedankenstopps, kleine Schritte und Unterstützung als eigene Karten an."); Button("Plan gestalten", systemImage: "plus") { editing = true }.buttonStyle(.borderedProminent) } }
                 }
-                if !plan.warningSigns.isEmpty { planCard("Meine Warnzeichen", text: plan.warningSigns, icon: "bell") }
-                if !plan.support.isEmpty { planCard("Meine Unterstützung", text: plan.support, icon: "person.2.fill") }
-                ForEach(store.data.copingMethods.filter { plan.methodIDs.contains($0.id) }) { method in
-                    NavigationLink { MethodDetailView(methodID: method.id) } label: { Label(method.title, systemImage: method.kind == .thoughtStop ? "hand.raised.fill" : "sparkles").font(.title2.bold()).frame(maxWidth: .infinity, alignment: .leading).padding(20).background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 20)) }.buttonStyle(.plain)
+                if !plan.firstStep.isEmpty { helpCard("Jetzt zuerst", text: plan.firstStep, symbol: "arrow.right.circle.fill") }
+                LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
+                    ForEach(panels) { panel in
+                        if let method = store.data.copingMethods.first(where: { $0.id == panel.methodID }) {
+                            methodCard(method, title: panel.title.isEmpty ? method.title : panel.title)
+                        } else { helpCard(panel.title, text: panel.text, symbol: panel.symbol) }
+                    }
+                    ForEach(Array(plan.steps.enumerated()), id: \.offset) { index, step in helpCard("Schritt \(index + 1)", text: step, symbol: "checkmark.circle") }
+                    ForEach(store.data.copingMethods.filter { plan.methodIDs.contains($0.id) }) { method in methodCard(method, title: method.title) }
+                    if !plan.warningSigns.isEmpty { helpCard("Meine Warnzeichen", text: plan.warningSigns, symbol: "bell") }
+                    if !plan.support.isEmpty { helpCard("Meine Unterstützung", text: plan.support, symbol: "person.2.fill") }
                 }
-                NavigationLink { GroundingExerciseView() } label: { Label("5-4-3-2-1 starten", systemImage: "hand.raised.fingers.spread.fill").font(.title3.bold()).padding(.vertical, 14) }.buttonStyle(.bordered)
-                Button("Mit KI einen Plan entwerfen", systemImage: "sparkles") { showAI = true }.buttonStyle(.bordered)
+                if let id = plan.imageID, let item = store.data.media.first(where: { $0.id == id }) { EmergencyPlanImage(item: item).frame(maxHeight: 220) }
+                NavigationLink { GroundingExerciseView() } label: { Label("5-4-3-2-1 starten", systemImage: "hand.raised.fingers.spread.fill").frame(maxWidth: .infinity).padding(.vertical, 8) }.buttonStyle(.borderedProminent)
+                Button("KI-Entwurf prüfen", systemImage: "sparkles") { showAI = true }.font(.footnote)
             }
         }.navigationTitle("Notfallplan").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Bearbeiten", systemImage: "pencil") { editing = true } }
-                ToolbarItem(placement: .topBarTrailing) { ShareLink(item: ([plan.title, plan.firstStep] + plan.steps + [plan.warningSigns, plan.support]).filter { !$0.isEmpty }.joined(separator: "\n\n")) { Image(systemName: "square.and.arrow.up") } }
-            }
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { ShareLink(item: shareText) { Image(systemName: "square.and.arrow.up") } } }
             .sheet(isPresented: $editing) { EmergencyPlanEditorView(plan: plan) }
             .sheet(isPresented: $showAI) { SupportAIProposalView(purpose: .emergency) }
     }
-    private func planCard(_ title: String, text: String, icon: String) -> some View {
-        GlassCard { VStack(alignment: .leading, spacing: 12) { Label(title, systemImage: icon).font(.headline).foregroundStyle(Color.accentColor); Text(text).font(.title2).textSelection(.enabled) }.frame(maxWidth: .infinity, alignment: .leading) }
+    private var shareText: String { ([plan.title, plan.firstStep] + panels.map { $0.title + "\n" + $0.text } + plan.steps + [plan.warningSigns, plan.support] + store.data.copingMethods.filter { method in plan.methodIDs.contains(method.id) || panels.contains(where: { $0.methodID == method.id }) }.map { $0.title + "\n" + ([$0.details] + $0.steps).joined(separator: "\n") }).filter { !$0.isEmpty }.joined(separator: "\n\n") }
+    private func helpCard(_ title: String, text: String, symbol: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) { Label(title, systemImage: symbol).font(.subheadline.bold()).foregroundStyle(Color.accentColor); Text(text).font(.body).textSelection(.enabled).fixedSize(horizontal: false, vertical: true) }.padding(14).frame(maxWidth: .infinity, alignment: .topLeading).background(Color.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 18))
+    }
+    private func methodCard(_ method: CopingMethod, title: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) { Label(title, systemImage: method.kind == .thoughtStop ? "hand.raised.fill" : "sparkles").font(.subheadline.bold()).foregroundStyle(Color.accentColor)
+            if !method.details.isEmpty { Text(method.details).font(.body).textSelection(.enabled) }
+            ForEach(Array(method.steps.enumerated()), id: \.offset) { index, step in Text("\(index + 1). " + step).font(.body) }
+            NavigationLink("Methode öffnen") { MethodDetailView(methodID: method.id) }.font(.caption)
+        }.padding(14).frame(maxWidth: .infinity, alignment: .topLeading).background(Color.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 18))
     }
 }
 private struct EmergencyPlanImage: View {
@@ -73,6 +75,16 @@ struct EmergencyPlanEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("Hilfe-Fläche") {
+                    Toggle("Kompakte Karten nebeneinander", isOn: Binding(get: { plan.compactLayout ?? true }, set: { plan.compactLayout = $0 }))
+                    ForEach(plan.panels ?? []) { panel in
+                        NavigationLink { EmergencyPanelEditor(panel: panel) { updated in
+                            if let index = plan.panels?.firstIndex(where: { $0.id == updated.id }) { plan.panels?[index] = updated }
+                        } } label: { Label(panel.title.isEmpty ? "Hilfekarte" : panel.title, systemImage: panel.symbol) }
+                    }.onDelete { offsets in plan.panels?.remove(atOffsets: offsets) }.onMove { source, target in plan.panels?.move(fromOffsets: source, toOffset: target) }
+                    Button("Eigene Hilfekarte", systemImage: "plus") { if plan.panels == nil { plan.panels = [] }; plan.panels?.append(EmergencyPanel(title: "Mein Gedankenstopp", symbol: "hand.raised.fill")) }
+                    Text("Karten öffnen, Texte anpassen, über Bearbeiten sortieren oder löschen. Verknüpfte Methoden werden sofort mit ihren Schritten angezeigt.").font(.caption).foregroundStyle(.secondary)
+                }
                 Section("Mein Plan") {
                     TextField("Titel", text: $plan.title)
                     TextField("Mein erster kleiner Schritt", text: $plan.firstStep, axis: .vertical).lineLimit(3...8)
@@ -97,6 +109,7 @@ struct EmergencyPlanEditorView: View {
                 if let error = store.lastSaveError { Section { Text(error).foregroundStyle(.red) } }
             }.navigationTitle("Notfallplan gestalten").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
+                    ToolbarItem(placement: .topBarLeading) { EditButton() }
                     ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { if changed { confirmExit = true } else { dismiss() } }.disabled(importing) }
                     ToolbarItem(placement: .confirmationAction) { Button("Speichern") {
                         var clean = plan; clean.steps = SupportText.steps(stepsText); clean.updatedAt = Date(); clean.title = clean.title.trimmingCharacters(in: .whitespacesAndNewlines); if clean.title.isEmpty { clean.title = "Mein Notfallplan" }
@@ -376,5 +389,21 @@ struct ShowerEntryEditor: View {
                     } }
                 }
         }
+    }
+}
+
+private struct EmergencyPanelEditor: View {
+    @EnvironmentObject private var store: AppStore
+    @Environment(\.dismiss) private var dismiss
+    @State var panel: EmergencyPanel
+    let save: (EmergencyPanel) -> Void
+    var body: some View {
+        Form {
+            TextField("Titel", text: $panel.title)
+            TextField("Was hilft mir jetzt?", text: $panel.text, axis: .vertical).lineLimit(3...10)
+            Picker("Symbol", selection: $panel.symbol) { ForEach(["heart.fill", "hand.raised.fill", "ear.fill", "person.2.fill", "leaf.fill", "drop.fill", "arrow.right.circle.fill"], id: \.self) { Label($0, systemImage: $0).tag($0) } }
+            Toggle("Im Plan anzeigen", isOn: $panel.enabled)
+            Picker("Gespeicherte Methode", selection: $panel.methodID) { Text("Eigener Text").tag(UUID?.none); ForEach(store.data.copingMethods) { Text($0.title).tag(Optional($0.id)) } }
+        }.navigationTitle("Hilfekarte").toolbar { ToolbarItem(placement: .confirmationAction) { Button("Übernehmen") { save(panel); dismiss() } } }
     }
 }

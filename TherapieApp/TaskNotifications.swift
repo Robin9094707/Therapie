@@ -103,7 +103,10 @@ final class TaskNotificationCoordinator: NSObject, UNUserNotificationCenterDeleg
             let parts = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: slot.fireAt)
             requests.append(UNNotificationRequest(identifier: slot.id, content: content, trigger: UNCalendarNotificationTrigger(dateMatching: parts, repeats: false)))
         }
-        let routineCandidates = RoutinePlanner.slots(data: snapshot)
+        let routineCandidates = RoutinePlanner.slots(data: snapshot).filter { slot in
+            guard let routine = snapshot.routines.first(where: { $0.id == slot.occurrence.routineID }) else { return false }
+            return !(snapshot.appleIntegration.remindersEnabled && routine.appleReminders != false)
+        }
         let routineSlots = RoutinePlanner.admittedSlots(routineCandidates, budget: max(0, 48 - requests.count))
         for slot in routineSlots {
             guard let routine = snapshot.routines.first(where: { $0.id == slot.occurrence.routineID }) else { continue }

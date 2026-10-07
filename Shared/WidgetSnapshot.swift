@@ -72,7 +72,7 @@ enum TherapyWidgetStorage {
         return nil
     }
     static func read() -> TherapyWidgetSnapshot {
-        guard let storage = container() else { return TherapyWidgetSnapshot(cacheProblem: "Kein gemeinsamer Datenzugriff. App öffnen und Widget-Diagnose prüfen; manuelle Widgets funktionieren unabhängig davon.") }
+        guard let storage = container() else { return TherapyWidgetSnapshot(cacheProblem: "Signierung ohne gemeinsamen App-Speicher. Daten-Code, manuelles Widget oder Apple-Erinnerungen-Widget verwenden.") }
         let file = try? Data(contentsOf: storage.url.appendingPathComponent(TherapyWidgetSnapshot.fileName))
         let shared = UserDefaults(suiteName: storage.group)?.data(forKey: TherapyWidgetSnapshot.fileName)
         let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601

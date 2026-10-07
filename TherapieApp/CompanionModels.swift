@@ -84,7 +84,16 @@ struct DailyRoutine: Codable, Equatable, Identifiable {
     var repeatEveryDays: Int?
     var repeatEveryWeeks: Int?
     var endsAt: Date?
+    var appleReminders: Bool?
+    var alarmDelayMinutes: Int?
+    var doneButtonTitle: String?
+    var skipButtonTitle: String?
+    var snoozeButtonTitle: String?
+    var snoozeMinutes: Int?
+    var maxSnoozes: Int?
+    var alarmTitle: String?
 }
+
 enum RoutineOutcome: String, Codable, Hashable { case done, skipped }
 struct RoutineCompletion: Codable, Equatable, Identifiable {
     var id = UUID()
@@ -110,6 +119,7 @@ struct RoutineCorrection: Codable, Equatable, Identifiable {
 struct RoutineSnooze: Codable, Equatable, Identifiable {
     var id: String
     var until: Date
+    var count: Int?
 }
 struct CompanionSettings: Codable, Equatable {
     var vacationUntil: Date?

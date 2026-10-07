@@ -125,12 +125,12 @@ struct RoutineDueCard: View {
                         }
                     }
                     ResponsiveButtonRow {
-                        Button("Erledigt", systemImage: "checkmark.circle.fill") { confirmDone = true }.buttonStyle(.borderedProminent)
-                        Button("1 Stunde später", systemImage: "clock") { store.snoozeRoutine(occurrence) }.buttonStyle(.bordered)
+                        Button(routine.doneButtonTitle?.isEmpty == false ? routine.doneButtonTitle! : "Erledigt", systemImage: "checkmark.circle.fill") { confirmDone = true }.buttonStyle(.borderedProminent)
+                        Button(routine.snoozeButtonTitle?.isEmpty == false ? routine.snoozeButtonTitle! : "\(routine.snoozeMinutes ?? 60) Minuten später", systemImage: "clock") { store.snoozeRoutine(occurrence) }.buttonStyle(.bordered).disabled(routine.maxSnoozes.map { (store.data.routineSnoozes.first { $0.id == occurrence.id }?.count ?? 0) >= $0 } ?? false)
                     }
-                    Button("Heute auslassen", systemImage: "forward.end") { showSkip = true }.font(.caption)
+                    Button(routine.skipButtonTitle?.isEmpty == false ? routine.skipButtonTitle! : "Heute auslassen", systemImage: "forward.end") { showSkip = true }.font(.caption)
                 }
-            }.alert("Wirklich erledigt?", isPresented: $confirmDone) {
+            }.onAppear { TherapyHomeService.shared.run(for: routine.id, occurrenceID: occurrence.id) }.alert("Wirklich erledigt?", isPresented: $confirmDone) {
                 Button("Noch nicht", role: .cancel) {}
                 Button("Ja, erledigt") { store.resolveRoutine(occurrence, outcome: .done) }
             } message: { Text("Damit bestätigst du nur diesen fälligen Termin. Die nächste Wiederholung bleibt aktiv.") }

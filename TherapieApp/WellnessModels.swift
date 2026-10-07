@@ -303,7 +303,9 @@ struct PersonalEmergencyPlan: Codable, Equatable {
     var imageID: UUID?
     var methodIDs: [UUID] = []
     var updatedAt: Date?
-    var hasContent: Bool { !warningSigns.isEmpty || !firstStep.isEmpty || !steps.isEmpty || !support.isEmpty || imageID != nil || !methodIDs.isEmpty }
+    var panels: [EmergencyPanel]?
+    var compactLayout: Bool?
+    var hasContent: Bool { !(panels ?? []).isEmpty || !warningSigns.isEmpty || !firstStep.isEmpty || !steps.isEmpty || !support.isEmpty || imageID != nil || !methodIDs.isEmpty }
 }
 struct GroundingPractice: Codable, Equatable, Identifiable {
     var id = UUID()
@@ -382,5 +384,136 @@ enum RoutineDayMutation {
         data.routineDeferrals.append(RoutineDeferral(routineID: occurrence.routineID, timeID: occurrence.timeID, scheduledAt: occurrence.scheduledAt, deferredUntil: date, createdAt: now))
         data.routineSnoozes.removeAll { $0.id == occurrence.id }
         return true
+    }
+}
+
+// Apple integration settings contain preferences only. OS grants and identifiers stay on-device.
+struct EmergencyPanel: Codable, Equatable, Identifiable {
+    var id = UUID()
+    var title = ""
+    var text = ""
+    var symbol = "heart.fill"
+    var methodID: UUID?
+    var enabled = true
+}
+struct MedicalPass: Codable, Equatable {
+    var name = ""
+    var birthDate: Date?
+    var heightCM: Int?
+    var medications = ""
+    var conditions = ""
+    var allergies = ""
+    var contacts = ""
+    var notes = ""
+    func age(at date: Date = Date(), calendar: Calendar = .current) -> Int? {
+        guard let birthDate, birthDate <= date else { return nil }
+        return calendar.dateComponents([.year], from: birthDate, to: date).year
+    }
+}
+struct AppleIntegrationPreferences: Codable, Equatable {
+    var remindersEnabled = false
+    var removeFinishedReminders = true
+    var privateReminderTitles = true
+    var alarmDelayMinutes = 10
+}
+enum WakeChallengeKind: String, Codable, CaseIterable, Identifiable {
+    case none, math, photo, movement, steps
+    var id: String { rawValue }
+    var title: String { switch self { case .none: "Bestätigen"; case .math: "Rechenaufgabe"; case .photo: "Frisches Kamerafoto"; case .movement: "Sanfte Bewegung"; case .steps: "Ein paar Schritte" } }
+}
+struct WakeAlarm: Codable, Equatable, Identifiable {
+    var id = UUID()
+    var title = "Aufstehen"
+    var enabled = true
+    var hour = 6
+    var minute = 30
+    var weekdays = [2, 3, 4, 5, 6]
+    var excludedDays: [Date] = []
+    var challenge: WakeChallengeKind = .math
+    var photoObject = "Eine Flasche"
+    var movementCount = 5
+    var stepCount = 15
+    var snoozeMinutes = 5
+    var maxSnoozes = 3
+    var followUpCount = 3
+    var followUpMinutes = 2
+    var buttonTitle = "Aufgabe öffnen"
+    var snoozeTitle = "Schlummern"
+}
+enum WakeRunOutcome: String, Codable { case completed, emergencyStopped }
+struct WakeRun: Codable, Equatable, Identifiable {
+    var id: String
+    var alarmID: UUID
+    var scheduledAt: Date
+    var finishedAt: Date?
+    var outcome: WakeRunOutcome?
+    var snoozes = 0
+    var emergencySnoozeUsed = false
+    var snoozedUntil: Date?
+    var revision = 0
+    var operandA = Int.random(in: 4...19)
+    var operandB = Int.random(in: 2...12)
+    var answer: Int { operandA + operandB }
+}
+struct WakeOccurrence: Equatable, Identifiable {
+    var alarm: WakeAlarm
+    var date: Date
+    var id: String { "wake.\(alarm.id).\(Int(date.timeIntervalSince1970))" }
+}
+enum WakePlanner {
+    static func occurrences(data: AppData, now: Date = Date(), days: Int = 8, calendar: Calendar = .current) -> [WakeOccurrence] {
+        var result: [WakeOccurrence] = []
+        for offset in -1..<max(1, min(31, days)) {
+            guard let day = calendar.date(byAdding: .day, value: offset, to: calendar.startOfDay(for: now)) else { continue }
+            for alarm in data.wakeAlarms where alarm.enabled && alarm.weekdays.contains(calendar.component(.weekday, from: day)) {
+                guard !alarm.excludedDays.contains(where: { calendar.isDate($0, inSameDayAs: day) }),
+                      let due = calendar.date(bySettingHour: max(0,min(23,alarm.hour)), minute: max(0,min(59,alarm.minute)), second: 0, of: day),
+                      let end = calendar.date(byAdding: .day, value: 1, to: due), end > now else { continue }
+                result.append(.init(alarm: alarm, date: due))
+            }
+        }
+        return result.sorted { $0.date < $1.date }
+    }
+    static func slots(data: AppData, now: Date = Date(), calendar: Calendar = .current) -> [CompanionAlarmSlot] {
+        var result: [CompanionAlarmSlot] = []
+        for occurrence in occurrences(data: data, now: now, calendar: calendar) {
+            let run = data.wakeRuns.first { $0.id == occurrence.id }
+            guard run?.outcome == nil else { continue }
+            let alarm = occurrence.alarm
+            let base = run?.snoozedUntil ?? occurrence.date
+            for index in 0...max(0, min(5, alarm.followUpCount)) {
+                let fire = base.addingTimeInterval(Double(index * max(1, min(30, alarm.followUpMinutes))) * 60)
+                guard fire > now else { continue }
+                result.append(.init(id: occurrence.id + ".r\(run?.revision ?? 0).\(index)", group: "wake.\(alarm.id)", fireAt: fire,
+                                    title: alarm.title, route: "wake|\(alarm.id)|\(Int(occurrence.date.timeIntervalSince1970))"))
+            }
+        }
+        return result.sorted { $0.fireAt < $1.fireAt }
+    }
+}
+struct OwnedReminderDraft: Equatable, Identifiable {
+    var id: String
+    var title: String
+    var due: Date
+    var route: String
+    var routineOccurrence: RoutineOccurrence?
+    var taskID: UUID?
+}
+enum AppleReminderPlanner {
+    static func drafts(data: AppData, now: Date = Date(), calendar: Calendar = .current) -> [OwnedReminderDraft] {
+        guard data.appleIntegration.remindersEnabled else { return [] }
+        var result: [OwnedReminderDraft] = []
+        for occurrence in RoutinePlanner.occurrences(data: data, now: now, days: 8, calendar: calendar) {
+            guard let routine = data.routines.first(where: { $0.id == occurrence.routineID }), routine.remindersEnabled,
+                  routine.appleReminders != false, RoutinePlanner.activeReminder(routine, occurrence: occurrence, settings: data.companionSettings, now: now),
+                  !RoutinePlanner.resolved(occurrence, completions: data.routineCompletions) else { continue }
+            result.append(.init(id: "routine." + occurrence.id, title: data.appleIntegration.privateReminderTitles ? "Deine Routine" : routine.title,
+                                due: occurrence.due, route: "routine/\(routine.id)", routineOccurrence: occurrence))
+        }
+        for task in data.weeklyTasks where !task.completed {
+            guard let due = task.dueDate, due > now.addingTimeInterval(-86400), due < now.addingTimeInterval(8 * 86400) else { continue }
+            result.append(.init(id: "task.\(task.id)", title: data.appleIntegration.privateReminderTitles ? "Dein nächster Schritt" : task.title, due: due, route: "task/\(task.id)", taskID: task.id))
+        }
+        return result.sorted { $0.due < $1.due }.prefix(100).map { $0 }
     }
 }

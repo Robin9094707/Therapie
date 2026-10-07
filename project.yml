@@ -7,8 +7,8 @@ settings:
   base:
     SWIFT_VERSION: "5.0"
     SWIFT_COMPILATION_MODE: incremental
-    CURRENT_PROJECT_VERSION: 23
-    MARKETING_VERSION: 3015.0.0
+    CURRENT_PROJECT_VERSION: 24
+    MARKETING_VERSION: 3016.0.0
 targets:
   TherapieApp:
     type: application

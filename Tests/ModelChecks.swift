@@ -26,7 +26,7 @@ struct ModelChecks {
         fixture["schemaVersion"] = 1
         for key in ["moodCheckIns", "batteryPoints", "weekReviews", "wellnessSettings", "therapyFolders", "therapyTopics", "therapyGoals", "sessionTemplates", "currentSession", "sessionHistory", "sessionPreferences", "weeklyEnergyReviews", "reminderPreferences"] { fixture.removeValue(forKey: key) }
         let migrated = try decoder.decode(AppData.self, from: JSONSerialization.data(withJSONObject: fixture))
-        try expect(migrated.schemaVersion == 16, "Schema migration")
+        try expect(migrated.schemaVersion == 17, "Schema migration")
         try expect(migrated.entryLocations.isEmpty && migrated.buddySuggestions.isEmpty && migrated.captureEntryLocation == nil && migrated.suggestionsEnabled == nil, "Legacy defaults never invent locations or suggestions")
         try expect(migrated.profile == old.profile && migrated.notes == old.notes, "Names and notes preserved")
         try expect(migrated.weeklyTasks == old.weeklyTasks && migrated.media == old.media, "Tasks and media paths preserved")
@@ -202,6 +202,40 @@ struct ModelChecks {
         try expect(snapshotWithShower.showerWeekCount == 1 && snapshotWithShower.showerWeekGoal == 3 && snapshotWithShower.showerDays?.first?.status == "done", "Minimal widget cache receives real shower state and goal")
         let profileXML = "<?xml version=\"1.0\"?><plist version=\"1.0\"><dict><key>Entitlements</key><dict><key>com.apple.security.application-groups</key><array><string>group.signer.therapie</string><string>group.unrelated</string></array></dict></dict></plist>"
         try expect(TherapyWidgetStorage.candidates(profile: Data(profileXML.utf8)) == [TherapyWidgetSnapshot.appGroup, "group.signer.therapie"], "Signed group discovery uses only related declared groups")
+        var appleData = AppData()
+        let wakeClock = date("2026-10-05T04:00:00Z")
+        let wakeAlarm = WakeAlarm(title: "Aufstehen", hour: 6, minute: 30, weekdays: [2,3,4,5,6], followUpCount: 3, followUpMinutes: 2)
+        appleData.wakeAlarms = [wakeAlarm]
+        let firstWake = WakePlanner.occurrences(data: appleData, now: wakeClock).first { $0.date > wakeClock }!
+        try expect(Calendar.current.component(.weekday, from: firstWake.date) == 2, "Wake alarm respects selected weekdays")
+        let firstSlots = WakePlanner.slots(data: appleData, now: wakeClock)
+        try expect(firstSlots.filter { $0.id.hasPrefix(firstWake.id + ".") }.count == 4, "Wake follow-ups are bounded and scheduled in advance")
+        appleData.wakeRuns = [WakeRun(id:firstWake.id, alarmID:wakeAlarm.id, scheduledAt:firstWake.date, outcome:.completed)]
+        try expect(!WakePlanner.slots(data:appleData,now:wakeClock).contains { $0.id.hasPrefix(firstWake.id + ".") }, "Completion removes every follow-up for this occurrence")
+        appleData.wakeRuns = []; appleData.wakeAlarms[0].excludedDays = [firstWake.date]
+        try expect(!WakePlanner.occurrences(data:appleData,now:wakeClock).contains { $0.id == firstWake.id }, "Excluded local calendar day never schedules")
+        appleData.wakeAlarms[0].excludedDays = []
+        appleData.wakeRuns = [WakeRun(id:firstWake.id,alarmID:wakeAlarm.id,scheduledAt:firstWake.date,snoozes:1,snoozedUntil:firstWake.date.addingTimeInterval(300),revision:1)]
+        try expect(!AlarmOwnershipPolicy.keepAlerting(key:firstWake.id + ".r0.0",data:appleData,now:firstWake.date.addingTimeInterval(60)), "Snoozing permits cancellation of the old ringing alarm")
+        try expect(WakePlanner.slots(data:appleData,now:firstWake.date).contains { $0.id.hasPrefix(firstWake.id + ".r1.") && $0.fireAt == firstWake.date.addingTimeInterval(300) }, "Snooze replaces the alarm generation and fire time")
+        try expect(MedicalPass(birthDate:date("2000-10-08T00:00:00Z")).age(at:date("2026-10-07T12:00:00Z")) == 25, "Pass age changes on the birthday rather than storing stale age")
+        var appleRoutine = DailyRoutine(title:"Frühstück",times:[RoutineTime(weekdays:[2],hour:6,minute:30)],urgentAlarm:true,repeatUntilDone:false,escalationHour:nil,appleReminders:true,alarmDelayMinutes:10)
+        appleData = AppData(); appleData.appleIntegration.remindersEnabled = true; appleData.routines = [appleRoutine]
+        let drafts = AppleReminderPlanner.drafts(data:appleData,now:wakeClock)
+        try expect(drafts.first?.title == "Deine Routine", "System reminders are private by default")
+        let breakfast = drafts.first!.routineOccurrence!
+        let delayed = CompanionAlarmPlanner.candidates(appleData,now:breakfast.due.addingTimeInterval(60))
+        try expect(delayed.contains { $0.route == "routine|\(appleRoutine.id)" && $0.fireAt == breakfast.due.addingTimeInterval(600) }, "Grace-period alarm is still planned after initial due time")
+        appleData.routineCompletions = [.init(routineID:appleRoutine.id,timeID:breakfast.timeID,scheduledAt:breakfast.scheduledAt)]
+        try expect(!AppleReminderPlanner.drafts(data:appleData,now:wakeClock).contains { $0.id == drafts.first!.id }, "Confirmed reminder is removed from managed desired inventory")
+        try expect(!CompanionAlarmPlanner.candidates(appleData,now:breakfast.due.addingTimeInterval(60)).contains { $0.fireAt == breakfast.due.addingTimeInterval(600) }, "Confirmed routine cancels grace alarm")
+        appleRoutine.enabled = false; appleData.routines = [appleRoutine]
+        try expect(AppleReminderPlanner.drafts(data:appleData,now:wakeClock).isEmpty, "Paused routine does not publish reminders")
+        var previousApple = try JSONSerialization.jsonObject(with:encoder.encode(AppData())) as! [String:Any]
+        previousApple["schemaVersion"] = 16
+        for key in ["medicalPass","appleIntegration","wakeAlarms","wakeRuns"] { previousApple.removeValue(forKey:key) }
+        let migratedApple = try decoder.decode(AppData.self,from:JSONSerialization.data(withJSONObject:previousApple))
+        try expect(migratedApple.medicalPass == MedicalPass() && !migratedApple.appleIntegration.remindersEnabled && migratedApple.wakeAlarms.isEmpty, "Existing data gains empty pass and opt-in integrations without requesting permission")
         print("Passed \(checks) migration, streak, chart aggregation and export checks.")
     }
 }

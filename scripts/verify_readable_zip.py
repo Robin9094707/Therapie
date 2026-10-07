@@ -11,6 +11,10 @@ with zipfile.ZipFile(sys.argv[1]) as archive:
     data = json.loads(archive.read("therapy-data.json"))
     manifest = json.loads(archive.read("manifest.json"))
     assert data == manifest["data"]
+    assert data["medicalPass"]["name"] == "Testpass"
+    assert data["appleIntegration"]["remindersEnabled"] is True
+    assert data["wakeAlarms"][0]["title"] == "Testwecker"
+    assert data["wakeRuns"][0]["outcome"] == "emergencyStopped"
     assert data["schemaVersion"] == 16
     assert len(data["copingMethods"]) == 2
     assert data["copingMethods"][1]["kind"] == "thoughtStop"

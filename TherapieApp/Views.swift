@@ -6,9 +6,10 @@ import UIKit
 private let therapyContentMaxWidth: CGFloat = 720
 
 private enum RootModal: Identifiable {
-    case ai, permissions, session, checkIn(GuidedCheckIn), task(WeeklyTask), routine(UUID), showers, widgetSetup, routines, reminders, therapy, mood, energy
+    case apple(String), ai, permissions, session, checkIn(GuidedCheckIn), task(WeeklyTask), routine(UUID), showers, widgetSetup, routines, reminders, therapy, mood, energy
     var id: String {
         switch self {
+        case .apple(let page): "apple-" + page
         case .ai: "ai"; case .permissions: "permissions"; case .session: "session"
         case .checkIn(let entry): "check-in-" + entry.id.uuidString
         case .task(let task): "task-" + task.id.uuidString
@@ -51,6 +52,8 @@ struct RootView: View {
         .onOpenURL { url in
             guard url.scheme == "therapie" else { return }
             switch url.host {
+            case "emergency", "medicalpass", "alarms", "apple", "methods", "grounding": store.notificationApplePage = url.host
+            case "wake": store.notificationApplePage = "wake|" + url.pathComponents.dropFirst().joined(separator: "|")
             case "showers": store.notificationShowers = true
             case "widgetsetup": store.notificationWidgetSetup = true
             case "session": store.notificationSession = true
@@ -64,7 +67,7 @@ struct RootView: View {
             default: break
             }
         }
-        .onChange(of: scenePhase) { _, phase in if phase == .active { store.resumeProtectedStorage(); if store.storageReady { store.sessionController.synchronize(); store.consumeRoutineAlarmRoute(); store.refreshTherapyCalendar(force: false); TaskNotificationCoordinator.shared.refresh(store); TherapyWidgetBridge.refresh(store, force: true); presentRequested() } } }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { store.resumeProtectedStorage(); if store.storageReady { store.sessionController.synchronize(); store.consumeRoutineAlarmRoute(); store.refreshTherapyCalendar(force: false); TaskNotificationCoordinator.shared.refresh(store); AppleRemindersService.shared.refresh(store); TherapyWidgetBridge.refresh(store, force: true); presentRequested() } } }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in store.resumeProtectedStorage(); presentRequested() }
         .onChange(of: store.waitingForProtectedData) { _, waiting in if !waiting { presentRequested() } }
         .onChange(of: presentationRequestKey) { _, _ in presentRequested() }
@@ -78,6 +81,7 @@ struct RootView: View {
                 if store.storageReady && scenePhase == .active { store.sessionController.reconcile(); store.consumeRoutineAlarmRoute(); presentRequested() }
                 if Date().timeIntervalSince(lastReminderRefresh) >= 300 && store.storageReady && store.lastSaveError == nil {
                     lastReminderRefresh = Date()
+                    AppleRemindersService.shared.refresh(store)
                     store.pruneUndo()
                     TaskNotificationCoordinator.shared.refresh(store)
                     TherapyWidgetBridge.refresh(store)
@@ -120,6 +124,7 @@ struct RootView: View {
 
     private func modalContent(_ route: RootModal) -> AnyView {
         switch route {
+        case .apple(let page): return AnyView(NavigationStack { ApplePageDestination(page: page).toolbar { ToolbarItem(placement: .cancellationAction) { Button("Schließen") { modal = nil } } } })
         case .ai: return AnyView(NavigationStack { AIBuddyView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Schließen") { modal = nil }.disabled(!store.visibleAIComposerIDs.isEmpty || !store.activeBuddyVoiceIDs.isEmpty) } } }.interactiveDismissDisabled(!store.visibleAIComposerIDs.isEmpty || !store.activeBuddyVoiceIDs.isEmpty))
         case .permissions: return AnyView(PermissionSetupView())
         case .session: return AnyView(NavigationStack {
@@ -140,13 +145,14 @@ struct RootView: View {
     }
     private var presentationRequestKey: String {
         let flags = [showPermissions, store.notificationSession, store.notificationAIHub, store.notificationShowers, store.notificationWidgetSetup, store.notificationRoutines, store.notificationReminders, store.notificationTherapy, store.notificationMood, store.openEnergyReview]
-        return flags.map { $0 ? "1" : "0" }.joined() + (store.pendingGuidedCheckIn?.id.uuidString ?? "") + (store.notificationTaskID?.uuidString ?? "") + (store.notificationRoutineID?.uuidString ?? "")
+        return (store.notificationApplePage ?? "") + flags.map { $0 ? "1" : "0" }.joined() + (store.pendingGuidedCheckIn?.id.uuidString ?? "") + (store.notificationTaskID?.uuidString ?? "") + (store.notificationRoutineID?.uuidString ?? "")
     }
 
     private func presentRequested() {
         // One stable presentation owner. Other requests wait for this sheet to close.
         guard modal == nil, store.storageReady, scenePhase == .active else { return }
-        if showPermissions { showPermissions = false; modal = .permissions }
+        if let page = store.notificationApplePage { store.notificationApplePage = nil; modal = .apple(page) }
+        else if showPermissions { showPermissions = false; modal = .permissions }
         else if store.notificationSession { store.notificationSession = false; modal = .session }
         else if let entry = store.pendingGuidedCheckIn { store.pendingGuidedCheckIn = nil; modal = .checkIn(entry) }
         else if store.notificationAIHub { store.notificationAIHub = false; modal = .ai }
@@ -1333,6 +1339,11 @@ struct SettingsView: View {
                 VStack(spacing: 16) {
                     profileCard
                     GlassCard { NavigationLink { BuddyWellbeingProfileView() } label: { Label("Mein aktueller Akku & Befinden", systemImage: "heart.text.clipboard") } }
+                    GlassCard { VStack(alignment: .leading, spacing: 14) {
+                        NavigationLink { MedicalPassView() } label: { Label("Mein Therapiepass", systemImage: "person.text.rectangle") }
+                        NavigationLink { WakeAlarmHubView() } label: { Label("Wecker & Aufstehen", systemImage: "alarm.fill") }
+                        NavigationLink { AppleIntegrationView() } label: { Label("Apple-Integration & Kurzbefehle", systemImage: "apple.logo") }
+                    } }
                     AppearanceCard()
                     HomeAndWidgetSettingsCard()
                     AIBuddySettingsCard()

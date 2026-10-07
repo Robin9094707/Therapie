@@ -5,9 +5,9 @@ import sys
 
 app = Path(sys.argv[1])
 info = plistlib.loads((app / "Info.plist").read_bytes())
-assert info["CFBundleShortVersionString"] == "3015.0.0"
+assert info["CFBundleShortVersionString"] == "3016.0.0"
 assert info["CFBundleIdentifier"] == "eu.rjuhas.therapie", "Existing app identity must be preserved"
-assert info["CFBundleVersion"] == "23", "Expected release build number"
+assert info["CFBundleVersion"] == "24", "Expected release build number"
 assert "therapie" in info["CFBundleURLTypes"][0]["CFBundleURLSchemes"], "Widget deep-link scheme missing"
 assert info["UIDeviceFamily"] == [1], "Expected a native iPhone target"
 assert info["UILaunchStoryboardName"] == "LaunchScreen"
@@ -27,11 +27,12 @@ assert (extension / "Metadata.appintents" / "extract.actionsdata").is_file(), "W
 assert widget["CFBundleIdentifier"] == "eu.rjuhas.therapie.liveactivity"
 assert widget["CFBundleShortVersionString"] == info["CFBundleShortVersionString"]
 assert (extension / widget["CFBundleExecutable"]).is_file(), "Compiled Live Activity executable missing"
+assert (app / "Metadata.appintents" / "extract.actionsdata").is_file(), "App Shortcuts metadata missing"
 primary = info["CFBundleIcons"]["CFBundlePrimaryIcon"]
 assert primary["CFBundleIconName"] == "AppIcon"
 assert primary.get("CFBundleIconFiles"), "SpringBoard icon registration missing"
 for suffix in ("@2x.png", "@3x.png"):
     assert (app / ("AppIcon60x60" + suffix)).is_file(), f"Home-screen icon {suffix} missing"
-for key in ("NSAlarmKitUsageDescription", "NSCalendarsFullAccessUsageDescription", "NSLocationWhenInUseUsageDescription", "NSMicrophoneUsageDescription"):
+for key in ("NSRemindersFullAccessUsageDescription", "NSHomeKitUsageDescription", "NSMotionUsageDescription", "NSCameraUsageDescription", "NSAlarmKitUsageDescription", "NSCalendarsFullAccessUsageDescription", "NSLocationWhenInUseUsageDescription", "NSMicrophoneUsageDescription"):
     assert info.get(key), f"Permission description {key} missing"
 print("Verified native iPhone target, compiled launch screen, scenes, 2x/3x icons, permissions and embedded Live Activity extension.")
