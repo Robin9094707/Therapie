@@ -11,7 +11,7 @@ with zipfile.ZipFile(sys.argv[1]) as archive:
     data = json.loads(archive.read("therapy-data.json"))
     manifest = json.loads(archive.read("manifest.json"))
     assert data == manifest["data"]
-    assert data["schemaVersion"] == 15
+    assert data["schemaVersion"] == 16
     assert len(data["copingMethods"]) == 2
     assert data["copingMethods"][1]["kind"] == "thoughtStop"
     assert data["emergencyPlan"]["firstStep"] == "Reize reduzieren"
