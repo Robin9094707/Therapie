@@ -44,7 +44,7 @@ struct BackupChecks {
         data.emergencyPlan = PersonalEmergencyPlan(firstStep: "Reize reduzieren", steps: ["Eine Pause machen"], support: "Meine eigene Kontaktperson", methodIDs: [data.copingMethods[0].id], updatedAt: supportClock)
         data.emergencyPlan.panels = [EmergencyPanel(title: "Stopp", text: "Pause", methodID: data.copingMethods[1].id)]
         data.groundingPractices = [GroundingPractice(date: supportClock, answers: [["Fenster"], ["Boden"], [], [], []], note: "In meinem Tempo")]
-        data.showerEntries = [ShowerEntry(date: supportClock, note: "Flexibel")]
+        data.showerEntries = [ShowerEntry(date: supportClock, note: "Flexibel"), ShowerEntry(date: supportClock.addingTimeInterval(-86400), note: "Versehentlich", markedWrongAt: supportClock)]
         data.showerPreferences.weeklyGoal = 2
         data.dashboard.welcomeMessage = "Ein kleiner Schritt reicht."
         data.dashboard.showFeatureLinks = false
@@ -60,7 +60,7 @@ struct BackupChecks {
         data.routines[0].repeatEveryDays = 2
         data.routines[0].actionButtons = [RoutineActionButton(title:"Frühstück in fünf Minuten",action:.snooze,minutes:5)]
         data.routineDeferrals = [RoutineDeferral(routineID: routine.id, timeID: routine.times[0].id, scheduledAt: supportClock, deferredUntil: supportClock.addingTimeInterval(86400), createdAt: supportClock)]
-        data.routineCompletions = [RoutineCompletion(routineID: routine.id, timeID: routine.times[0].id, scheduledAt: Date(), outcome: .skipped, note: "Pause", routineTitle: "Frühstück", timeTitle: "Vor der Arbeit", corrections: [RoutineCorrection(previousOutcome: .done, previousNote: "", outcome: .skipped, note: "Pause", reason: "Falsche Angabe")])]
+        data.routineCompletions = [RoutineCompletion(routineID: routine.id, timeID: routine.times[0].id, scheduledAt: Date(), outcome: .skipped, note: "Pause", routineTitle: "Frühstück", timeTitle: "Vor der Arbeit", corrections: [RoutineCorrection(previousOutcome: .done, previousNote: "", outcome: .skipped, note: "Pause", reason: "Falsche Angabe")], markedWrong: true)]
         data.routineSnoozes = [RoutineSnooze(id: "portable-occurrence", until: Date())]
         data.guidedCheckIns = [GuidedCheckIn(kind: .therapy, mood: 4, batteryPercent: 0, stress: 2, sensoryLoad: 3, sleepHours: 7.5, summary: "Geführter Rückblick", therapyQuestion: "Was hilft?", tasks: [CheckInTaskDraft(title: "Erster Schritt", source: "Aus der Therapie")], isDraft: false)]
         data.companionSettings = CompanionSettings(vacationUntil: Date(), privateRoutineTitles: false, offerTherapyCheckIn: true, checkInReminders: [CheckInReminder(kind: .morning, time: RoutineTime(weekdays: [2, 3, 4, 5, 6], hour: 6, minute: 30, weekendHour: 9, weekendMinute: 0))])
@@ -163,6 +163,7 @@ struct BackupChecks {
         try expect(prepared.manifest.data.copingMethods == data.copingMethods && prepared.manifest.data.emergencyPlan == data.emergencyPlan, "Methods, thought stops and emergency image references round-trip")
         try expect(prepared.manifest.data.showerPreferences == data.showerPreferences && prepared.manifest.data.routineDeferrals == data.routineDeferrals && prepared.manifest.data.routines[0].repeatEveryDays == 2, "Shower target, calendar-day rhythm and per-occurrence deferral round-trip")
         try expect(prepared.manifest.data.groundingPractices == data.groundingPractices && prepared.manifest.data.showerEntries == data.showerEntries, "Grounding answers and flexible shower dates round-trip")
+        try expect(prepared.manifest.data.showerEntries[1].markedWrongAt != nil && prepared.manifest.data.routineCompletions[0].markedWrong == true, "Schema-18 wrong-entry marks round-trip")
         defer { prepared.discard() }
         try expect(try json(prepared.manifest.data) == json(data.portableSnapshot), "All AppData fields round-trip")
         try expect(prepared.manifest.data.dashboard == data.dashboard && prepared.manifest.data.archivePreferences == data.archivePreferences, "Encrypted restore retains cards, pins and archive settings")
@@ -254,10 +255,10 @@ struct BackupChecks {
         prefs.apply(defaults)
         try expect(PortablePreferences.capture(defaults) == prefs, "Appearance, calm, haptics and confetti restored")
         var oldJSON = try JSONSerialization.jsonObject(with: BackupArchive.encoder().encode(data)) as! [String: Any]
-        for version in 1...16 {
+        for version in 1...17 {
             oldJSON["schemaVersion"] = version
             let migrated = try BackupArchive.decoder().decode(AppData.self, from: JSONSerialization.data(withJSONObject: oldJSON))
-            try expect(migrated.schemaVersion == 17 && migrated.notes.count == 1 && migrated.media[0].attachmentOmitted == nil, "Schema \(version) migrates for backups")
+            try expect(migrated.schemaVersion == 18 && migrated.notes.count == 1 && migrated.media[0].attachmentOmitted == nil, "Schema \(version) migrates for backups")
         }
         oldJSON["schemaVersion"] = 12; oldJSON.removeValue(forKey: "accentTheme"); oldJSON.removeValue(forKey: "wellbeingPreferences")
         for key in ["copingMethods", "emergencyPlan", "groundingPractices", "showerEntries"] { oldJSON.removeValue(forKey: key) }

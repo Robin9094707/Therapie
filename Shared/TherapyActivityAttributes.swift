@@ -16,6 +16,8 @@ struct TherapyActivityAttributes: TherapyActivityConformance {
         var remaining: Int
         var phases: [Phase]
         var referenceDate: Date?
+        /// Final lock-screen state after the planned time; the island itself is removed by iOS.
+        var finished: Bool? = nil
         func phaseRemaining(at date: Date = Date()) -> TimeInterval? {
             guard let phase = currentPhase(at: date) else { return nil }
             let clock = paused ? referenceDate ?? end.addingTimeInterval(-Double(remaining)) : date

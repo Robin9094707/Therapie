@@ -19,7 +19,7 @@ struct TherapyEditorSheet<Content: View>: View {
     }
     var body: some View {
         NavigationStack {
-            Form { content }
+            Form { content }.therapyFormStyle()
                 // Form's automatic row action must never activate sibling buttons together.
                 .buttonStyle(.borderless)
                 .navigationTitle(title).navigationBarTitleDisplayMode(.inline)

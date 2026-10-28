@@ -26,7 +26,7 @@ struct ModelChecks {
         fixture["schemaVersion"] = 1
         for key in ["moodCheckIns", "batteryPoints", "weekReviews", "wellnessSettings", "therapyFolders", "therapyTopics", "therapyGoals", "sessionTemplates", "currentSession", "sessionHistory", "sessionPreferences", "weeklyEnergyReviews", "reminderPreferences"] { fixture.removeValue(forKey: key) }
         let migrated = try decoder.decode(AppData.self, from: JSONSerialization.data(withJSONObject: fixture))
-        try expect(migrated.schemaVersion == 17, "Schema migration")
+        try expect(migrated.schemaVersion == 18, "Schema migration")
         try expect(migrated.entryLocations.isEmpty && migrated.buddySuggestions.isEmpty && migrated.captureEntryLocation == nil && migrated.suggestionsEnabled == nil, "Legacy defaults never invent locations or suggestions")
         try expect(migrated.profile == old.profile && migrated.notes == old.notes, "Names and notes preserved")
         try expect(migrated.weeklyTasks == old.weeklyTasks && migrated.media == old.media, "Tasks and media paths preserved")
@@ -195,6 +195,28 @@ struct ModelChecks {
         try expect(RoutineDayMutation.postpone(showerOccurrence, until: date("2026-10-07T17:00:00Z"), in: &merged, at: monday), "Move to official shower day accepted")
         try expect(merged.routineDeferrals.isEmpty && merged.routineCompletions.first?.outcome == .skipped && ShowerPlanner.today(merged, at: date("2026-10-07T10:00:00Z")).count == 1, "Moving to next official day creates no duplicate obligation")
         try expect(ShowerPlanner.weekCount(merged, at: monday) == 0, "Skipping never counts as showering")
+        // Schema 18: correcting past shower days keeps an honest, visible history.
+        var history = AppData(); history.routines = [showerRoutine]
+        let wednesday = date("2026-10-07T10:00:00Z"), wednesdayShower = ShowerPlanner.today(history, at: wednesday).first!
+        try expect(RoutineDayMutation.resolve(wednesdayShower, outcome: .done, note: "", in: &history, at: wednesday.addingTimeInterval(32400)), "Planned shower confirmed")
+        history.showerEntries = [ShowerEntry(date: date("2026-10-08T18:00:00Z"), note: "Extra")]
+        try expect(ShowerPlanner.weekCount(history, at: wednesday) == 2, "Planned and extra shower count")
+        let plannedID = history.routineCompletions[0].id, extraID = history.showerEntries[0].id
+        try expect(ShowerHistory.setMarkedWrong(plannedID, true, in: &history, at: wednesday) && history.routineCompletions[0].markedWrong == true && history.routineCompletions[0].outcome == .skipped, "Planned shower marked as wrongly entered")
+        try expect(ShowerHistory.items(history).first { $0.id == plannedID }?.markedWrong == true && ShowerPlanner.weekCount(history, at: wednesday) == 1, "Wrong entry stays visible and stops counting")
+        try expect(!ShowerHistory.setShowered(plannedID, true, in: &history, at: wednesday), "Marked entry must be unmarked before other corrections")
+        try expect(ShowerHistory.setMarkedWrong(plannedID, false, in: &history, at: wednesday) && history.routineCompletions[0].outcome == .done && history.routineCompletions[0].markedWrong == nil && history.routineCompletions[0].corrections?.count == 2, "Mark can be lifted with an audit trail")
+        try expect(ShowerHistory.setShowered(plannedID, false, in: &history, at: wednesday) && history.routineCompletions[0].outcome == .skipped && history.routineCompletions[0].markedWrong == nil, "Admitting a missed shower keeps the day resolved")
+        try expect(RoutinePlanner.resolved(wednesdayShower, completions: history.routineCompletions), "Corrections never reopen reminders")
+        try expect(ShowerHistory.setShowered(plannedID, true, in: &history, at: wednesday) && ShowerHistory.setMarkedWrong(plannedID, true, in: &history, at: wednesday), "Planned shower marked wrong again")
+        try expect(RoutineHistoryMutation.correct(id: plannedID, outcome: .done, note: "", reason: "Doch richtig", in: &history, now: wednesday) && history.routineCompletions[0].markedWrong == nil && ShowerHistory.items(history).first { $0.id == plannedID }?.markedWrong == false, "Routine-history correction clears the wrong-entry mark")
+        history.routineCompletions[0].markedWrong = true
+        try expect(ShowerHistory.setMarkedWrong(plannedID, false, in: &history, at: wednesday) && history.routineCompletions[0].markedWrong == nil && history.routineCompletions[0].outcome == .done, "A stuck mark on a done entry can still be lifted")
+        try expect(ShowerHistory.setShowered(plannedID, false, in: &history, at: wednesday), "Planned shower reset to not showered")
+        try expect(ShowerHistory.setMarkedWrong(extraID, true, in: &history, at: wednesday) && ShowerPlanner.weekCount(history, at: wednesday) == 0 && history.showerEntries.count == 1, "Extra entry marked wrong is kept but not counted")
+        try expect(!ShowerHistory.setMarkedWrong(extraID, true, in: &history, at: wednesday), "Repeated mark is idempotent")
+        try expect(ShowerHistory.setMarkedWrong(extraID, false, in: &history, at: wednesday) && ShowerPlanner.weekCount(history, at: wednesday) == 1, "Extra entry counts again after unmarking")
+        try expect(ShowerHistory.setShowered(extraID, false, in: &history, at: wednesday) && history.showerEntries.isEmpty, "Extra entry can be removed again")
         var interval = AppData(); interval.routines = [ShowerPlanner.defaultRoutine(at: date("2026-10-24T10:00:00Z"), everyTwoDays: true)]
         let intervalDates = RoutinePlanner.occurrences(data: interval, now: date("2026-10-24T00:00:00Z"), days: 5).map(\.due)
         try expect(intervalDates == [date("2026-10-24T17:00:00Z"), date("2026-10-26T18:00:00Z"), date("2026-10-28T18:00:00Z")], "Every-two-days rhythm retains local clock across autumn DST")

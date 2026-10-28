@@ -213,6 +213,10 @@ final class AppStore: ObservableObject {
                     let beforeUpdate = rootURL.appendingPathComponent("therapy-data.pre-3016.json")
                     if !fm.fileExists(atPath: beforeUpdate.path) { try raw.write(to: beforeUpdate, options: [.atomic, .completeFileProtection]) }
                 }
+                if version < 18 {
+                    let beforeUpdate = rootURL.appendingPathComponent("therapy-data.pre-4000.json")
+                    if !fm.fileExists(atPath: beforeUpdate.path) { try raw.write(to: beforeUpdate, options: [.atomic, .completeFileProtection]) }
+                }
                 let snapshot = rootURL.appendingPathComponent("therapy-data.pre-3009.json")
                 if version < 11 && !fm.fileExists(atPath: snapshot.path) { try raw.write(to: snapshot, options: [.atomic, .completeFileProtection]) }
             }

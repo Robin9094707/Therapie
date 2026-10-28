@@ -72,7 +72,7 @@ struct RootView: View {
             default: break
             }
         }
-        .onChange(of: scenePhase) { _, phase in if phase == .active { store.resumeProtectedStorage(); if store.storageReady { store.sessionController.synchronize(); store.consumeRoutineAlarmRoute(); store.refreshTherapyCalendar(force: false); TaskNotificationCoordinator.shared.refresh(store); AppleRemindersService.shared.refresh(store); TherapyWidgetBridge.refresh(store, force: true); presentRequested() } } }
+        .onChange(of: scenePhase) { _, phase in if phase == .inactive && store.storageReady { store.sessionController.prepareForBackground() }; if phase == .active { store.resumeProtectedStorage(); if store.storageReady { store.sessionController.synchronize(); store.consumeRoutineAlarmRoute(); store.refreshTherapyCalendar(force: false); TaskNotificationCoordinator.shared.refresh(store); AppleRemindersService.shared.refresh(store); TherapyWidgetBridge.refresh(store, force: true); presentRequested() } } }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in store.resumeProtectedStorage(); presentRequested() }
         .onChange(of: store.waitingForProtectedData) { _, waiting in if !waiting { presentRequested() } }
         .onChange(of: presentationRequestKey) { _, _ in presentRequested() }
@@ -771,16 +771,17 @@ struct TasksView: View {
             TherapyScreen {
                 VStack(spacing: 14) {
                     GlassCard {
-                        VStack(alignment: .leading, spacing: 10) {
-                            NavigationLink { ReminderCenterView() } label: { Label("Aufgabenerinnerungen einstellen", systemImage: "bell.badge") }
+                        VStack(alignment: .leading, spacing: 14) {
+                            Picker("Wochen", selection: $weekScope) { Text("Diese Woche").tag("current"); Text("Andere Wochen").tag("other"); Text("Alle").tag("all") }.pickerStyle(.segmented)
+                            Toggle("Nur offene Aufgaben", isOn: $onlyOpen)
+                            Text("\(filteredTasks.count) Aufgaben · mehrere Aufgaben pro Woche möglich").font(.caption).foregroundStyle(.secondary)
+                            ViewThatFits(in: .horizontal) {
+                                HStack(spacing: 10) { reminderLink; timelineLink }
+                                VStack(alignment: .leading, spacing: 10) { reminderLink; timelineLink }
+                            }
                             if !store.taskReminderStatus.isEmpty { Text(store.taskReminderStatus).font(.caption).foregroundStyle(.secondary) }
                         }
                     }
-                    NavigationLink { TodoTimelineView() } label: { Label("Gemeinsame To-do-Timeline", systemImage: "calendar.day.timeline.left") }
-                    Picker("Wochen", selection: $weekScope) { Text("Diese Woche").tag("current"); Text("Andere Wochen").tag("other"); Text("Alle").tag("all") }.pickerStyle(.segmented)
-                    Text("\(filteredTasks.count) Aufgaben · mehrere Aufgaben pro Woche möglich").font(.caption).foregroundStyle(.secondary)
-                    Toggle("Nur offene Aufgaben", isOn: $onlyOpen)
-                        .padding(.horizontal, 4)
                     if filteredTasks.isEmpty && !store.data.weeklyTasks.isEmpty { Text("Keine Aufgaben im gewählten Filter. Unter Alle findest du auch andere Wochen.").font(.subheadline).foregroundStyle(.secondary) }
                     if onlyOpen && !store.data.weeklyTasks.isEmpty && store.data.weeklyTasks.allSatisfy(\.completed) {
                         ContentUnavailableView("Alles erledigt", systemImage: "checkmark.seal",
@@ -828,6 +829,13 @@ struct TasksView: View {
                 Button("Löschen", role: .destructive) { store.data.weeklyTasks.removeAll { $0.id == taskToDelete } }
             } message: { Text("Diese Aufgabe wird endgültig gelöscht.") }
         }
+    }
+
+    private var reminderLink: some View {
+        NavigationLink { ReminderCenterView() } label: { Label("Erinnerungen", systemImage: "bell.badge") }.buttonStyle(.glass)
+    }
+    private var timelineLink: some View {
+        NavigationLink { TodoTimelineView() } label: { Label("To-do-Timeline", systemImage: "calendar.day.timeline.left") }.buttonStyle(.glass)
     }
 
     @ViewBuilder
@@ -1180,41 +1188,114 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             TherapyScreen {
-                VStack(spacing: 16) {
-                    profileCard
-                    GlassCard { NavigationLink { BuddyWellbeingProfileView() } label: { Label("Mein aktueller Akku & Befinden", systemImage: "heart.text.clipboard") } }
-                    GlassCard { VStack(alignment: .leading, spacing: 14) {
-                        NavigationLink { MedicalPassView() } label: { Label("Mein Therapiepass", systemImage: "person.text.rectangle") }
-                        NavigationLink { WakeAlarmHubView() } label: { Label("Wecker & Aufstehen", systemImage: "alarm.fill") }
-                        NavigationLink { AppleIntegrationView() } label: { Label("Apple-Integration & Kurzbefehle", systemImage: "apple.logo") }
-                    } }
-                    AppearanceCard()
-                    HomeAndWidgetSettingsCard()
-                    AIBuddySettingsCard()
-                    NavigationLink { EditorDraftListView() } label: { Label("Meine Entwürfe (\(store.data.editorDrafts.count))", systemImage: "square.and.pencil") }
-                    GlassCard {
-                        NavigationLink { WellnessSettingsView() } label: {
-                            Label("Stimmung: Ziele, Erinnerungen & Freigaben", systemImage: "heart.text.clipboard")
+                VStack(spacing: 24) {
+                    profileHeader
+
+                    TherapySettingsSection(title: "Ich & meine Therapie") {
+                        TherapySettingsLink(title: "Akku & Befinden", icon: "heart.text.clipboard", tint: .pink) { BuddyWellbeingProfileView() }
+                        TherapySettingsLink(title: "Therapiepass", icon: "person.text.rectangle", tint: .blue) { MedicalPassView() }
+                        TherapySettingsLink(title: "Therapietag & Termin-Erinnerungen", icon: "calendar.badge.clock", subtitle: scheduleSummary, tint: .indigo) {
+                            TherapySettingsPage(title: "Therapietag") { scheduleCard; reminderCard }
+                        }
+                        TherapySettingsLink(title: "Meine Entwürfe", icon: "square.and.pencil", tint: .orange, value: "\(store.data.editorDrafts.count)") { EditorDraftListView() }
+                    }
+
+                    TherapySettingsSection(title: "Alltag & Erinnerungen") {
+                        TherapySettingsLink(title: "Routinen", icon: "repeat", tint: .green, value: "\(store.data.routines.count)") { RoutineHubView() }
+                        TherapySettingsLink(title: "Duschtage", icon: "shower.fill", tint: .cyan) { ShowerDaysView() }
+                        TherapySettingsLink(title: "Wecker & Aufstehen", icon: "alarm.fill", tint: .orange) { WakeAlarmHubView() }
+                        TherapySettingsLink(title: "Aufgaben- & Wochenenergie-Erinnerungen", icon: "bell.badge.fill", tint: .red) { ReminderCenterView() }
+                        TherapySettingsLink(title: "Stimmung: Ziele & Freigaben", icon: "face.smiling", tint: .yellow) { WellnessSettingsView() }
+                    }
+
+                    TherapySettingsSection(title: "Gestaltung") {
+                        TherapySettingsLink(title: "Darstellung", icon: "paintpalette.fill", tint: .purple, value: store.data.accentTheme.title) {
+                            TherapySettingsPage(title: "Darstellung") { AppearanceCard() }
+                        }
+                        TherapySettingsLink(title: "Startseite & Widgets", icon: "square.grid.2x2.fill", tint: .teal) {
+                            TherapySettingsPage(title: "Startseite & Widgets") { HomeAndWidgetSettingsCard() }
+                        }
+                        TherapySettingsLink(title: "Apple-Integration & Kurzbefehle", icon: "apple.logo", tint: .gray) { AppleIntegrationView() }
+                    }
+
+                    TherapySettingsSection(title: "KI-Begleiter") {
+                        TherapySettingsLink(title: "KI-Begleiter", icon: "sparkles", subtitle: "Optional – die App funktioniert vollständig ohne KI.", tint: .indigo, value: store.data.aiSettings.enabled ? "An" : "Aus") {
+                            TherapySettingsPage(title: "KI-Begleiter") { AIBuddySettingsCard() }
                         }
                     }
-                    scheduleCard
-                    reminderCard
-                    GlassCard { NavigationLink { ReminderCenterView() } label: { Label("Aufgaben- & Wochenenergie-Erinnerungen", systemImage: "bell.badge") } }
-                    GlassCard(emphasized: true) {
-                        VStack(alignment: .leading, spacing: 14) {
-                            SectionHeader(title: "Vollständige Datensicherung", icon: "lock.doc.fill", subtitle: "Passwortsicherung oder lesbares ZIP – mit oder ohne Bilder.")
-                            Text("Alle Einträge und Einstellungen exportieren, in Dateien sichern und später auf diesem oder einem anderen iPhone wiederherstellen.").font(.subheadline).foregroundStyle(.secondary)
-                            Button { showBackupCenter = true } label: { Label("Export & Import öffnen", systemImage: "externaldrive").frame(maxWidth: .infinity) }.buttonStyle(.glassProminent)
+
+                    TherapySettingsSection(title: "Daten & Privatsphäre", footer: "Deine Therapiedaten bleiben auf deinem iPhone. Keine eigenen Server, kein Tracking.") {
+                        Button { showBackupCenter = true } label: {
+                            TherapySettingsRow(title: "Sicherung exportieren & importieren", icon: "lock.doc.fill", subtitle: "Passwortsicherung oder lesbares ZIP", tint: .blue)
                         }
+                        .buttonStyle(TherapyRowPressStyle())
+                        TherapySettingsLink(title: "Automatische Ordnersicherung", icon: "externaldrive.fill", tint: .cyan, value: BackupService.shared.hasSelectedFolder ? "Aktiv" : nil) { backupPage }
+                        TherapySettingsLink(title: "Privatsphäre", icon: "lock.shield.fill", tint: .green) {
+                            TherapySettingsPage(title: "Privatsphäre") { privacyCard }
+                        }
+                        NavigationLink { dangerPage } label: {
+                            TherapySettingsRow(title: "Alle Daten löschen", icon: "trash.fill", destructive: true)
+                        }
+                        .buttonStyle(TherapyRowPressStyle())
                     }
-                    backupCard
-                    privacyCard
-                    dangerCard
+
+                    VStack(spacing: 4) {
+                        TherapyLogoMark(size: 36, glow: false)
+                        Text("Therapie \(TherapyDesign.appVersion)").font(.caption.weight(.semibold))
+                        Text("Mit Sorgfalt für dich gemacht.").font(.caption2)
+                    }
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 4)
                 }
             }
             .navigationTitle("Profil")
             .navigationBarTitleDisplayMode(.large)
             .sheet(isPresented: $showBackupCenter) { BackupCenterView() }
+        }
+    }
+
+    private var scheduleSummary: String {
+        let time = String(format: "%02d:%02d", store.data.schedule.hour, store.data.schedule.minute)
+        return TherapyDateHelper.weekdayName(store.data.schedule.weekday) + " · " + time + " Uhr"
+    }
+
+    private var profileHeader: some View {
+        let name = store.data.profile.userName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let initials = name.split(separator: " ").prefix(2).compactMap(\.first).map { String($0) }.joined().uppercased()
+        return GlassCard(emphasized: true) {
+            VStack(spacing: 14) {
+                Text(initials.isEmpty ? "🙂" : initials)
+                    .font(.system(size: 30, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .frame(width: 76, height: 76)
+                    .background(Color.accentColor.gradient, in: Circle())
+                    .overlay { Circle().strokeBorder(.white.opacity(0.35), lineWidth: 1) }
+                    .shadow(color: Color.accentColor.opacity(0.35), radius: 12, y: 6)
+                    .accessibilityHidden(true)
+                VStack(spacing: 10) {
+                    TextField("Dein Name", text: $store.data.profile.userName)
+                        .font(.system(.title3, design: .rounded, weight: .semibold))
+                        .multilineTextAlignment(.center)
+                        .textInputAutocapitalization(.words)
+                        .padding(10)
+                        .therapyInsetSurface(cornerRadius: 13)
+                    TextField("Therapeutin / Therapeut", text: $store.data.profile.therapistName)
+                        .multilineTextAlignment(.center)
+                        .textInputAutocapitalization(.words)
+                        .padding(10)
+                        .therapyInsetSurface(cornerRadius: 13)
+                }
+                Text("Die Namen erscheinen nur innerhalb deiner App.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private var backupPage: some View {
+        TherapySettingsPage(title: "Ordnersicherung") { backupCard }
             .fileImporter(
                 isPresented: $showFolderPicker,
                 allowedContentTypes: [.folder],
@@ -1247,6 +1328,10 @@ struct SettingsView: View {
             } message: {
                 Text("Die lokalen Therapiedaten werden durch den Stand aus dem ausgewählten Backup-Ordner ersetzt.")
             }
+    }
+
+    private var dangerPage: some View {
+        TherapySettingsPage(title: "Daten löschen") { dangerCard }
             .alert("Alle Daten löschen?", isPresented: $showDeleteDialog) {
                 TextField(deleteConfirmation, text: $deletePhrase)
                 Button("Abbrechen", role: .cancel) {
@@ -1266,29 +1351,6 @@ struct SettingsView: View {
             } message: {
                 Text("Tippe exakt „\(deleteConfirmation)“. Fotos, Audios, Notizen, Aufgaben und Rückblicke werden danach lokal gelöscht.")
             }
-        }
-    }
-
-    private var profileCard: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: 14) {
-                SectionHeader(
-                    title: "Personen",
-                    icon: "person.2.fill",
-                    subtitle: "Die Namen erscheinen nur innerhalb deiner App."
-                )
-
-                TextField("Dein Name", text: $store.data.profile.userName)
-                    .textInputAutocapitalization(.words)
-                    .padding(12)
-                    .therapyInsetSurface(cornerRadius: 13)
-
-                TextField("Therapeutin / Therapeut", text: $store.data.profile.therapistName)
-                    .textInputAutocapitalization(.words)
-                    .padding(12)
-                    .therapyInsetSurface(cornerRadius: 13)
-            }
-        }
     }
 
     private var scheduleCard: some View {
@@ -1590,7 +1652,7 @@ struct AddPhotoView: View {
                             .foregroundStyle(.red)
                     }
                 }
-            }
+            }.therapyFormStyle()
             .navigationTitle("Foto hinzufügen")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -1661,7 +1723,7 @@ struct ImportDocumentView: View {
                             .foregroundStyle(.red)
                     }
                 }
-            }
+            }.therapyFormStyle()
             .navigationTitle("Dokument importieren")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

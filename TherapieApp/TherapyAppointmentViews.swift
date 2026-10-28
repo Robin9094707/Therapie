@@ -41,7 +41,9 @@ struct TodayOverviewCard: View {
                     NavigationLink { RoutineHubView() } label: { tile("Deine Routinen", value: "\(store.data.routines.count)", icon: "repeat") }
                     NavigationLink { TherapyJournalView() } label: { tile("Therapietagebuch", value: "Gedanken & Rückblicke", icon: "book.closed") }
                     NavigationLink { LibraryView() } label: { tile("Notizen & Medien", value: "\(store.data.notes.count) · \(store.data.media.count)", icon: "photo.on.rectangle.angled") }
+                    NavigationLink { ShowerDaysView() } label: { tile("Duschtage diese Woche", value: "\(ShowerPlanner.weekCount(store.data, at: Date())) von \(store.data.showerPreferences.weeklyGoal)", icon: "shower.fill") }
                 }
+                .buttonStyle(TherapyPressStyle())
                 if let mood = store.data.moodCheckIns.sorted(by: { $0.date > $1.date }).first {
                     Label("Zuletzt: \(mood.face) \(mood.moodTitle) · Akku \(mood.battery)/5", systemImage: "battery.100percent").font(.subheadline).foregroundStyle(.secondary)
                 }
@@ -55,10 +57,11 @@ struct TodayOverviewCard: View {
     private func tile(_ title: String, value: String, icon: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Image(systemName: icon).font(.title3).foregroundStyle(Color.accentColor.gradient)
-            Text(value).font(.system(.title2, design: .rounded, weight: .bold)).lineLimit(2).minimumScaleFactor(0.8)
+            Text(value).font(.system(.title2, design: .rounded, weight: .bold)).foregroundStyle(.primary).lineLimit(2).minimumScaleFactor(0.8)
             Text(title).font(.caption).foregroundStyle(.secondary)
         }.frame(maxWidth: .infinity, alignment: .leading).padding(14)
             .therapyInsetSurface(cornerRadius: 18)
+            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }
 
@@ -128,7 +131,7 @@ struct TherapyAppointmentsView: View {
                         }
                     }
                 }
-            }.buttonStyle(.borderless).navigationTitle("Deine Therapietermine").navigationBarTitleDisplayMode(.inline)
+            }.therapyFormStyle().buttonStyle(.borderless).navigationTitle("Deine Therapietermine").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fertig") { dismiss() }.accessibilityIdentifier("therapy.manage.close") } }
                 .safeAreaInset(edge: .bottom) { WellnessSaveErrorView() }
         }.accessibilityIdentifier("therapy.appointments")

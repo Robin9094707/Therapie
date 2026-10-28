@@ -70,7 +70,7 @@ struct AIBuddySettingsView: View {
                     Toggle("Sprachnachricht transkribieren dürfen", isOn: $store.data.aiSettings.allowVoiceUploads)
                     Text("Vor jedem Foto-Upload folgt eine Bestätigung. Eine Sprachaufnahme sendest du ausdrücklich zum Transkribieren und kannst den Text vor dem Chat-Senden bearbeiten. Keine Aufnahme der Therapiestunde im Hintergrund.").font(.caption).foregroundStyle(.secondary)
                 }
-            }.buttonStyle(.borderless).navigationTitle("KI-Begleiter").navigationBarTitleDisplayMode(.inline)
+            }.therapyFormStyle().buttonStyle(.borderless).navigationTitle("KI-Begleiter").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { key = ""; dismiss() } } }
                 .alert("API-Schlüssel entfernen?", isPresented: $deleteKey) { Button("Abbrechen", role: .cancel) {}; Button("Entfernen", role: .destructive) { AIBuddyKeychain.remove(); hasKey = false; store.data.aiSettings.enabled = false } }
         }

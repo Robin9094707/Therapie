@@ -99,7 +99,7 @@ private struct RoutineCorrectionView: View {
                     Text("Die ursprüngliche Bestätigung bleibt im Korrekturverlauf erhalten. Dieser Termin wird dadurch nicht erneut erinnert.").font(.caption).foregroundStyle(.secondary)
                     if let error { Text(error).foregroundStyle(.red) }
                 }
-            }.buttonStyle(.borderless).navigationTitle("Angabe korrigieren").navigationBarTitleDisplayMode(.inline)
+            }.therapyFormStyle().buttonStyle(.borderless).navigationTitle("Angabe korrigieren").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { dismiss() } }
                     ToolbarItem(placement: .confirmationAction) { Button("Speichern") { confirm = true }.disabled(reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (outcome == log.outcome && note == log.note)) }

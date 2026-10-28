@@ -103,7 +103,7 @@ struct RoutineEditorView: View {
                     Toggle("Enddatum", isOn: Binding(get: { routine.endsAt != nil }, set: { routine.endsAt = $0 ? Date().addingTimeInterval(28 * 86400) : nil }))
                     if routine.endsAt != nil { DatePicker("Letzter Termin bis", selection: Binding(get: { routine.endsAt ?? Date() }, set: { routine.endsAt = $0 })) }
                 }
-            }.buttonStyle(.borderless).navigationTitle("Routine gestalten").navigationBarTitleDisplayMode(.inline)
+            }.therapyFormStyle().buttonStyle(.borderless).navigationTitle("Routine gestalten").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { if initial != nil && routine != initial { confirmExit = true } else { dismiss() } } }
                     ToolbarItem(placement: .confirmationAction) { Button("Speichern") { store.saveRoutine(routine); if store.lastSaveError == nil { store.removeEditorDraft(routine.id); if store.lastSaveError == nil { dismiss() } } else { error = store.lastSaveError } }.disabled(!valid) }

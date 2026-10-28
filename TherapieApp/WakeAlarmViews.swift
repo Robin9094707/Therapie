@@ -72,7 +72,7 @@ struct WakeAlarmHubView: View {
                 Text("iOS erlaubt weiterhin System-Stopp und das Beenden der App. Eine unbegrenzt laufende, nicht abschaltbare Sperre ist nicht möglich. Folgealarme sind begrenzt und werden beim nächsten Öffnen aufgefüllt. Ein Notfall-Stopp bleibt in der App erreichbar.").font(.footnote).foregroundStyle(.secondary)
             }
             if !store.data.wakeRuns.isEmpty { Section("Letzte Bestätigungen") { ForEach(store.data.wakeRuns.filter { $0.outcome != nil }.prefix(20)) { run in HStack { Text(run.finishedAt ?? run.scheduledAt, style: .date); Spacer(); Text(run.outcome == .completed ? "Bestätigt" : "Notfall-Stopp").foregroundStyle(.secondary) } } } }
-        }.navigationTitle("Wecker & Aufstehen").navigationBarTitleDisplayMode(.inline)
+        }.therapyFormStyle().navigationTitle("Wecker & Aufstehen").navigationBarTitleDisplayMode(.inline)
             .sheet(item: $draft) { WakeAlarmEditor(alarm: $0) }
     }
 }
@@ -114,7 +114,7 @@ private struct WakeAlarmEditor: View {
                 }
                 Section("Apple Home") { HomeSceneBindingView(ownerID: alarm.id) }
                 if let error = store.lastSaveError { Text(error).foregroundStyle(.red) }
-            }.navigationTitle("Wecker gestalten").toolbar {
+            }.therapyFormStyle().navigationTitle("Wecker gestalten").toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) { Button("Speichern") { store.saveWakeAlarm(alarm); if store.lastSaveError == nil { dismiss() } }.disabled(alarm.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || alarm.weekdays.isEmpty || (alarm.challenge == .photo && alarm.photoObject.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)) }
             }

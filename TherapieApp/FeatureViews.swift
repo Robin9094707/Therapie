@@ -4,19 +4,35 @@ import UIKit
 
 struct FeatureHubLinks: View {
     var body: some View {
-        GlassCard {
-            ViewThatFits(in: .horizontal) {
-                VStack(spacing: 14) { HStack { methods; Spacer(); timeline; Spacer(); map }; HStack { alarms; Spacer(); pass; Spacer(); apple } }
-                VStack(alignment: .leading, spacing: 12) { methods; timeline; map; alarms; pass; apple }
+        ScrollView(.horizontal) {
+            HStack(spacing: 10) {
+                shortcut("Methoden", icon: "sparkles", tint: .purple) { MethodsHubView() }
+                shortcut("Timeline", icon: "calendar.day.timeline.left", tint: .blue) { TodoTimelineView() }
+                shortcut("Duschtage", icon: "shower.fill", tint: .cyan) { ShowerDaysView() }
+                shortcut("Wecker", icon: "alarm.fill", tint: .orange) { WakeAlarmHubView() }
+                shortcut("Pass", icon: "person.text.rectangle.fill", tint: .teal) { MedicalPassView() }
+                shortcut("Karte", icon: "map.fill", tint: .green) { EntryMapView() }
+                shortcut("Apple", icon: "apple.logo", tint: .gray) { AppleIntegrationView() }
             }
+            .padding(.vertical, 4)
         }
+        .scrollIndicators(.hidden)
+        .scrollClipDisabled()
     }
-    private var alarms: some View { NavigationLink { WakeAlarmHubView() } label: { Label("Wecker", systemImage: "alarm.fill") } }
-    private var pass: some View { NavigationLink { MedicalPassView() } label: { Label("Therapiepass", systemImage: "person.text.rectangle") } }
-    private var apple: some View { NavigationLink { AppleIntegrationView() } label: { Label("Apple", systemImage: "apple.logo") } }
-    private var methods: some View { NavigationLink { MethodsHubView() } label: { Label("Meine Methoden", systemImage: "sparkles") } }
-    private var timeline: some View { NavigationLink { TodoTimelineView() } label: { Label("To-do-Timeline", systemImage: "calendar.day.timeline.left") } }
-    private var map: some View { NavigationLink { EntryMapView() } label: { Label("Meine Eintragskarte", systemImage: "map") } }
+    private func shortcut<Destination: View>(_ title: String, icon: String, tint: Color, @ViewBuilder destination: () -> Destination) -> some View {
+        let target = destination()
+        return NavigationLink { target } label: {
+            VStack(spacing: 8) {
+                TherapyIconTile(icon: icon, size: 42, tint: tint)
+                Text(title).font(.caption.weight(.semibold)).foregroundStyle(.primary).lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .frame(width: 78)
+            .padding(.vertical, 12)
+            .contentShape(RoundedRectangle(cornerRadius: TherapyDesign.tileRadius, style: .continuous))
+        }
+        .buttonStyle(TherapyPressStyle())
+        .therapyGlass(in: RoundedRectangle(cornerRadius: TherapyDesign.tileRadius, style: .continuous), interactive: true)
+    }
 }
 struct BuddySuggestionsCard: View {
     @ObservedObject var controller: AIBuddyController

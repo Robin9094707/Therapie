@@ -85,7 +85,7 @@ struct WeeklyEnergyEditorView: View {
                     TextField("Eine Frage für meine Therapeutin / meinen Therapeuten", text: $review.therapyQuestion, axis: .vertical).lineLimit(2...6)
                     TextField("Mein nächster kleiner Schritt", text: $review.nextStep, axis: .vertical).lineLimit(2...6)
                 }
-            }
+            }.therapyFormStyle()
             .navigationTitle("Wochenenergie").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { if review != initial { discard = true } else { dismiss() } } }
@@ -182,7 +182,7 @@ private struct WeeklyEnergyFactorEditor: View {
                 EnergyLevelButtons(value: $factor.impact, title: "Wie stark war der Einfluss?", color: gives ? .teal : .orange)
                 Picker("Bereich", selection: $factor.category) { ForEach(BatteryCategory.allCases) { Label($0.title, systemImage: $0.symbol).tag($0) } }
                 TextField("Was war daran hilfreich oder anstrengend?", text: $factor.note, axis: .vertical).lineLimit(3...8)
-            }.buttonStyle(.borderless).navigationTitle(gives ? "Gibt Energie" : "Nimmt Energie")
+            }.therapyFormStyle().buttonStyle(.borderless).navigationTitle(gives ? "Gibt Energie" : "Nimmt Energie")
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { if factor != initial { discard = true } else { dismiss() } } }
                     ToolbarItem(placement: .confirmationAction) { Button("Übernehmen") { factor.title = factor.title.trimmingCharacters(in: .whitespacesAndNewlines); onSave(factor); TherapyEffects.shared.light(); dismiss() }.disabled(factor.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }

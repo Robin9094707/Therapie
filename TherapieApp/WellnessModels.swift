@@ -317,6 +317,8 @@ struct ShowerEntry: Codable, Equatable, Identifiable {
     var id = UUID()
     var date = Date()
     var note = ""
+    /// Schema 18: kept visible in the history but no longer counted as a shower day.
+    var markedWrongAt: Date?
 }
 enum GroundingGuide {
     static let counts = [5, 4, 3, 2, 1]
@@ -344,7 +346,11 @@ enum ShowerPlanner {
         data.routines.first { $0.id == entry.routineID }.map(isShower) == true || (entry.routineTitle ?? "").localizedCaseInsensitiveContains("dusch")
     }
     static func dates(_ data: AppData) -> [Date] {
-        data.showerEntries.map(\.date) + data.routineCompletions.filter { $0.outcome == .done && isShower($0, data: data) }.map(\.recordedAt)
+        data.showerEntries.filter { $0.markedWrongAt == nil }.map(\.date)
+            + data.routineCompletions.filter { $0.outcome == .done && isShower($0, data: data) }.map(\.recordedAt)
+    }
+    static func showered(on day: Date, data: AppData, calendar: Calendar = .current) -> Bool {
+        dates(data).contains { calendar.isDate($0, inSameDayAs: day) }
     }
     static func weekCount(_ data: AppData, at date: Date, calendar: Calendar = .therapyCalendar) -> Int {
         guard let week = calendar.dateInterval(of: .weekOfYear, for: date) else { return 0 }
@@ -361,6 +367,64 @@ enum ShowerPlanner {
         routine.escalationHour = nil
         if everyTwoDays { routine.recurrenceAnchor = calendar.startOfDay(for: now); routine.repeatEveryDays = 2 }
         return routine
+    }
+}
+/// One row of the shower history: an off-schedule entry or a planned shower routine confirmation.
+struct ShowerHistoryItem: Identifiable, Equatable {
+    enum Kind: Equatable { case extra, planned }
+    var id: UUID
+    var kind: Kind
+    var date: Date
+    var note: String
+    var showered: Bool
+    var markedWrong: Bool
+    var corrected: Bool
+}
+enum ShowerHistory {
+    static let wrongReason = "Als falsch eingetragen markiert"
+    static func items(_ data: AppData) -> [ShowerHistoryItem] {
+        let extras = data.showerEntries.map {
+            ShowerHistoryItem(id: $0.id, kind: .extra, date: $0.date, note: $0.note, showered: $0.markedWrongAt == nil, markedWrong: $0.markedWrongAt != nil, corrected: false)
+        }
+        let planned = data.routineCompletions.filter { ShowerPlanner.isShower($0, data: data) }.map {
+            ShowerHistoryItem(id: $0.id, kind: .planned, date: $0.outcome == .done ? $0.recordedAt : $0.scheduledAt, note: $0.note,
+                              showered: $0.outcome == .done, markedWrong: $0.markedWrong == true, corrected: !($0.corrections ?? []).isEmpty)
+        }
+        return (extras + planned).sorted { $0.date > $1.date }
+    }
+    /// Marks a recorded shower as entered by mistake (or lifts the mark). The entry stays in the history.
+    @discardableResult static func setMarkedWrong(_ id: UUID, _ wrong: Bool, in data: inout AppData, at now: Date = Date()) -> Bool {
+        if let index = data.showerEntries.firstIndex(where: { $0.id == id }) {
+            guard (data.showerEntries[index].markedWrongAt != nil) != wrong else { return false }
+            data.showerEntries[index].markedWrongAt = wrong ? now : nil
+            return true
+        }
+        guard let index = data.routineCompletions.firstIndex(where: { $0.id == id }), ShowerPlanner.isShower(data.routineCompletions[index], data: data) else { return false }
+        let log = data.routineCompletions[index]
+        if wrong {
+            guard log.outcome == .done, log.markedWrong != true,
+                  RoutineHistoryMutation.correct(id: id, outcome: .skipped, note: log.note, reason: wrongReason, in: &data, now: now) else { return false }
+            data.routineCompletions[index].markedWrong = true
+        } else {
+            guard log.markedWrong == true else { return false }
+            if log.outcome != .done {
+                guard RoutineHistoryMutation.correct(id: id, outcome: .done, note: log.note, reason: "Markierung „falsch eingetragen“ aufgehoben", in: &data, now: now) else { return false }
+            }
+            data.routineCompletions[index].markedWrong = nil
+        }
+        return true
+    }
+    /// Honest correction of a planned shower day. Off-schedule entries are removed instead ("doch nicht geduscht").
+    @discardableResult static func setShowered(_ id: UUID, _ showered: Bool, in data: inout AppData, at now: Date = Date()) -> Bool {
+        if let index = data.showerEntries.firstIndex(where: { $0.id == id }) {
+            guard !showered else { return false }
+            data.showerEntries.remove(at: index)
+            return true
+        }
+        guard let log = data.routineCompletions.first(where: { $0.id == id }), ShowerPlanner.isShower(log, data: data),
+              log.markedWrong != true, (log.outcome == .done) != showered else { return false }
+        return RoutineHistoryMutation.correct(id: id, outcome: showered ? .done : .skipped, note: log.note,
+                                              reason: showered ? "Doch geduscht" : "Doch nicht geduscht", in: &data, now: now)
     }
 }
 enum RoutineDayMutation {

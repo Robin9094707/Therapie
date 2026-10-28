@@ -176,7 +176,7 @@ struct MethodEditorView: View {
                     }
                 }
                 if let error = store.lastSaveError { Section { Text(error).foregroundStyle(.red) } }
-            }.navigationTitle(method.kind.title + " gestalten").navigationBarTitleDisplayMode(.inline)
+            }.therapyFormStyle().navigationTitle(method.kind.title + " gestalten").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { if changed { confirmExit = true } else { dismiss() } } }
                     ToolbarItem(placement: .confirmationAction) { Button("Speichern") {
