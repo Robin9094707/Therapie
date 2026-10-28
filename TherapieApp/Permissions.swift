@@ -108,7 +108,7 @@ struct PermissionSetupView: View {
                         Task { await permissions.requestAll() }
                     }.disabled(permissions.running)
                 }
-            }
+            }.therapyFormStyle()
             .navigationTitle("App einrichten").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

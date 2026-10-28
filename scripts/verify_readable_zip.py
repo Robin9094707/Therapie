@@ -15,13 +15,15 @@ with zipfile.ZipFile(sys.argv[1]) as archive:
     assert data["appleIntegration"]["remindersEnabled"] is True
     assert data["wakeAlarms"][0]["title"] == "Testwecker"
     assert data["wakeRuns"][0]["outcome"] == "emergencyStopped"
-    assert data["schemaVersion"] == 17
+    assert data["schemaVersion"] == 18
     assert len(data["copingMethods"]) == 2
     assert data["copingMethods"][1]["kind"] == "thoughtStop"
     assert data["emergencyPlan"]["firstStep"] == "Reize reduzieren"
     assert data["emergencyPlan"]["imageID"] == data["media"][0]["id"]
     assert data["groundingPractices"][0]["answers"][0] == ["Fenster"]
     assert data["showerEntries"][0]["note"] == "Flexibel"
+    assert data["showerEntries"][1]["markedWrongAt"] and "markedWrongAt" not in data["showerEntries"][0]
+    assert data["routineCompletions"][0]["markedWrong"] is True
     assert data["showerPreferences"]["weeklyGoal"] == 2
     assert len(data["routineDeferrals"]) == 1
     assert data["routines"][0]["repeatEveryDays"] == 2

@@ -13,7 +13,7 @@ enum TherapyDesign {
     static let tileRadius: CGFloat = 20
     static let insetRadius: CGFloat = 14
     static let isUITesting = ProcessInfo.processInfo.arguments.contains("--ui-testing")
-    static var appVersion: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "3017.0.0" }
+    static var appVersion: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "4000.0.0" }
 }
 
 private struct TherapyAccentKey: EnvironmentKey {
@@ -304,6 +304,136 @@ struct ResponsiveButtonRow<Content: View>: View {
     }
 }
 
+// MARK: - Grouped menus
+
+extension View {
+    /// Native grouped forms on the shared ambient background, so every menu and editor matches.
+    func therapyFormStyle() -> some View {
+        scrollContentBackground(.hidden)
+            .background { AppBackground() }
+    }
+}
+
+struct TherapyRowPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(Color.primary.opacity(configuration.isPressed ? 0.07 : 0))
+            .contentShape(Rectangle())
+    }
+}
+
+/// A titled group of rows on one glass surface, like a Settings section.
+struct TherapySettingsSection<Content: View>: View {
+    let title: String
+    var footer: String? = nil
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+                .padding(.horizontal, 18)
+                .accessibilityAddTraits(.isHeader)
+            VStack(spacing: 0) {
+                Group(subviews: content) { subviews in
+                    ForEach(subviews) { subview in
+                        subview
+                        if subview.id != subviews.last?.id {
+                            Divider().padding(.leading, 62)
+                        }
+                    }
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: TherapyDesign.tileRadius + 4, style: .continuous))
+            .therapyGlass(in: RoundedRectangle(cornerRadius: TherapyDesign.tileRadius + 4, style: .continuous))
+            if let footer {
+                Text(footer)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 18)
+            }
+        }
+    }
+}
+
+struct TherapySettingsRow: View {
+    let title: String
+    let icon: String
+    var subtitle: String? = nil
+    var tint: Color = .accentColor
+    var value: String? = nil
+    var destructive = false
+    var showsChevron = true
+
+    var body: some View {
+        HStack(spacing: 14) {
+            TherapyIconTile(icon: icon, size: 32, tint: destructive ? .red : tint)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.body)
+                    .foregroundStyle(destructive ? Color.red : Color.primary)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
+            Spacer(minLength: 8)
+            if let value {
+                Text(value).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+            }
+            if showsChevron {
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 11)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+}
+
+struct TherapySettingsLink<Destination: View>: View {
+    let title: String
+    let icon: String
+    var subtitle: String? = nil
+    var tint: Color = .accentColor
+    var value: String? = nil
+    @ViewBuilder var destination: Destination
+
+    var body: some View {
+        NavigationLink {
+            destination
+        } label: {
+            TherapySettingsRow(title: title, icon: icon, subtitle: subtitle, tint: tint, value: value)
+        }
+        .buttonStyle(TherapyRowPressStyle())
+    }
+}
+
+/// A pushed settings page that keeps cards on the shared background.
+struct TherapySettingsPage<Content: View>: View {
+    let title: String
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        TherapyScreen {
+            VStack(spacing: 18) {
+                content
+            }
+        }
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
 // MARK: - Brand
 
 struct TherapyLogoMark: View {
@@ -406,18 +536,18 @@ struct WhatsNewView: View {
     }
 
     private let items: [Item] = [
-        Item(icon: "sparkles", title: "Liquid Glass überall",
-             text: "Karten, Knöpfe, Leisten und Auswahlchips bestehen jetzt aus lebendigem Glas, das sich an Licht und Hintergrund anpasst."),
-        Item(icon: "paintpalette.fill", title: "Deine Farbe im Hintergrund",
-             text: "Ein sanfter Farbverlauf greift deine Hauptfarbe auf. Unter Profil › Deine Oberfläche kannst du sie wechseln oder mit „Ruhige Oberfläche“ dämpfen."),
-        Item(icon: "wand.and.stars", title: "Neuer Startbildschirm",
-             text: "Ein ruhiger Auftakt beim Öffnen der App. Einmal antippen überspringt ihn."),
-        Item(icon: "rectangle.compress.vertical", title: "Mehr Platz beim Lesen",
-             text: "Die Tableiste wird beim Scrollen kleiner und erscheint wieder, sobald du zurückscrollst."),
-        Item(icon: "wrench.and.screwdriver.fill", title: "Fehler behoben",
-             text: "Aufgaben, Archiv, Kalender, Insights und Therapieraum öffnen sich wieder mit nur einer Navigationsleiste und einem zuverlässigen Zurück."),
+        Item(icon: "sparkles", title: "Therapie 4 – aufgeräumt & hochwertig",
+             text: "Ruhigere Seiten, klarere Abschnitte und überall dasselbe Liquid-Glass-Design – auch in allen Menüs, Editoren und Einstellungen."),
+        Item(icon: "person.crop.circle.fill", title: "Neues Profil",
+             text: "Alle Einstellungen sind jetzt übersichtlich gruppiert wie in der Einstellungen-App. Jeder Bereich hat seine eigene ruhige Seite."),
+        Item(icon: "shower.fill", title: "Duschtage besser verwalten",
+             text: "Wochenleiste und Zielring auf einen Blick. Vergangene Einträge kannst du als „doch nicht geduscht“ korrigieren, als falsch eingetragen markieren, bearbeiten oder entfernen."),
+        Item(icon: "timer", title: "Dynamic Island, die mitläuft",
+             text: "Die Therapiestunde startet ihre Live-Aktivität sofort, auch wenn du die App gleich verlässt. Ring, Restzeit und Abschnitte laufen im Hintergrund korrekt weiter."),
+        Item(icon: "square.grid.2x2.fill", title: "Bessere Übersicht",
+             text: "Schnellzugriffe als Kachelreihe, „Alles im Blick“ mit Duschtagen und ein neuer Zeitring in der Therapiestunde."),
         Item(icon: "lock.shield.fill", title: "Deine Daten bleiben",
-             text: "Das Datenformat ist unverändert. Einträge, Fotos, Aufnahmen, Sicherungen und Einstellungen funktionieren genau wie vorher.")
+             text: "Alle bisherigen Einträge, Fotos, Aufnahmen, Sicherungen und Einstellungen funktionieren weiter. Vor der Umstellung legt die App automatisch eine Kopie deiner Daten an.")
     ]
 
     var body: some View {

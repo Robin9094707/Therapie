@@ -42,7 +42,18 @@ final class TherapySessionController: ObservableObject {
         store.offerCheckIn(for: session)
         Self.cancelNotifications(session.id)
         let id = session.id.uuidString
-        Task { for activity in Activity<TherapyActivityAttributes>.activities where activity.attributes.sessionID == id { await activity.end(nil, dismissalPolicy: .immediate) } }
+        var final = activityState(session, privateMode: store.data.sessionPreferences.usesPrivateLiveActivity)
+        final.paused = false; final.finished = true; final.remaining = 0
+        let content = ActivityContent(state: final, staleDate: nil)
+        // Leave a calm "finished" card on the Lock Screen for a short while instead of vanishing abruptly.
+        Task { for activity in Activity<TherapyActivityAttributes>.activities where activity.attributes.sessionID == id { await activity.end(content, dismissalPolicy: .after(Date().addingTimeInterval(15 * 60))) } }
+    }
+    /// Called when the app leaves the foreground: iOS only lets the app start a Live Activity while it is visible.
+    func prepareForBackground() {
+        guard let store, let session = store.data.currentSession, store.data.sessionPreferences.liveActivityEnabled,
+              !Activity<TherapyActivityAttributes>.activities.contains(where: { $0.attributes.sessionID == session.id.uuidString }) else { return }
+        lastPresentedPhase = nil
+        if !busy { synchronize() }
     }
     private func phaseSignature(_ session: RunningTherapySession) -> String {
         session.id.uuidString + ":" + String(session.phaseIndex() ?? -1) + ":" + String(session.pausedAt != nil) + ":" + String(store?.data.sessionPreferences.usesPrivateLiveActivity ?? false) + ":" + String(store?.data.sessionPreferences.liveActivityEnabled ?? false)
@@ -69,23 +80,34 @@ final class TherapySessionController: ObservableObject {
             }
             guard generation == synchronizationGeneration else { return }
             guard let session else { liveStatus = ""; return }
-            await synchronizeNotifications(session, preferences: preferences)
+            // Present the Live Activity before the slower notification work: people often leave the app
+            // right after starting, and iOS refuses to start an activity from the background.
+            if preferences.liveActivityEnabled { await presentActivity(session, preferences: preferences) }
+            else { liveStatus = "Live-Aktivität ausgeschaltet. Der Timer läuft in der App weiter." }
             guard generation == synchronizationGeneration, self.store?.data.currentSession?.id == session.id else { return }
-            guard preferences.liveActivityEnabled else { liveStatus = "Live-Aktivität ausgeschaltet. Der Timer läuft in der App weiter."; return }
-            guard ActivityAuthorizationInfo().areActivitiesEnabled else {
-                liveStatus = "Live-Aktivitäten sind in den iPhone-Einstellungen deaktiviert. Der Timer bleibt gespeichert."
-                return
-            }
-            let state = activityState(session, privateMode: preferences.usesPrivateLiveActivity)
-            let content = ActivityContent(state: state, staleDate: session.pausedAt == nil ? state.currentPhase()?.end ?? session.expectedEnd : nil)
-            if let activity = Activity<TherapyActivityAttributes>.activities.first(where: { $0.attributes.sessionID == session.id.uuidString }) {
-                await activity.update(content)
+            await synchronizeNotifications(session, preferences: preferences)
+        }
+    }
+    private func presentActivity(_ session: RunningTherapySession, preferences: SessionPreferences) async {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+            liveStatus = "Live-Aktivitäten sind in den iPhone-Einstellungen deaktiviert. Der Timer bleibt gespeichert."
+            return
+        }
+        let state = activityState(session, privateMode: preferences.usesPrivateLiveActivity)
+        // iOS re-renders a Live Activity when it turns stale. Marking it stale at the next phase boundary lets the
+        // Dynamic Island show the new phase even while the app is suspended; all clocks are timer-based.
+        let now = Date()
+        let staleDate = session.pausedAt == nil ? state.phases.map(\.end).first(where: { $0 > now }) ?? session.expectedEnd : nil
+        let content = ActivityContent(state: state, staleDate: staleDate, relevanceScore: 100)
+        if let activity = Activity<TherapyActivityAttributes>.activities.first(where: { $0.attributes.sessionID == session.id.uuidString }) {
+            await activity.update(content)
+            liveStatus = "Live-Aktivität aktiv · Sperrbildschirm & Dynamic Island"
+        } else {
+            do {
+                _ = try Activity.request(attributes: TherapyActivityAttributes(sessionID: session.id.uuidString), content: content, pushType: nil)
                 liveStatus = "Live-Aktivität aktiv · Sperrbildschirm & Dynamic Island"
-            } else {
-                do {
-                    _ = try Activity.request(attributes: TherapyActivityAttributes(sessionID: session.id.uuidString), content: content, pushType: nil)
-                    liveStatus = "Live-Aktivität aktiv · Sperrbildschirm & Dynamic Island"
-                } catch { liveStatus = "Live-Aktivität konnte nicht gestartet werden: " + error.localizedDescription }
+            } catch {
+                liveStatus = "Live-Aktivität konnte nicht gestartet werden: " + error.localizedDescription
             }
         }
     }

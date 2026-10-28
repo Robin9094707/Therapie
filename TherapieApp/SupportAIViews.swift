@@ -46,7 +46,7 @@ struct SupportAIProposalView: View {
                         Button("Entwurf bearbeiten und übernehmen", systemImage: "pencil") { openDraft(proposal) }.disabled(busy)
                     }
                 }
-            }.navigationTitle("Mit KI gestalten").navigationBarTitleDisplayMode(.inline)
+            }.therapyFormStyle().navigationTitle("Mit KI gestalten").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Schließen") { request?.cancel(); dismiss() } } }
         }.onAppear { if situation.isEmpty, let originalMethod { situation = originalMethod.situation; category = originalMethod.categories.first ?? .sensory; stage = originalMethod.stages.first ?? .calm } }
             .onDisappear { request?.cancel() }
@@ -104,7 +104,7 @@ struct GroundingHistoryView: View {
                     Button("Übung löschen", role: .destructive) { deleting = practice.id }
                 }
             }
-        }.navigationTitle("Meine Übungen").navigationBarTitleDisplayMode(.inline)
+        }.therapyFormStyle().navigationTitle("Meine Übungen").navigationBarTitleDisplayMode(.inline)
             .alert("Gespeicherte Übung löschen?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) { Button("Abbrechen", role: .cancel) { deleting = nil }; Button("Löschen", role: .destructive) { if let deleting { store.data.groundingPractices.removeAll { $0.id == deleting } }; deleting = nil } }
     }
 }

@@ -107,6 +107,8 @@ struct RoutineCompletion: Codable, Equatable, Identifiable {
     var routineTitle: String?
     var timeTitle: String?
     var corrections: [RoutineCorrection]?
+    /// Schema 18: a confirmation that was entered by mistake. Its outcome is corrected to skipped.
+    var markedWrong: Bool?
 }
 struct RoutineCorrection: Codable, Equatable, Identifiable {
     var id = UUID()

@@ -57,7 +57,7 @@ struct NoteArchivePicker: View {
                 ForEach(store.data.media) { item in
                     Button { choose(item.id); dismiss() } label: { HStack { MediaAttachmentThumbnail(item: item); VStack(alignment: .leading) { Text(item.title); Text(item.kind.displayName).font(.caption).foregroundStyle(.secondary) } } }.accessibilityIdentifier("note.archive.choose." + item.id.uuidString)
                 }
-            }.navigationTitle("Anhang auswählen").toolbar { ToolbarItem(placement: .cancellationAction) { Button("Schließen") { dismiss() } } }.accessibilityIdentifier("note.archive")
+            }.therapyFormStyle().navigationTitle("Anhang auswählen").toolbar { ToolbarItem(placement: .cancellationAction) { Button("Schließen") { dismiss() } } }.accessibilityIdentifier("note.archive")
         }
     }
 }

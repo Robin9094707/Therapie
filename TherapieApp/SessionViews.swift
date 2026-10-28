@@ -190,27 +190,42 @@ struct SessionClockFace: View {
     var body: some View {
         ZStack {
             Canvas { context, size in
+                // Ring of phases: the planned part is a soft track, the elapsed part fills in full colour.
                 let center = CGPoint(x: size.width / 2, y: size.height / 2)
-                let radius = min(size.width, size.height) / 2 - 12
+                let lineWidth = max(14, min(size.width, size.height) * 0.075)
+                let radius = min(size.width, size.height) / 2 - lineWidth / 2 - 6
+                let style = StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+                let elapsedAngle = -90 + min(1, max(0, progress)) * 360
                 var offset = -90.0
                 for phase in session.phases {
                     let angle = session.totalSeconds > 0 ? Double(max(1, phase.minutes) * 60) / session.totalSeconds * 360 : 0
-                    var wedge = Path(); wedge.move(to: center)
-                    wedge.addArc(center: center, radius: radius, startAngle: .degrees(offset + 0.8), endAngle: .degrees(offset + angle - 0.8), clockwise: false)
-                    wedge.closeSubpath()
-                    context.fill(wedge, with: .color(phaseColors[abs(phase.colorIndex) % phaseColors.count].opacity(0.65)))
+                    // Round caps reach half the line width past each end; keep a visible gap between phases.
+                    let capDegrees = Double(lineWidth / 2 / max(1, radius)) * 180 / .pi
+                    let gap: Double = session.phases.count > 1 ? min(capDegrees + 1.5, angle * 0.45) : 0
+                    let color = phaseColors[abs(phase.colorIndex) % phaseColors.count]
+                    let start = offset + gap, end = offset + angle - gap
+                    if end > start {
+                        var track = Path()
+                        track.addArc(center: center, radius: radius, startAngle: .degrees(start), endAngle: .degrees(end), clockwise: false)
+                        context.stroke(track, with: .color(color.opacity(0.22)), style: style)
+                        let filled = min(end, elapsedAngle)
+                        if filled > start {
+                            var done = Path()
+                            done.addArc(center: center, radius: radius, startAngle: .degrees(start), endAngle: .degrees(filled), clockwise: false)
+                            context.stroke(done, with: .color(color), style: style)
+                        }
+                    }
                     offset += angle
                 }
-                let angle = (progress * 360 - 90) * .pi / 180
-                var pointer = Path()
-                pointer.move(to: CGPoint(x: center.x + cos(angle) * radius * 0.66, y: center.y + sin(angle) * radius * 0.66))
-                pointer.addLine(to: CGPoint(x: center.x + cos(angle) * radius * 1.06, y: center.y + sin(angle) * radius * 1.06))
-                context.stroke(pointer, with: .color(.primary), style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                let radians = elapsedAngle * .pi / 180
+                let knob = CGPoint(x: center.x + cos(radians) * radius, y: center.y + sin(radians) * radius)
+                let knobRect = CGRect(x: knob.x - lineWidth * 0.62, y: knob.y - lineWidth * 0.62, width: lineWidth * 1.24, height: lineWidth * 1.24)
+                context.fill(Path(ellipseIn: knobRect), with: .color(.white))
+                context.stroke(Path(ellipseIn: knobRect), with: .color(.black.opacity(0.18)), lineWidth: 1)
             }
-            Circle().fill(Color(uiColor: .secondarySystemGroupedBackground)).frame(width: 174, height: 174)
             VStack(spacing: 4) {
                 Text(session.pausedAt == nil ? "Restzeit" : "Pausiert").font(.caption).foregroundStyle(.secondary)
-                Text(Self.format(session.remaining(at: now))).font(.system(.title, design: .rounded, weight: .bold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
+                Text(Self.format(session.remaining(at: now))).font(.system(.largeTitle, design: .rounded, weight: .bold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5).contentTransition(.numericText(countsDown: true))
                 Text("\(Int(progress * 100)) % vergangen").font(.caption).foregroundStyle(.secondary)
             }.frame(maxWidth: 160)
         }.aspectRatio(1, contentMode: .fit)
@@ -311,7 +326,7 @@ struct SessionPreferencesView: View {
             Button("Einstellungen für laufende Stunde übernehmen") { controller.synchronize() }.disabled(controller.busy)
             if !controller.liveStatus.isEmpty { Text(controller.liveStatus).font(.caption) }
             Link("iPhone-Einstellungen öffnen", destination: URL(string: UIApplication.openSettingsURLString)!)
-        }
+        }.therapyFormStyle()
         .navigationTitle("Timer-Einstellungen")
         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { controller.synchronize(); dismiss() } } }
     }

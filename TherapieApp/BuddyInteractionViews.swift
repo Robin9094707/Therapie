@@ -137,7 +137,7 @@ struct BuddyConversationSummaryView: View {
                 }
                 Section("Details") { DisclosureGroup("Vollständiges Gespräch · \(messages.count) Nachrichten") { Text(BuddyInteraction.transcript(messages)).font(.subheadline).textSelection(.enabled) } }
                 if chat?.savedNoteID != nil { Section { Text("Beim Bestätigen ersetzt diese Vorschau Überschrift, Zusammenfassung und Tags deines bisherigen Gesprächseintrags. Andere Einträge bleiben erhalten.").font(.caption).foregroundStyle(.secondary) } }
-            }.navigationTitle("Eintrag prüfen").navigationBarTitleDisplayMode(.inline).buttonStyle(.borderless)
+            }.therapyFormStyle().navigationTitle("Eintrag prüfen").navigationBarTitleDisplayMode(.inline).buttonStyle(.borderless)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { operation?.cancel(); dismiss() } }
                     ToolbarItem(placement: .confirmationAction) { Button("Speichern") { save() }.bold().disabled(busy || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }

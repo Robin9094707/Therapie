@@ -51,7 +51,7 @@ struct DashboardCustomizationView: View {
                 Section {
                     Button("Standardlayout wiederherstellen", role: .destructive) { reset = true }
                 }
-            }
+            }.therapyFormStyle()
             .navigationTitle("Heute gestalten").navigationBarTitleDisplayMode(.inline)
             .environment(\.editMode, .constant(.active))
             .toolbar {
@@ -242,7 +242,7 @@ struct WidgetSetupHelpView: View {
                 Section("Gemeinsame Daten") {
                     Text("Automatische Live-Daten brauchen beim Signieren dieselbe freigegebene App-Gruppe in App und Erweiterung. Die App prüft auch passende umbenannte Gruppen aus dem Signaturprofil. Eine Widget-Einstellung kann eine entfernte iOS-Berechtigung nicht ersetzen. Nach einer passenden Installation App öffnen und das Widget gegebenenfalls neu hinzufügen.").font(.caption)
                 }
-            }.buttonStyle(.borderless).navigationTitle("Widget einrichten").navigationBarTitleDisplayMode(.inline)
+            }.therapyFormStyle().buttonStyle(.borderless).navigationTitle("Widget einrichten").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { dismiss() } } }
                 .onAppear { TherapyWidgetBridge.refresh(store, force: true) }
         }

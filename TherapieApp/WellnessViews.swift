@@ -496,7 +496,7 @@ struct MoodEditorView: View {
                     }
                     Toggle("Als Favorit merken", isOn: $entry.favorite)
                 } header: { Text("Mehr Raum für dich") } footer: { Text("Stress und Reizbelastung: 1 = gering, 5 = sehr hoch. Nicht ausgefüllte Werte bleiben leer.") }
-            }
+            }.therapyFormStyle()
             .onAppear {
                 guard !prepared else { return }; prepared = true
                 if !store.data.moodCheckIns.contains(where: { $0.id == entry.id }), let saved = MoodDailyPolicy.existing(for: entry, in: store.data) {
@@ -565,7 +565,7 @@ struct BatteryPointEditorView: View {
                     if showDate { DatePicker("Wann?", selection: $point.date, in: ...Date(), displayedComponents: [.date, .hourAndMinute]) }
                 }
                 Section("Details · freiwillig") { TextField("Was genau hat geholfen oder belastet?", text: $point.note, axis: .vertical).lineLimit(3...8) }
-            }
+            }.therapyFormStyle()
             .navigationTitle("Akku-Punkt").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { if point != initial { discard = true } else { dismiss() } } }
@@ -627,7 +627,7 @@ struct WeekReviewEditorView: View {
                     field("Ein kleiner nächster Schritt", $review.nextStep)
                     field("Das möchte ich in der Therapie besprechen", $review.therapyQuestion)
                 }
-            }
+            }.therapyFormStyle()
             .navigationTitle("Wochenrückblick").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { if review != initial { discard = true } else { dismiss() } } }
@@ -696,7 +696,7 @@ struct WellnessSettingsView: View {
                 Button("Berechtigungseinrichtung öffnen", systemImage: "hand.raised") { permissionSetup = true }
                 Text("Fotos werden über die Systemauswahl freigegeben. Die App braucht keinen Zugriff auf deine ganze Fotomediathek.").font(.caption).foregroundStyle(.secondary)
             }
-        }
+        }.therapyFormStyle()
         .navigationTitle("Ziele & Erinnerungen")
         .sheet(isPresented: $permissionSetup) { PermissionSetupView() }
     }

@@ -75,7 +75,7 @@ private struct MedicalPassEditor: View {
                     TextField("Eigene Notizen", text: $pass.notes, axis: .vertical).lineLimit(2...8)
                 }
                 if let error = store.lastSaveError { Text(error).foregroundStyle(.red) }
-            }.navigationTitle("Therapiepass bearbeiten").toolbar {
+            }.therapyFormStyle().navigationTitle("Therapiepass bearbeiten").toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) { Button("Speichern") { store.data.medicalPass = pass; if store.lastSaveError == nil { dismiss() } } }
             }
@@ -114,7 +114,7 @@ struct AppleIntegrationView: View {
                 Text("Verknüpfte Szenen starten beim Öffnen einer fälligen Routine oder Wecker-Aufgabe. Für HomeKit muss dein Signaturprofil die entsprechende Berechtigung erhalten. Geräte- und Szenenverknüpfungen werden auf diesem iPhone gespeichert und nach einem Import neu gewählt.").font(.footnote)
             }
             Section("Widgets") { NavigationLink("Widget-Zugriff & Alternativen") { WidgetSetupHelpView() } }
-        }.buttonStyle(.borderless).navigationTitle("Apple-Integration").navigationBarTitleDisplayMode(.inline)
+        }.therapyFormStyle().buttonStyle(.borderless).navigationTitle("Apple-Integration").navigationBarTitleDisplayMode(.inline)
             .onAppear { AppleRemindersService.shared.refresh(store) }
     }
 }
