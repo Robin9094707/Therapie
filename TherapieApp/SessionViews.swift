@@ -118,7 +118,7 @@ struct SessionConductorContent: View {
                 ResponsiveButtonRow {
                     Button(session.pausedAt == nil ? "Pausieren" : "Fortsetzen", systemImage: session.pausedAt == nil ? "pause.fill" : "play.fill") { controller.pauseOrResume() }.buttonStyle(.glassProminent)
                     Button("Beenden", systemImage: "stop") { finish = true }.buttonStyle(.glass).disabled(voiceActive)
-                }.disabled(controller.busy)
+                }
                 LiveActivityStatusRow(controller: controller, enabled: store.data.sessionPreferences.liveActivityEnabled)
                 Text(store.data.sessionPreferences.usesPrivateLiveActivity ? "Die Live-Aktivität zeigt neutrale Abschnittsnamen. Echte Namen kannst du in den Timer-Einstellungen einschalten." : "Die Live-Aktivität zeigt deine Abschnittsnamen. Notizen bleiben in der App; neutrale Namen sind in den Timer-Einstellungen wählbar.").font(.caption2).foregroundStyle(.secondary)
             }
@@ -149,7 +149,7 @@ struct SessionConductorContent: View {
                         }
                         Text(template.phases.map { "\($0.title) (\($0.minutes) Min.)" }.joined(separator: " → ")).font(.subheadline).foregroundStyle(.secondary)
                         Button("Stunde starten", systemImage: "play.circle.fill") { controller.start(template) }
-                            .buttonStyle(.glassProminent).disabled(store.data.currentSession != nil || controller.busy || !template.isValid)
+                            .buttonStyle(.glassProminent).disabled(store.data.currentSession != nil || !template.isValid)
                     }
                 }
             }

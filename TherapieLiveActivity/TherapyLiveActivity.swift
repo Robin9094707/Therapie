@@ -20,7 +20,7 @@ struct TherapyLiveActivityBundle: WidgetBundle {
 struct TherapyLiveActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: TherapyActivityAttributes.self) { context in
-            SessionLockScreenView(state: context.state)
+            SessionLockScreenView(state: context.state, isStale: context.isStale)
                 .padding(16)
                 .activitySystemActionForegroundColor(.teal)
                 .widgetURL(URL(string: "therapie://session"))
@@ -44,7 +44,7 @@ struct TherapyLiveActivityWidget: Widget {
                 DynamicIslandExpandedRegion(.center) {
                     VStack(spacing: 1) {
                         SessionCaption(state: context.state).font(.caption2.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1)
-                        SessionPhaseTitle(state: context.state).font(.headline).lineLimit(1)
+                        SessionPhaseTitle(state: context.state, isStale: context.isStale).font(.headline).lineLimit(1)
                     }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
@@ -83,6 +83,7 @@ struct TherapyLiveActivityWidget: Widget {
 /// draws the activity, which it does again at every stale date (the next phase boundary) without the app.
 struct SessionLockScreenView: View {
     let state: TherapyActivityAttributes.ContentState
+    let isStale: Bool
     var body: some View {
         let over = state.isOver()
         VStack(alignment: .leading, spacing: 12) {
@@ -90,7 +91,7 @@ struct SessionLockScreenView: View {
                 SessionRing(state: state, size: 46)
                 VStack(alignment: .leading, spacing: 2) {
                     SessionCaption(state: state).font(.caption.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1)
-                    SessionPhaseTitle(state: state).font(.headline).lineLimit(1)
+                    SessionPhaseTitle(state: state, isStale: isStale).font(.headline).lineLimit(1)
                 }
                 Spacer(minLength: 8)
                 if !over {
@@ -158,12 +159,19 @@ struct SessionCaption: View {
 }
 
 /// Phase name chosen when iOS draws the activity. The app sets the stale date to the next phase boundary, so iOS
-/// redraws right there and the name follows the plan even while the app is suspended.
+/// redraws right there and the name follows the plan even while the app is suspended. Stale content has not been
+/// refreshed since that boundary, so a further boundary may have passed: the name is then marked as the planned
+/// phase, and the caption's "bis HH:MM" states how long it applies, instead of presenting it as live.
 struct SessionPhaseTitle: View {
     let state: TherapyActivityAttributes.ContentState
+    let isStale: Bool
     var body: some View {
         if state.isOver() { Text("Geschafft") }
-        else if let phase = state.currentPhase() { Text((state.paused ? "Pausiert · " : "") + phase.title) }
+        else if let phase = state.currentPhase() {
+            if state.paused { Text("Pausiert · " + phase.title) }
+            else if isStale { Text("Laut Plan: " + phase.title) }
+            else { Text(phase.title) }
+        }
         else { Text(state.paused ? "Pausiert" : (state.title ?? "Deine Zeit läuft")) }
     }
 }

@@ -52,7 +52,10 @@ final class TherapySessionController: ObservableObject {
         store.data = snapshot
         store.offerCheckIn(for: session)
         Self.cancelNotifications(session.id)
+        // Invalidate pending reminder work for this session; its generation check then skips cleanup, so release
+        // the busy flag here instead of leaving the start buttons disabled.
         notificationGeneration = UUID()
+        busy = false
         lastPresentedPhase = nil
         BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: Self.refreshTaskIdentifier)
         var final = activityState(session, privateMode: store.data.sessionPreferences.usesPrivateLiveActivity)

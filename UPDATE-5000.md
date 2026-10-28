@@ -19,7 +19,7 @@ Build 28, iPhone ab iOS 26.1. Bundle-ID bleibt `eu.rjuhas.therapie`. Datenformat
 - Beim Wechsel in den Hintergrund (inaktiv **und** Hintergrund) erhält die Aktivität frischen Inhalt; ein Hintergrund-Zeitfenster stellt sicher, dass die Aktualisierung vor dem Anhalten der App ankommt.
 - Aktivitäten werden nie mehr beendet, solange die geschützten Daten noch nicht geladen sind (zuvor konnte ein Start bei gesperrtem Gerät die laufende Stunde aus der Dynamic Island entfernen).
 - Aktualisierungen und Beenden laufen seriell und erfassen ihr Ziel vorab, damit eine ältere Bereinigung nie eine neue Aktivität beendet.
-- Abschnittsname, „Abschnitt 2 von 4 · bis 15:20“ und „Zeit ist um“ werden beim Zeichnen durch iOS berechnet. Der Stale-Zeitpunkt liegt an der nächsten Abschnittsgrenze bzw. am Ende, sodass iOS genau dann neu zeichnet – auch ohne geöffnete App.
+- Abschnittsname, „Abschnitt 2 von 4 · bis 15:20“ und „Zeit ist um“ werden beim Zeichnen durch iOS berechnet. Der Stale-Zeitpunkt liegt an der nächsten Abschnittsgrenze bzw. am Ende, sodass iOS genau dann neu zeichnet – auch ohne geöffnete App. Konnte die App seit dieser Grenze noch nicht aktualisieren, steht der Name als „Laut Plan: …“ mit seinem Zeitfenster da, statt als sicher aktuell zu gelten.
 - Zusätzlich plant die App eine Hintergrundaktualisierung (`BGAppRefreshTask`) für die nächste Abschnittsgrenze; sie aktualisiert oder beendet die Aktivität allein aus deren Inhalt, ohne Zugriff auf die geschützten Daten. Den genauen Zeitpunkt bestimmt iOS.
 - Abschnittsmitteilungen nennen den nächsten Abschnitt, wenn echte Namen eingeschaltet sind.
 
