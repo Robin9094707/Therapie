@@ -183,6 +183,53 @@ struct InsightsHubView: View {
     }
 }
 
+/// Glanceable status under the greeting; each chip jumps to its area.
+struct WelcomeStatusChips: View {
+    @EnvironmentObject private var store: AppStore
+    let now: Date
+
+    var body: some View {
+        let data = store.data
+        let next = TherapyDateHelper.nextOccurrence(schedule: data.schedule, after: now)
+        let openTasks = data.weeklyTasks.filter { !$0.completed }.count
+        let openRoutines = RoutinePlanner.occurrences(data: data, now: Calendar.current.startOfDay(for: now), days: 1)
+            .filter { !RoutinePlanner.resolved($0, completions: data.routineCompletions) }.count
+        ScrollView(.horizontal) {
+            GlassEffectContainer(spacing: 8) {
+                HStack(spacing: 8) {
+                    if data.currentSession != nil {
+                        Button { store.notificationSession = true } label: { TherapyChip(text: "Stunde läuft", icon: "leaf.fill", tint: .teal) }
+                    }
+                    if let next {
+                        Button { store.selectedTab = TherapyTab.therapy } label: { TherapyChip(text: Self.relative(next, from: now), icon: "calendar.badge.clock", tint: .indigo) }
+                    }
+                    Button { store.selectedTab = TherapyTab.everyday } label: {
+                        TherapyChip(text: openRoutines == 0 ? "Routinen erledigt" : "\(openRoutines) Routinen offen", icon: openRoutines == 0 ? "checkmark.circle.fill" : "repeat", tint: .green)
+                    }
+                    if openTasks > 0 {
+                        Button { store.selectedTab = TherapyTab.everyday } label: { TherapyChip(text: "\(openTasks) Aufgaben offen", icon: "checklist", tint: .orange) }
+                    }
+                }
+                .buttonStyle(.plain)
+                .padding(.vertical, 2)
+            }
+        }
+        .scrollIndicators(.hidden)
+        .scrollClipDisabled()
+    }
+
+    static func relative(_ date: Date, from now: Date) -> String {
+        let calendar = Calendar.current
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: calendar.startOfDay(for: date)).day ?? 0
+        let time = date.formatted(date: .omitted, time: .shortened)
+        switch days {
+        case ...0: return "Therapie heute " + time
+        case 1: return "Therapie morgen " + time
+        default: return "Therapie in \(days) Tagen"
+        }
+    }
+}
+
 struct PersonalWelcomeCard: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.scenePhase) private var scenePhase
@@ -195,6 +242,7 @@ struct PersonalWelcomeCard: View {
                     .font(.caption.weight(.semibold)).textCase(.uppercase).tracking(0.6).foregroundStyle(Color.accentColor)
                 Text(PersonalGreeting.title(at: context.date, name: store.data.profile.userName)).font(.system(.title, design: .rounded, weight: .bold))
                 Text(store.data.dashboard.welcomeMessage.isEmpty ? PersonalGreeting.sentence(at: context.date) : store.data.dashboard.welcomeMessage).font(.subheadline).foregroundStyle(.secondary)
+                WelcomeStatusChips(now: context.date).padding(.top, 4)
             }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
                 .opacity(appeared ? 1 : 0).offset(y: appeared || reduceMotion ? 0 : 8)
         }

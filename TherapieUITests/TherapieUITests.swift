@@ -18,7 +18,7 @@ final class TherapieUITests: XCTestCase {
                        "The SwiftUI viewport must fill the native iPhone window, including safe areas.")
         XCTAssertGreaterThan(screen.height, 700, "A modern iPhone must not use a legacy 480/568-point viewport.")
         capture("Dashboard portrait")
-        for tab in ["Insights", "Therapie", "Archiv", "Profil"] {
+        for tab in ["Therapie", "Alltag", "Verlauf"] {
             let button = app.tabBars.buttons[tab]
             XCTAssertTrue(button.waitForExistence(timeout: 5))
             button.tap()
@@ -173,7 +173,7 @@ final class TherapieUITests: XCTestCase {
         app.buttons["Speichern"].tap()
         XCTAssertTrue(app.staticTexts["therapy.countdown"].waitForExistence(timeout: 10))
         capture("Updated home with therapy countdown")
-        XCTAssertTrue(app.tabBars.buttons["Archiv"].waitForExistence(timeout: 10)); app.tabBars.buttons["Archiv"].tap()
+        XCTAssertTrue(app.tabBars.buttons["Verlauf"].waitForExistence(timeout: 10)); app.tabBars.buttons["Verlauf"].tap()
         let overview = app.buttons["Übersicht öffnen"].firstMatch
         XCTAssertTrue(overview.waitForExistence(timeout: 5)); overview.tap()
         XCTAssertTrue(app.navigationBars["Deine Notiz"].waitForExistence(timeout: 5))
@@ -316,7 +316,7 @@ final class TherapieUITests: XCTestCase {
         app.launchArguments = ["--ui-testing", "--show-dashboard", "--personalization-fixture"]
         app.launch()
         let complete = app.buttons["today.routine.complete"].firstMatch
-        XCTAssertTrue(app.buttons["today.customize"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.tabBars.buttons["Heute"].waitForExistence(timeout: 20))
         for _ in 0..<8 where !complete.isHittable { app.swipeUp() }
         XCTAssertTrue(complete.isHittable)
         complete.tap()
@@ -336,7 +336,9 @@ final class TherapieUITests: XCTestCase {
         app.launchArguments = ["--ui-testing", "--show-dashboard", "--personalization-fixture"]
         app.launch()
         let customize = app.buttons["today.customize"]
-        XCTAssertTrue(customize.waitForExistence(timeout: 20))
+        XCTAssertTrue(app.tabBars.buttons["Heute"].waitForExistence(timeout: 20))
+        for _ in 0..<8 where !customize.exists { app.swipeUp() }
+        XCTAssertTrue(customize.waitForExistence(timeout: 10))
         customize.tap()
         XCTAssertTrue(app.navigationBars["Heute gestalten"].waitForExistence(timeout: 10))
         capture("Heute gestalten mit Kartenreihenfolge")
@@ -359,7 +361,7 @@ final class TherapieUITests: XCTestCase {
         complete.tap(); app.alerts.buttons["Ja, ich habe sie erledigt"].tap()
         XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: complete)], timeout: 10), .completed)
         capture("Routine nach Rückgängig erneut bestätigt")
-        app.tabBars.buttons["Archiv"].tap()
+        app.tabBars.buttons["Verlauf"].tap()
         XCTAssertTrue(app.staticTexts["Deine Zeitreise"].waitForExistence(timeout: 10))
         capture("Archiv Timeline nach Tagen")
         app.buttons["Kalender öffnen"].tap()

@@ -64,7 +64,7 @@ struct BackupChecks {
         data.routineSnoozes = [RoutineSnooze(id: "portable-occurrence", until: Date())]
         data.guidedCheckIns = [GuidedCheckIn(kind: .therapy, mood: 4, batteryPercent: 0, stress: 2, sensoryLoad: 3, sleepHours: 7.5, summary: "Geführter Rückblick", therapyQuestion: "Was hilft?", tasks: [CheckInTaskDraft(title: "Erster Schritt", source: "Aus der Therapie")], isDraft: false)]
         data.companionSettings = CompanionSettings(vacationUntil: Date(), privateRoutineTitles: false, offerTherapyCheckIn: true, checkInReminders: [CheckInReminder(kind: .morning, time: RoutineTime(weekdays: [2, 3, 4, 5, 6], hour: 6, minute: 30, weekendHour: 9, weekendMinute: 0))])
-        data.aiSettings.enabled = true; data.aiSettings.model = "gpt-6-luna"; data.aiSettings.contextDays = 14; data.aiSettings.allowVoiceUploads = true
+        data.aiSettings.enabled = true; data.aiSettings.model = "gpt-6-luna"; data.aiSettings.contextDays = 14; data.aiSettings.allowVoiceUploads = true; data.aiSettings.thinking = "deep"
         data.aiMessages = [AIBuddyMessage(role: "assistant", text: "Mein Rückblick", reply: AIBuddyReply(title: "Meine Woche", message: "Eine gute Pause", sections: [], actions: [AIBuddyAction(kind: .note, title: "Gedanke", text: "Gut", weekdays: [])], suggestedDays: 14))]
         AIConversationMutation.migrate(&data)
         data.aiConversations[0].contextDays = 14
@@ -164,6 +164,7 @@ struct BackupChecks {
         try expect(prepared.manifest.data.showerPreferences == data.showerPreferences && prepared.manifest.data.routineDeferrals == data.routineDeferrals && prepared.manifest.data.routines[0].repeatEveryDays == 2, "Shower target, calendar-day rhythm and per-occurrence deferral round-trip")
         try expect(prepared.manifest.data.groundingPractices == data.groundingPractices && prepared.manifest.data.showerEntries == data.showerEntries, "Grounding answers and flexible shower dates round-trip")
         try expect(prepared.manifest.data.showerEntries[1].markedWrongAt != nil && prepared.manifest.data.routineCompletions[0].markedWrong == true, "Schema-18 wrong-entry marks round-trip")
+        try expect(prepared.manifest.data.aiSettings.thinking == "deep", "Therapie 5 AI thinking depth round-trips in the encrypted backup")
         defer { prepared.discard() }
         try expect(try json(prepared.manifest.data) == json(data.portableSnapshot), "All AppData fields round-trip")
         try expect(prepared.manifest.data.dashboard == data.dashboard && prepared.manifest.data.archivePreferences == data.archivePreferences, "Encrypted restore retains cards, pins and archive settings")
@@ -273,6 +274,9 @@ struct BackupChecks {
         var oldSchedule = oldJSON["schedule"] as! [String: Any]; oldSchedule.removeValue(forKey: "recurrence"); oldSchedule.removeValue(forKey: "extraAppointments"); oldJSON["schedule"] = oldSchedule
         let preAI = try BackupArchive.decoder().decode(AppData.self, from: JSONSerialization.data(withJSONObject: oldJSON))
         try expect(!preAI.aiSettings.enabled && preAI.aiMessages.isEmpty && preAI.schedule.recurrence == nil && preAI.therapyDiscussionAcknowledgedIDs.isEmpty, "Actual schema-9 backup preserves weekly plan and defaults AI off")
+        var olderAI = oldJSON; olderAI["aiSettings"] = ["enabled": true, "model": "gpt-5.6-luna", "contextDays": 9]
+        let preThinking = try BackupArchive.decoder().decode(AppData.self, from: JSONSerialization.data(withJSONObject: olderAI))
+        try expect(preThinking.aiSettings.enabled && preThinking.aiSettings.contextDays == 9 && preThinking.aiSettings.thinking == "balanced", "Backups from before Therapie 5 keep AI settings and start with balanced thinking")
         try expect(!String(decoding: try BackupArchive.encoder().encode(data), as: UTF8.self).contains("apiKey"), "API keys never belong to backup model")
         print("Passed \(count) encrypted backup checks: complete model, streaming attachments, password authentication, tampering, paths, omissions, settings and recovery.")
     }

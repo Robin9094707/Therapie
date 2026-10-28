@@ -28,12 +28,19 @@ import Foundation
         try expect(state.currentPhase(at: start.addingTimeInterval(3000))?.title == "AirTag besprechen", "Older paused content without reference date decodes safely")
         try expect(state.phaseRemaining(at: start.addingTimeInterval(3000)) == 270, "Older pause content also freezes section remaining time")
         state.paused = false; state.referenceDate = start
+        try expect(state.phasePosition(at: start.addingTimeInterval(300))?.index == 1 && state.phasePosition(at: start)?.count == phases.count, "Render-time phase position follows the plan without app updates")
+        try expect(!state.isOver(at: session.expectedEnd.addingTimeInterval(-1)) && state.isOver(at: session.expectedEnd), "Redraw at the planned end shows the finished state even before the app ends the activity")
+        state.paused = true
+        try expect(!state.isOver(at: session.expectedEnd.addingTimeInterval(600)), "A paused session is never shown as over")
+        state.paused = false
+        try expect(TherapyPhaseTimeline.sessionTitle("  Meine\nStunde ", privateMode: false) == "Meine Stunde" && TherapyPhaseTimeline.sessionTitle("Meine Stunde", privateMode: true) == nil, "Session title is compact and hidden in neutral mode")
+        state.title = "Meine Stunde"
         let roundtrip = try JSONDecoder().decode(TherapyActivityAttributes.ContentState.self, from: JSONEncoder().encode(state))
         try expect(roundtrip == state, "Exact Live Activity content with names and reference round-trips")
         var object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(state)) as! [String: Any]
-        object.removeValue(forKey: "referenceDate")
+        object.removeValue(forKey: "referenceDate"); object.removeValue(forKey: "title")
         let oldState = try JSONDecoder().decode(TherapyActivityAttributes.ContentState.self, from: JSONSerialization.data(withJSONObject: object))
-        try expect(oldState.referenceDate == nil && oldState.phases == state.phases, "Previous Live Activity content remains supported")
+        try expect(oldState.referenceDate == nil && oldState.title == nil && oldState.phases == state.phases, "Previous Live Activity content remains supported")
         let crowded = (0..<12).map { index in TherapyPhaseTimeline.Phase(title: TherapyPhaseTimeline.displayTitle(String(repeating: "👨‍👩‍👧‍👦\"\\", count: 80), index: index, privateMode: false), start: start.addingTimeInterval(Double(index * 60)), end: start.addingTimeInterval(Double((index + 1) * 60))) }
         state.phases = crowded
         try expect(try JSONEncoder().encode(state).count < 3500, "Twelve Unicode-heavy named phases fit the actual content budget")

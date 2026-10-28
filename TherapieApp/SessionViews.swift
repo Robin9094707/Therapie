@@ -118,8 +118,8 @@ struct SessionConductorContent: View {
                 ResponsiveButtonRow {
                     Button(session.pausedAt == nil ? "Pausieren" : "Fortsetzen", systemImage: session.pausedAt == nil ? "pause.fill" : "play.fill") { controller.pauseOrResume() }.buttonStyle(.glassProminent)
                     Button("Beenden", systemImage: "stop") { finish = true }.buttonStyle(.glass).disabled(voiceActive)
-                }.disabled(controller.busy)
-                if !controller.liveStatus.isEmpty { Text(controller.liveStatus).font(.caption).foregroundStyle(.secondary) }
+                }
+                LiveActivityStatusRow(controller: controller, enabled: store.data.sessionPreferences.liveActivityEnabled)
                 Text(store.data.sessionPreferences.usesPrivateLiveActivity ? "Die Live-Aktivität zeigt neutrale Abschnittsnamen. Echte Namen kannst du in den Timer-Einstellungen einschalten." : "Die Live-Aktivität zeigt deine Abschnittsnamen. Notizen bleiben in der App; neutrale Namen sind in den Timer-Einstellungen wählbar.").font(.caption2).foregroundStyle(.secondary)
             }
         }
@@ -149,7 +149,7 @@ struct SessionConductorContent: View {
                         }
                         Text(template.phases.map { "\($0.title) (\($0.minutes) Min.)" }.joined(separator: " → ")).font(.subheadline).foregroundStyle(.secondary)
                         Button("Stunde starten", systemImage: "play.circle.fill") { controller.start(template) }
-                            .buttonStyle(.glassProminent).disabled(store.data.currentSession != nil || controller.busy || !template.isValid)
+                            .buttonStyle(.glassProminent).disabled(store.data.currentSession != nil || !template.isValid)
                     }
                 }
             }
@@ -311,7 +311,7 @@ struct SessionPreferencesView: View {
             Section("Live-Aktivität") {
                 Toggle("Sperrbildschirm & Dynamic Island", isOn: $store.data.sessionPreferences.liveActivityEnabled)
                 Toggle("Echte Abschnittsnamen anzeigen", isOn: Binding(get: { !store.data.sessionPreferences.usesPrivateLiveActivity }, set: { store.data.sessionPreferences.showLiveActivityNames($0); controller.synchronize() }))
-                Text("Die Restzeit und der Gesamtfortschritt laufen auch ohne geöffnete App weiter. Deine Abschnitte erscheinen mit Namen, Zeitfenster und zeitgesteuertem Fortschritt auf dem Sperrbildschirm.").font(.caption).foregroundStyle(.secondary)
+                Text("Restzeit, Ring und Abschnittsbalken laufen auch ohne geöffnete App weiter. An jeder Abschnittsgrenze zeichnet iOS den Abschnittsnamen neu, am Ende erscheint „Geschafft“. Fehlt die Anzeige einmal, hilft „Dynamic Island neu verbinden“ in der laufenden Stunde.").font(.caption).foregroundStyle(.secondary)
             }
             Section("Mitteilungen") {
                 Toggle("Am Ende der Stunde erinnern", isOn: $store.data.sessionPreferences.notifyAtEnd)
@@ -329,5 +329,31 @@ struct SessionPreferencesView: View {
         }.therapyFormStyle()
         .navigationTitle("Timer-Einstellungen")
         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { controller.synchronize(); dismiss() } } }
+    }
+}
+
+/// Shows whether the Lock Screen / Dynamic Island activity is running and offers a manual reconnect.
+private struct LiveActivityStatusRow: View {
+    @ObservedObject var controller: TherapySessionController
+    let enabled: Bool
+
+    var body: some View {
+        let active = controller.liveStatus.hasPrefix("Live-Aktivität aktiv") || controller.liveStatus.hasPrefix("Live-Aktivität neu verbunden")
+        VStack(alignment: .leading, spacing: 8) {
+            Label {
+                Text(controller.liveStatus.isEmpty ? "Live-Aktivität wird vorbereitet …" : controller.liveStatus)
+            } icon: {
+                Image(systemName: active ? "checkmark.circle.fill" : enabled ? "exclamationmark.circle.fill" : "minus.circle.fill")
+                    .foregroundStyle(active ? Color.green : enabled ? Color.orange : Color.secondary)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            if enabled {
+                Button("Dynamic Island neu verbinden", systemImage: "arrow.triangle.2.circlepath") { controller.reconnectLiveActivity() }
+                    .font(.caption.weight(.semibold))
+                    .buttonStyle(.glass)
+                    .accessibilityHint("Startet die Live-Aktivität dieser Stunde neu, falls sie im Sperrbildschirm oder in der Dynamic Island fehlt.")
+            }
+        }
     }
 }

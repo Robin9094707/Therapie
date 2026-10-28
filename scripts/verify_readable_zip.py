@@ -34,6 +34,7 @@ with zipfile.ZipFile(sys.argv[1]) as archive:
     assert data["accentTheme"] == "purple"
     assert data["wellbeingPreferences"] == {"estimateBattery": True, "hourlyDecline": 2}
     assert data["aiSettings"]["speakReplies"] is True
+    assert data["aiSettings"]["thinking"] == "deep"
     assert data["aiConversations"][0]["memory"] == "Familie und Pausen"
     assert data["notes"][0]["conversationTranscript"].startswith("Du: Meine Schwester")
     assert data["guidedCheckIns"][0]["satisfaction"] == 4

@@ -540,7 +540,7 @@ struct AIBuddyChatContent: View {
         case "routines": RoutineHubView()
         case "appointments": TherapyAppointmentsView()
         case "reminders": ReminderCenterView()
-        default: DashboardView()
+        default: TherapyFeatureDestination(id: name)
         }
     }
 }
