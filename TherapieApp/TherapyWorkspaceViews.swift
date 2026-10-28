@@ -183,7 +183,7 @@ struct TherapyNoteEditorView: View {
                     HStack {
                         Button("Liste", systemImage: "list.bullet") { note.text += (note.text.isEmpty ? "" : "\n") + "• " }
                         Button("Checkliste", systemImage: "checklist") { note.text += (note.text.isEmpty ? "" : "\n") + "☐ " }
-                    }.buttonStyle(.bordered)
+                    }.buttonStyle(.glass)
                 }
                 if store.data.aiSettings.enabled { Button("Mit KI schreiben & sortieren", systemImage: "sparkles") { dismissKeyboard(); showAI = true }.accessibilityIdentifier("note.ai") }
                 Toggle("Wichtig · oben anheften", isOn: Binding(get: { note.isImportant ?? false }, set: { note.isImportant = $0 }))
@@ -200,7 +200,7 @@ struct TherapyNoteEditorView: View {
                 }
                 TextField("Hashtags, mit Komma trennen", text: $tags)
                 HashtagChips(tags: AppHashtags.clean(tags.split(separator: ",").map(String.init)))
-                ScrollView(.horizontal) { HStack { ForEach(AppHashtags.catalog(store.data).prefix(20), id: \.self) { tag in Button("#" + tag) { let all = AppHashtags.clean(tags.split(separator: ",").map(String.init) + [tag]); tags = all.joined(separator: ", ") }.buttonStyle(.bordered) } } }
+                ScrollView(.horizontal) { HStack { ForEach(AppHashtags.catalog(store.data).prefix(20), id: \.self) { tag in Button("#" + tag) { let all = AppHashtags.clean(tags.split(separator: ",").map(String.init) + [tag]); tags = all.joined(separator: ", ") }.buttonStyle(.glass) } } }
             }
         }
         .accessibilityIdentifier("note.editor")
@@ -260,7 +260,8 @@ struct TherapyMediaEditorView: View {
 struct TherapyHubView: View {
     @State private var section = 0
     var body: some View {
-        NavigationStack {
+        // Hosted by the tab's or presenter's NavigationStack; a nested stack doubled the bars and broke Back.
+        Group {
             TherapyScreen {
                 VStack(spacing: 16) {
                     GlassCard(emphasized: true) {

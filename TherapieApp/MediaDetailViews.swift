@@ -73,7 +73,7 @@ struct TherapyMediaDetailView: View {
                                 GlassCard {
                                     VStack(spacing: 16) {
                                         Label("Deine Sprachnachricht", systemImage: "waveform").font(.headline)
-                                        Button(audio.playing ? "Pause" : "Anhören", systemImage: audio.playing ? "pause.circle.fill" : "play.circle.fill") { audio.toggle() }.buttonStyle(.borderedProminent).disabled(audio.duration <= 0).accessibilityIdentifier("media.audio.play")
+                                        Button(audio.playing ? "Pause" : "Anhören", systemImage: audio.playing ? "pause.circle.fill" : "play.circle.fill") { audio.toggle() }.buttonStyle(.glassProminent).disabled(audio.duration <= 0).accessibilityIdentifier("media.audio.play")
                                         Slider(value: Binding(get: { audio.position }, set: { audio.seek($0) }), in: 0...max(1, audio.duration)).accessibilityLabel("Position in der Aufnahme")
                                         HStack { Text(clock(audio.position)); Spacer(); Text(clock(audio.duration)) }.font(.caption.monospacedDigit())
                                         if let error = audio.error { Text(error).font(.caption).foregroundStyle(.red) }
@@ -81,8 +81,8 @@ struct TherapyMediaDetailView: View {
                                 }.task(id: url) { audio.load(url) }
                             }
                             ResponsiveButtonRow {
-                                Button(item.kind == .photo ? "Bild groß öffnen" : "Datei öffnen", systemImage: "arrow.up.right.square") { preview = url }.buttonStyle(.bordered)
-                                ShareLink(item: url) { Label("Teilen", systemImage: "square.and.arrow.up") }.buttonStyle(.bordered)
+                                Button(item.kind == .photo ? "Bild groß öffnen" : "Datei öffnen", systemImage: "arrow.up.right.square") { preview = url }.buttonStyle(.glass)
+                                ShareLink(item: url) { Label("Teilen", systemImage: "square.and.arrow.up") }.buttonStyle(.glass)
                             }
                         } else { ContentUnavailableView("Datei nicht verfügbar", systemImage: "doc.badge.ellipsis", description: Text("Die Informationen bleiben erhalten. Die Datei fehlt oder wurde beim Backup ausgelassen.")) }
                     }

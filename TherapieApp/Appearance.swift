@@ -25,6 +25,7 @@ struct AppearanceCard: View {
     @AppStorage("therapy.confetti") private var confetti = true
     @AppStorage("therapy.appearance") private var appearance = TherapyAppearance.system.rawValue
     @AppStorage("therapy.calmInterface") private var calmInterface = true
+    @State private var showWhatsNew = false
 
     var body: some View {
         GlassCard {
@@ -43,14 +44,17 @@ struct AppearanceCard: View {
                 Toggle("Feine Haptik", isOn: $haptics)
                 Toggle("Konfetti bei erledigten Aufgaben", isOn: $confetti)
                 Text("Bei reduzierter Bewegung erscheint eine ruhige Bestätigung statt Konfetti.").font(.caption).foregroundStyle(.secondary)
-                Text("Weniger Transparenz und Farbverläufe. Die Schriftgröße folgt deinen iPhone-Einstellungen.")
+                Text("Die ruhige Oberfläche dämpft Farbverlauf und Glastönung. Für vollständig deckende Flächen: iPhone-Einstellungen › Bedienungshilfen › Anzeige & Textgröße › Transparenz reduzieren. Die Schriftgröße folgt deinen iPhone-Einstellungen.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
-                LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "3000.0.0")
+                LabeledContent("Version", value: TherapyDesign.appVersion)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                Button("Neu in dieser Version", systemImage: "sparkles") { showWhatsNew = true }
+                    .buttonStyle(.glass)
             }
         }
+        .sheet(isPresented: $showWhatsNew) { WhatsNewView() }
         .onChange(of: appearance) { _, _ in store.refreshReadableFiles() }
         .onChange(of: calmInterface) { _, _ in store.refreshReadableFiles() }
         .onChange(of: haptics) { _, _ in store.refreshReadableFiles() }

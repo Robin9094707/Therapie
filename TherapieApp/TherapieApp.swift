@@ -12,6 +12,7 @@ struct TherapieApp: App {
                 .environmentObject(store)
                 .tint(store.data.accentTheme.color)
                 .accentColor(store.data.accentTheme.color)
+                .environment(\.therapyAccent, store.data.accentTheme)
                 .preferredColorScheme((TherapyAppearance(rawValue: appearance) ?? .system).colorScheme)
                 .environment(\.locale, Locale(identifier: "de_DE"))
         }

@@ -21,7 +21,7 @@ struct TherapyAppointmentCard: View {
                         Label("Therapiepause bis " + vacation.end.addingTimeInterval(-1).formatted(date: .abbreviated, time: .omitted), systemImage: "sun.max.fill").font(.subheadline).foregroundStyle(.teal)
                     }
                     Button("Termine, Absagen & Urlaub", systemImage: "calendar.badge.gearshape") { store.notificationTherapy = true }
-                        .buttonStyle(.bordered).accessibilityIdentifier("therapy.manage")
+                        .buttonStyle(.glass).accessibilityIdentifier("therapy.manage")
                 }
             }
         }
@@ -54,11 +54,11 @@ struct TodayOverviewCard: View {
     }
     private func tile(_ title: String, value: String, icon: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Image(systemName: icon).font(.title3).foregroundStyle(Color.accentColor)
-            Text(value).font(.system(.title2, design: .rounded, weight: .bold))
+            Image(systemName: icon).font(.title3).foregroundStyle(Color.accentColor.gradient)
+            Text(value).font(.system(.title2, design: .rounded, weight: .bold)).lineLimit(2).minimumScaleFactor(0.8)
             Text(title).font(.caption).foregroundStyle(.secondary)
         }.frame(maxWidth: .infinity, alignment: .leading).padding(14)
-            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18))
+            .therapyInsetSurface(cornerRadius: 18)
     }
 }
 

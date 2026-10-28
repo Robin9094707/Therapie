@@ -168,13 +168,13 @@ struct WakeChallengeView: View {
             VStack(alignment: .leading, spacing: 18) {
                 if let run, let alarm {
                     Label(alarm.title, systemImage: "sun.max.fill").font(.title2.bold()).foregroundStyle(Color.accentColor)
-                    if run.outcome != nil { Label(run.outcome == .completed ? "Bestätigt. Verbleibende Wecker werden entfernt." : "Notfall-Stopp gespeichert.", systemImage: "checkmark.circle.fill"); Button("Fertig") { dismiss() }.buttonStyle(.borderedProminent) }
+                    if run.outcome != nil { Label(run.outcome == .completed ? "Bestätigt. Verbleibende Wecker werden entfernt." : "Notfall-Stopp gespeichert.", systemImage: "checkmark.circle.fill"); Button("Fertig") { dismiss() }.buttonStyle(.glassProminent) }
                     else if run.scheduledAt > Date() { Text("Dieser Wecker ist für später geplant."); Text(run.scheduledAt, style: .date); Text(run.scheduledAt, style: .time) }
                     else {
                         if let until = run.snoozedUntil, until > Date() { Text("Schlummern bis " + until.formatted(date: .omitted, time: .shortened)).font(.headline) }
                         challengeContent(alarm, run: run)
                         Divider()
-                        Button((alarm.snoozeTitle.isEmpty ? "Schlummern" : alarm.snoozeTitle) + " · \(alarm.snoozeMinutes) Min. (\(run.snoozes)/\(alarm.maxSnoozes))", systemImage: "zzz") { movement.stop(); store.snoozeWakeRun(run.id) }.buttonStyle(.bordered).disabled(run.snoozes >= alarm.maxSnoozes || verifying)
+                        Button((alarm.snoozeTitle.isEmpty ? "Schlummern" : alarm.snoozeTitle) + " · \(alarm.snoozeMinutes) Min. (\(run.snoozes)/\(alarm.maxSnoozes))", systemImage: "zzz") { movement.stop(); store.snoozeWakeRun(run.id) }.buttonStyle(.glass).disabled(run.snoozes >= alarm.maxSnoozes || verifying)
                         Button("Notfall-Schlummern · 5 Minuten", systemImage: "clock") { movement.stop(); store.snoozeWakeRun(run.id, emergency: true) }.disabled(run.emergencySnoozeUsed || verifying)
                         Button("Notfall-Stopp", role: .destructive) { confirmEmergency = true }
                         Text("Folgealarme sind vorgeplant. Das iPhone kann den Systemalarm stoppen; die App kann das nicht sperren. Eine offene Aufgabe bleibt hier erhalten.").font(.caption).foregroundStyle(.secondary)
@@ -197,21 +197,21 @@ struct WakeChallengeView: View {
     }
     @ViewBuilder private func challengeContent(_ alarm: WakeAlarm, run: WakeRun) -> some View {
         switch alarm.challenge {
-        case .none: Button("Ich bin aufgestanden", systemImage: "checkmark.circle.fill") { store.finishWakeRun(run.id) }.buttonStyle(.borderedProminent)
+        case .none: Button("Ich bin aufgestanden", systemImage: "checkmark.circle.fill") { store.finishWakeRun(run.id) }.buttonStyle(.glassProminent)
         case .math:
-            GlassCard { VStack(alignment: .leading, spacing: 14) { Text("\(run.operandA) + \(run.operandB) = ?").font(.largeTitle.bold()); TextField("Deine Antwort", text: $answer).keyboardType(.numberPad).textFieldStyle(.roundedBorder); Button("Antwort bestätigen") { if Int(answer.trimmingCharacters(in: .whitespacesAndNewlines)) == run.answer { error = nil; store.finishWakeRun(run.id) } else { error = "Versuche es noch einmal." } }.buttonStyle(.borderedProminent) } }
+            GlassCard { VStack(alignment: .leading, spacing: 14) { Text("\(run.operandA) + \(run.operandB) = ?").font(.largeTitle.bold()); TextField("Deine Antwort", text: $answer).keyboardType(.numberPad).textFieldStyle(.roundedBorder); Button("Antwort bestätigen") { if Int(answer.trimmingCharacters(in: .whitespacesAndNewlines)) == run.answer { error = nil; store.finishWakeRun(run.id) } else { error = "Versuche es noch einmal." } }.buttonStyle(.glassProminent) } }
         case .photo:
             Text("Fotografiere: " + alarm.photoObject).font(.headline)
-            Button("Frisches Foto aufnehmen", systemImage: "camera.fill") { if UIImagePickerController.isSourceTypeAvailable(.camera) { camera = true } else { error = "Auf diesem Gerät ist keine Kamera verfügbar." } }.buttonStyle(.borderedProminent).disabled(verifying)
-            if let jpeg, let image = UIImage(data: jpeg) { Image(uiImage: image).resizable().scaledToFit().frame(maxHeight: 220).clipShape(RoundedRectangle(cornerRadius: 16)); Button("Dieses Foto zur KI-Prüfung senden", systemImage: "sparkles") { verifyPhoto(jpeg, object: alarm.photoObject, runID: run.id) }.buttonStyle(.bordered).disabled(verifying) }
+            Button("Frisches Foto aufnehmen", systemImage: "camera.fill") { if UIImagePickerController.isSourceTypeAvailable(.camera) { camera = true } else { error = "Auf diesem Gerät ist keine Kamera verfügbar." } }.buttonStyle(.glassProminent).disabled(verifying)
+            if let jpeg, let image = UIImage(data: jpeg) { Image(uiImage: image).resizable().scaledToFit().frame(maxHeight: 220).clipShape(RoundedRectangle(cornerRadius: 16)); Button("Dieses Foto zur KI-Prüfung senden", systemImage: "sparkles") { verifyPhoto(jpeg, object: alarm.photoObject, runID: run.id) }.buttonStyle(.glass).disabled(verifying) }
             if verifying { ProgressView("Foto wird geprüft …") }
             Text("Nur dieses frische Foto und die Objektbeschreibung werden an OpenAI gesendet. Es wird nicht im Archiv gespeichert. Die Erkennung kann sich irren.").font(.caption).foregroundStyle(.secondary)
         case .movement, .steps:
             let target = alarm.challenge == .steps ? max(5,min(100,alarm.stepCount)) : max(3,min(20,alarm.movementCount))
             Text("\(min(movement.progress,target)) / \(target)").font(.largeTitle.bold())
             Text(movement.status.isEmpty ? "Die Messung beginnt erst, wenn du sie startest." : movement.status)
-            Button("Messung starten", systemImage: alarm.challenge == .steps ? "figure.walk" : "iphone.gen3.radiowaves.left.and.right") { movement.start(alarm.challenge) }.buttonStyle(.bordered)
-            Button("Aufgabe bestätigen") { movement.stop(); store.finishWakeRun(run.id) }.buttonStyle(.borderedProminent).disabled(movement.progress < target)
+            Button("Messung starten", systemImage: alarm.challenge == .steps ? "figure.walk" : "iphone.gen3.radiowaves.left.and.right") { movement.start(alarm.challenge) }.buttonStyle(.glass)
+            Button("Aufgabe bestätigen") { movement.stop(); store.finishWakeRun(run.id) }.buttonStyle(.glassProminent).disabled(movement.progress < target)
         }
     }
     private func verifyPhoto(_ bytes: Data, object: String, runID: String) {

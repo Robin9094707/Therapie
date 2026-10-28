@@ -99,7 +99,7 @@ struct TodayRoutinesCard: View {
                                 Button { store.notificationRoutineID = routine.id } label: { Label(routine.title, systemImage: routine.symbol).font(.headline).multilineTextAlignment(.leading) }.buttonStyle(.plain)
                                 Text("Fällig seit " + occurrence.due.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
                                 if let snooze = store.data.routineSnoozes.first(where: { $0.id == occurrence.id && $0.until > context.date }) { Text("Erinnerung verschoben bis " + snooze.until.formatted(date: .omitted, time: .shortened)).font(.caption).foregroundStyle(.secondary) }
-                                Button("Als erledigt bestätigen", systemImage: "checkmark.circle.fill") { confirmCompletion(occurrence) }.buttonStyle(.bordered).accessibilityIdentifier("today.routine.complete")
+                                Button("Als erledigt bestätigen", systemImage: "checkmark.circle.fill") { confirmCompletion(occurrence) }.buttonStyle(.glass).accessibilityIdentifier("today.routine.complete")
                             }
                             if occurrence.id != due.last?.id { Divider() }
                         }
@@ -202,7 +202,7 @@ struct HomeAndWidgetSettingsCard: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
                 SectionHeader(title: "Heute & iPhone-Widgets", icon: "square.grid.2x2")
-                Button("Heute-Seite gestalten", systemImage: "slider.horizontal.3") { customize = true }.buttonStyle(.bordered)
+                Button("Heute-Seite gestalten", systemImage: "slider.horizontal.3") { customize = true }.buttonStyle(.glass)
                 Toggle("Titel in Widgets anzeigen", isOn: $store.data.dashboard.showWidgetTitles)
                 Text("Halte den iPhone-Home-Bildschirm gedrückt und wähle Bearbeiten → Widget hinzufügen → Therapie. Du findest Übersichten für Termine, Routinen, Erinnerungen und deine laufende Stunde.").font(.subheadline).foregroundStyle(.secondary)
                 Text("Widget gedrückt halten → Widget bearbeiten: Datenquelle und Titel-Filter wählen. Ohne gemeinsamen Datenzugriff lässt sich ein manueller Termin einstellen; er ist klar als manuell gekennzeichnet.").font(.caption).foregroundStyle(.secondary)

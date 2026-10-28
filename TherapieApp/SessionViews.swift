@@ -29,7 +29,7 @@ struct SessionConductorContent: View {
                 if let session = store.data.currentSession {
                     SwiftUI.TimelineView(.periodic(from: .now, by: 1)) { context in activeCard(session, now: context.date) }
                     TherapyDiscussionCard(alwaysVisible: true)
-                    if store.data.aiSettings.enabled { Button { showAI = true } label: { Label("KI-Begleiter für diese Stunde", systemImage: "sparkles") }.buttonStyle(.bordered) }
+                    if store.data.aiSettings.enabled { Button { showAI = true } label: { Label("KI-Begleiter für diese Stunde", systemImage: "sparkles") }.buttonStyle(.glass) }
                     GlassCard {
                         VStack(alignment: .leading, spacing: 10) {
                             Label("Während der Stunde", systemImage: "square.and.pencil").font(.headline)
@@ -116,8 +116,8 @@ struct SessionConductorContent: View {
                     }
                 }
                 ResponsiveButtonRow {
-                    Button(session.pausedAt == nil ? "Pausieren" : "Fortsetzen", systemImage: session.pausedAt == nil ? "pause.fill" : "play.fill") { controller.pauseOrResume() }.buttonStyle(.borderedProminent)
-                    Button("Beenden", systemImage: "stop") { finish = true }.buttonStyle(.bordered).disabled(voiceActive)
+                    Button(session.pausedAt == nil ? "Pausieren" : "Fortsetzen", systemImage: session.pausedAt == nil ? "pause.fill" : "play.fill") { controller.pauseOrResume() }.buttonStyle(.glassProminent)
+                    Button("Beenden", systemImage: "stop") { finish = true }.buttonStyle(.glass).disabled(voiceActive)
                 }.disabled(controller.busy)
                 if !controller.liveStatus.isEmpty { Text(controller.liveStatus).font(.caption).foregroundStyle(.secondary) }
                 Text(store.data.sessionPreferences.usesPrivateLiveActivity ? "Die Live-Aktivität zeigt neutrale Abschnittsnamen. Echte Namen kannst du in den Timer-Einstellungen einschalten." : "Die Live-Aktivität zeigt deine Abschnittsnamen. Notizen bleiben in der App; neutrale Namen sind in den Timer-Einstellungen wählbar.").font(.caption2).foregroundStyle(.secondary)
@@ -149,7 +149,7 @@ struct SessionConductorContent: View {
                         }
                         Text(template.phases.map { "\($0.title) (\($0.minutes) Min.)" }.joined(separator: " → ")).font(.subheadline).foregroundStyle(.secondary)
                         Button("Stunde starten", systemImage: "play.circle.fill") { controller.start(template) }
-                            .buttonStyle(.borderedProminent).disabled(store.data.currentSession != nil || controller.busy || !template.isValid)
+                            .buttonStyle(.glassProminent).disabled(store.data.currentSession != nil || controller.busy || !template.isValid)
                     }
                 }
             }

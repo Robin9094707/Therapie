@@ -27,7 +27,7 @@ struct CompanionTodayCard: View {
                     } label: { Image(systemName: "slider.horizontal.3").frame(width: 44, height: 44) }.accessibilityLabel("Darstellung wählen")
                 }
                 DayCheckInButtons { checkIn = $0 }
-                Button("Therapie-Check-in", systemImage: "leaf") { checkIn = DayCheckInPolicy.reopen(GuidedCheckIn(kind: .therapy), in: store.data) }.buttonStyle(.bordered)
+                Button("Therapie-Check-in", systemImage: "leaf") { checkIn = DayCheckInPolicy.reopen(GuidedCheckIn(kind: .therapy), in: store.data) }.buttonStyle(.glass)
                 ForEach(store.data.guidedCheckIns.filter(\.isDraft).prefix(2)) { draft in
                     Button { checkIn = draft } label: { Label("\(draft.displayTitle) fortsetzen · Schritt \(draft.step + 1)", systemImage: "arrow.uturn.forward") }.font(.subheadline)
                 }
@@ -106,9 +106,9 @@ struct GuidedCheckInCard: View {
                 HStack { Label(entry.displayTitle, systemImage: entry.kind.symbol).font(.headline); Spacer(); if entry.isDraft { Text("Entwurf").font(.caption).foregroundStyle(.secondary) } }
                 GuidedCheckInSummary(entry: entry)
                 ResponsiveButtonRow {
-                    Button(entry.isDraft ? "Fortsetzen" : "Übersicht öffnen", systemImage: entry.isDraft ? "pencil" : "doc.text.magnifyingglass", action: edit).buttonStyle(.bordered)
-                    ShareLink(item: GuidedCheckInExport.text(entry), subject: Text(entry.displayTitle)) { Label("Teilen", systemImage: "square.and.arrow.up") }.buttonStyle(.bordered)
-                    Button("Löschen", systemImage: "trash", role: .destructive) { deleting = true }.buttonStyle(.bordered)
+                    Button(entry.isDraft ? "Fortsetzen" : "Übersicht öffnen", systemImage: entry.isDraft ? "pencil" : "doc.text.magnifyingglass", action: edit).buttonStyle(.glass)
+                    ShareLink(item: GuidedCheckInExport.text(entry), subject: Text(entry.displayTitle)) { Label("Teilen", systemImage: "square.and.arrow.up") }.buttonStyle(.glass)
+                    Button("Löschen", systemImage: "trash", role: .destructive) { deleting = true }.buttonStyle(.glass)
                 }
                 if !entry.mediaIDs.isEmpty {
                     ForEach(entry.mediaIDs, id: \.self) { id in

@@ -3,10 +3,8 @@ import PhotosUI
 import UniformTypeIdentifiers
 import UIKit
 
-private let therapyContentMaxWidth: CGFloat = 720
-
 private enum RootModal: Identifiable {
-    case apple(String), ai, permissions, session, checkIn(GuidedCheckIn), task(WeeklyTask), routine(UUID), showers, widgetSetup, routines, reminders, therapy, mood, energy
+    case apple(String), ai, permissions, session, checkIn(GuidedCheckIn), task(WeeklyTask), routine(UUID), showers, widgetSetup, routines, reminders, therapy, mood, energy, whatsNew
     var id: String {
         switch self {
         case .apple(let page): "apple-" + page
@@ -14,7 +12,7 @@ private enum RootModal: Identifiable {
         case .checkIn(let entry): "check-in-" + entry.id.uuidString
         case .task(let task): "task-" + task.id.uuidString
         case .routine(let id): "routine-" + id.uuidString
-        case .showers: "showers"; case .widgetSetup: "widget-setup"; case .routines: "routines"; case .reminders: "reminders"; case .therapy: "therapy"; case .mood: "mood"; case .energy: "energy"
+        case .showers: "showers"; case .widgetSetup: "widget-setup"; case .routines: "routines"; case .reminders: "reminders"; case .therapy: "therapy"; case .mood: "mood"; case .energy: "energy"; case .whatsNew: "whats-new"
         }
     }
 }
@@ -26,6 +24,8 @@ struct RootView: View {
     @State private var lastReminderRefresh = Date()
     @AppStorage("therapy.permissions3000") private var permissionSetupDone = false
     @State private var showPermissions = false
+    @State private var showSplash = !TherapyDesign.isUITesting
+    @AppStorage("therapy.lastSeenVersion") private var lastSeenVersion = ""
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @EnvironmentObject private var store: AppStore
 
@@ -33,9 +33,14 @@ struct RootView: View {
         Group {
             if store.waitingForProtectedData {
                 VStack(spacing: 16) {
+                    TherapyLogoMark(size: 72)
                     ProgressView("Deine Daten werden geöffnet …")
                     Text("Nach dem Entsperren geht es automatisch weiter.").font(.subheadline).foregroundStyle(.secondary)
-                }.padding()
+                        .multilineTextAlignment(.center)
+                }
+                .padding(28)
+                .therapyGlass(in: RoundedRectangle(cornerRadius: TherapyDesign.cardRadius, style: .continuous))
+                .padding()
             } else if store.loadError != nil {
                 SettingsView()
             } else if store.data.profile.onboardingCompleted {
@@ -45,7 +50,7 @@ struct RootView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
+        .background { AppBackground() }
         .tint(Color.accentColor)
         .accessibilityIdentifier("therapy.root")
         .sheet(item: $modal, onDismiss: presentRequested) { modalContent($0) }
@@ -91,6 +96,14 @@ struct RootView: View {
             }
         }
         .overlay { TherapyCelebrationOverlay() }
+        .overlay {
+            if showSplash {
+                TherapySplashView {
+                    showSplash = false
+                    presentRequested()
+                }
+            }
+        }
         .transaction { if reduceMotion { $0.animation = nil } }
         .task {
             if !permissionSetupDone && !ProcessInfo.processInfo.arguments.contains("--ui-testing") {
@@ -101,8 +114,14 @@ struct RootView: View {
             if let error = store.lastSaveError {
                 VStack(alignment: .leading, spacing: 4) {
                     Label("Daten nicht gespeichert", systemImage: "exclamationmark.triangle.fill").bold()
+                        .foregroundStyle(.orange)
                     Text(error).font(.caption)
-                }.padding(12).frame(maxWidth: .infinity, alignment: .leading).background(Color.orange.opacity(0.18))
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .therapyGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous), tint: Color.orange.opacity(0.22))
+                .padding(.horizontal, 12)
+                .padding(.bottom, 4)
             }
         }
         .environment(\.dynamicTypeSize, ProcessInfo.processInfo.arguments.contains("--large-text") ? .accessibility2 : dynamicTypeSize)
@@ -141,6 +160,7 @@ struct RootView: View {
         case .therapy: return AnyView(TherapyAppointmentsView())
         case .mood: return AnyView(MoodEditorView())
         case .energy: return AnyView(WeeklyEnergyEditorView())
+        case .whatsNew: return AnyView(WhatsNewView())
         }
     }
     private var presentationRequestKey: String {
@@ -150,7 +170,7 @@ struct RootView: View {
 
     private func presentRequested() {
         // One stable presentation owner. Other requests wait for this sheet to close.
-        guard modal == nil, store.storageReady, scenePhase == .active else { return }
+        guard modal == nil, !showSplash, store.storageReady, scenePhase == .active else { return }
         if let page = store.notificationApplePage { store.notificationApplePage = nil; modal = .apple(page) }
         else if showPermissions { showPermissions = false; modal = .permissions }
         else if store.notificationSession { store.notificationSession = false; modal = .session }
@@ -165,6 +185,13 @@ struct RootView: View {
         else if store.notificationTherapy { store.notificationTherapy = false; modal = .therapy }
         else if store.notificationMood { store.notificationMood = false; modal = .mood }
         else if store.openEnergyReview { store.openEnergyReview = false; modal = .energy }
+        else if shouldShowWhatsNew { lastSeenVersion = TherapyDesign.appVersion; modal = .whatsNew }
+    }
+
+    /// Shown once after an update for people who already use the app; new installs mark it seen in onboarding.
+    private var shouldShowWhatsNew: Bool {
+        !TherapyDesign.isUITesting && store.loadError == nil && store.data.profile.onboardingCompleted
+            && lastSeenVersion.split(separator: ".").first != TherapyDesign.appVersion.split(separator: ".").first
     }
 
     private func recordViewport(width: CGFloat, height: CGFloat) {
@@ -187,155 +214,6 @@ struct RootView: View {
     }
 }
 
-// MARK: - Design system
-
-struct AppBackground: View {
-    @AppStorage("therapy.calmInterface") private var calmInterface = true
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-
-    var body: some View {
-        ZStack {
-            Color(uiColor: .systemGroupedBackground)
-            if !calmInterface && !reduceTransparency {
-                LinearGradient(colors: [Color.accentColor.opacity(0.12), Color.accentColor.opacity(0.05), .clear],
-                               startPoint: .topLeading, endPoint: .bottomTrailing)
-            }
-        }
-        .ignoresSafeArea()
-    }
-}
-
-struct TherapyScreen<Content: View>: View {
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        ZStack {
-            AppBackground()
-
-            ScrollView {
-                content
-                    .frame(maxWidth: therapyContentMaxWidth)
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 10)
-                    .padding(.bottom, 32)
-            }
-            .scrollDismissesKeyboard(.interactively)
-            .scrollIndicators(.hidden)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
-struct GlassCard<Content: View>: View {
-    var emphasized = false
-    @AppStorage("therapy.calmInterface") private var calmInterface = true
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        Group {
-            if calmInterface || reduceTransparency {
-                cardContent
-                    .background(Color(uiColor: .secondarySystemGroupedBackground),
-                                in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .strokeBorder(emphasized ? Color.accentColor.opacity(0.24) : Color.primary.opacity(0.06), lineWidth: 1)
-                    }
-            } else {
-                cardContent
-                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-            }
-        }
-    }
-    private var cardContent: some View {
-        content.padding(20).frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-struct SectionHeader: View {
-    let title: String
-    let icon: String
-    var subtitle: String? = nil
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 11) {
-            Image(systemName: icon)
-                .font(.headline)
-                .frame(width: 28, height: 28)
-                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.headline)
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
-}
-
-struct StatusPill: View {
-    let text: String
-    let icon: String
-
-    var body: some View {
-        Label(text, systemImage: icon)
-            .font(.caption.weight(.semibold))
-            .lineLimit(1)
-            .minimumScaleFactor(0.85)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(.thinMaterial, in: Capsule())
-    }
-}
-
-struct PrimaryActionButton: View {
-    let title: String
-    let icon: String
-    var isBusy = false
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                if isBusy {
-                    ProgressView()
-                        .controlSize(.small)
-                } else {
-                    Image(systemName: icon)
-                }
-                Text(title)
-                    .fontWeight(.semibold)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-        }
-        .buttonStyle(.borderedProminent)
-        .buttonBorderShape(.roundedRectangle(radius: 16))
-    }
-}
-
-struct ResponsiveButtonRow<Content: View>: View {
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 10) {
-                content
-            }
-
-            VStack(spacing: 10) {
-                content
-            }
-        }
-    }
-}
-
 // MARK: - Onboarding
 
 struct OnboardingView: View {
@@ -343,6 +221,7 @@ struct OnboardingView: View {
     @State private var userName = ""
     @State private var therapistName = ""
     @State private var showBackup = false
+    @AppStorage("therapy.lastSeenVersion") private var lastSeenVersion = ""
 
     var body: some View {
         ZStack {
@@ -351,7 +230,8 @@ struct OnboardingView: View {
             ScrollView {
                 VStack(spacing: 22) {
                     VStack(spacing: 14) {
-                        TherapyLogoMark()
+                        TherapyLogoMark(size: 112)
+                            .padding(.bottom, 6)
 
                         Text("Dein Therapiebegleiter")
                             .font(.system(.largeTitle, design: .rounded, weight: .bold))
@@ -380,13 +260,13 @@ struct OnboardingView: View {
                                     .textContentType(.name)
                                     .textInputAutocapitalization(.words)
                                     .padding(13)
-                                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                    .therapyInsetSurface()
 
                                 TextField("Therapeutin / Therapeut", text: $therapistName)
                                     .accessibilityIdentifier("onboarding.therapist")
                                     .textInputAutocapitalization(.words)
                                     .padding(13)
-                                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                    .therapyInsetSurface()
                             }
 
                             PrimaryActionButton(
@@ -395,6 +275,7 @@ struct OnboardingView: View {
                             ) {
                                 store.data.profile.userName = userName.trimmingCharacters(in: .whitespacesAndNewlines)
                                 store.data.profile.therapistName = therapistName.trimmingCharacters(in: .whitespacesAndNewlines)
+                                lastSeenVersion = TherapyDesign.appVersion
                                 store.data.profile.onboardingCompleted = true
                             }
                             .disabled(userName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -410,7 +291,7 @@ struct OnboardingView: View {
                     }
                     .frame(maxWidth: 520, alignment: .leading)
                     Button("Vorhandene Sicherung importieren", systemImage: "square.and.arrow.down") { showBackup = true }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.glass)
                 }
                 .frame(maxWidth: 600)
                 .frame(maxWidth: .infinity)
@@ -423,17 +304,6 @@ struct OnboardingView: View {
     }
 }
 
-struct TherapyLogoMark: View {
-    var body: some View {
-        Image("TherapyMark")
-            .resizable()
-            .scaledToFit()
-            .frame(width: 104, height: 104)
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-            .accessibilityHidden(true)
-    }
-}
-
 // MARK: - Main navigation
 
 struct MainTabView: View {
@@ -441,31 +311,32 @@ struct MainTabView: View {
 
     var body: some View {
         TabView(selection: $store.selectedTab) {
-            DashboardView()
-                .safeAreaInset(edge: .bottom) { UndoChangesButton() }
-                .tabItem { Label("Heute", systemImage: "sparkles") }
-                .tag(0)
+            Tab("Heute", systemImage: "sparkles", value: 0) {
+                DashboardView()
+                    .safeAreaInset(edge: .bottom) { UndoChangesButton() }
+            }
 
-            InsightsHubView()
-                .safeAreaInset(edge: .bottom) { UndoChangesButton() }
-                .tabItem { Label("Insights", systemImage: "chart.xyaxis.line") }
-                .tag(1)
+            Tab("Insights", systemImage: "chart.xyaxis.line", value: 1) {
+                NavigationStack { InsightsHubView() }
+                    .safeAreaInset(edge: .bottom) { UndoChangesButton() }
+            }
 
-            TherapyHubView()
-                .safeAreaInset(edge: .bottom) { UndoChangesButton() }
-                .tabItem { Label("Therapie", systemImage: "leaf") }
-                .tag(2)
+            Tab("Therapie", systemImage: "leaf", value: 2) {
+                NavigationStack { TherapyHubView() }
+                    .safeAreaInset(edge: .bottom) { UndoChangesButton() }
+            }
 
-            LibraryView()
-                .safeAreaInset(edge: .bottom) { UndoChangesButton() }
-                .tabItem { Label("Archiv", systemImage: "square.stack.3d.up.fill") }
-                .tag(3)
+            Tab("Archiv", systemImage: "square.stack.3d.up.fill", value: 3) {
+                NavigationStack { LibraryView() }
+                    .safeAreaInset(edge: .bottom) { UndoChangesButton() }
+            }
 
-            SettingsView()
-                .safeAreaInset(edge: .bottom) { UndoChangesButton() }
-                .tabItem { Label("Profil", systemImage: "person.crop.circle.fill") }
-                .tag(4)
+            Tab("Profil", systemImage: "person.crop.circle.fill", value: 4) {
+                SettingsView()
+                    .safeAreaInset(edge: .bottom) { UndoChangesButton() }
+            }
         }
+        .tabBarMinimizeBehavior(TherapyDesign.isUITesting ? .never : .onScrollDown)
     }
 }
 
@@ -512,7 +383,7 @@ struct DashboardView: View {
                     }
                     if store.data.dashboard.visibleCards.isEmpty {
                         ContentUnavailableView("Deine Heute-Seite", systemImage: "slider.horizontal.3", description: Text("Wähle deine Karten über „Heute gestalten“."))
-                        Button("Heute gestalten") { customize = true }.buttonStyle(.borderedProminent)
+                        Button("Heute gestalten") { customize = true }.buttonStyle(.glassProminent)
                     }
                 }
             }
@@ -578,7 +449,8 @@ struct DashboardView: View {
     private var quickActions: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Schnell erfassen")
-                .font(.headline)
+                .font(.system(.headline, design: .rounded))
+                .accessibilityAddTraits(.isHeader)
                 .padding(.horizontal, 2)
 
             LazyVGrid(
@@ -628,7 +500,7 @@ struct DashboardView: View {
                             systemImage: task.completed ? "arrow.uturn.backward.circle" : "checkmark.circle.fill"
                         )
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.glass)
                     .buttonBorderShape(.roundedRectangle(radius: 14))
                 } else {
                     Text("Für diese Woche ist noch keine Aufgabe eingetragen.")
@@ -639,7 +511,7 @@ struct DashboardView: View {
                     } label: {
                         Label("Aufgabe anlegen", systemImage: "plus.circle.fill")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.glassProminent)
                     .buttonBorderShape(.roundedRectangle(radius: 14))
                 }
             }
@@ -660,7 +532,8 @@ struct DashboardView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(Array(store.data.notes.sorted { $0.createdAt > $1.createdAt }.prefix(3))) { note in
+                    let latest = Array(store.data.notes.sorted { $0.createdAt > $1.createdAt }.prefix(3))
+                    ForEach(latest) { note in
                         VStack(alignment: .leading, spacing: 3) {
                             Text(note.title)
                                 .font(.subheadline.weight(.semibold))
@@ -670,49 +543,13 @@ struct DashboardView: View {
                                 .foregroundStyle(.secondary)
                         }
 
-                        if note.id != store.data.notes.prefix(3).last?.id {
+                        if note.id != latest.last?.id {
                             Divider()
                         }
                     }
                 }
             }
         }
-    }
-}
-
-struct QuickActionButton: View {
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    let title: String
-    let subtitle: String
-    let icon: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 10) {
-                Image(systemName: icon)
-                    .font(.title3)
-                    .frame(width: 38, height: 38)
-                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
-                        .font(.subheadline.bold())
-                    Text(subtitle)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
-            .padding(14)
-        }
-        .buttonStyle(TherapyPressStyle())
-        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(Color.accentColor.opacity(0.14), lineWidth: 1)
-        }
-        .accessibilityElement(children: .combine)
     }
 }
 
@@ -747,7 +584,8 @@ struct TherapyCalendarView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        // Hosted by the tab's or presenter's NavigationStack; a nested stack doubled the bars and broke Back.
+        Group {
             TherapyScreen {
                 VStack(spacing: 16) {
                     TherapyAppointmentCard()
@@ -794,7 +632,7 @@ struct TherapyCalendarView: View {
                     }
                     .padding(12)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .therapyInsetSurface()
                 }
 
                 if dayNotes.isEmpty && dayMedia.isEmpty && dayEnergy.isEmpty && dayMoods.isEmpty && dayPoints.isEmpty && !therapyWeekdayMatch {
@@ -905,7 +743,7 @@ struct DayCountTile: View {
             Spacer(minLength: 0)
         }
         .padding(11)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .therapyInsetSurface()
     }
 }
 
@@ -928,7 +766,8 @@ struct TasksView: View {
     @State private var showAdd = false
 
     var body: some View {
-        NavigationStack {
+        // Hosted by the tab's or presenter's NavigationStack; a nested stack doubled the bars and broke Back.
+        Group {
             TherapyScreen {
                 VStack(spacing: 14) {
                     GlassCard {
@@ -966,7 +805,7 @@ struct TasksView: View {
                     }
                 }
             }
-            .safeAreaInset(edge: .bottom) { if filteredTasks.count > taskLimit { Button("Weitere 40 Aufgaben") { taskLimit += 40 }.buttonStyle(.bordered).padding(8).background(.regularMaterial) } }
+            .safeAreaInset(edge: .bottom) { if filteredTasks.count > taskLimit { Button("Weitere 40 Aufgaben") { taskLimit += 40 }.buttonStyle(.glass).padding(8) } }
             .onChange(of: weekScope) { _, _ in taskLimit = 40 }
             .navigationTitle("Wochenaufgaben")
             .toolbar {
@@ -1082,7 +921,8 @@ struct LibraryView: View {
     @State private var viewingMedia: MediaItem?
 
     var body: some View {
-        NavigationStack {
+        // Hosted by the tab's or presenter's NavigationStack; a nested stack doubled the bars and broke Back.
+        Group {
             TherapyScreen {
                 VStack(spacing: 14) {
                     sectionSelector
@@ -1154,27 +994,31 @@ struct LibraryView: View {
 
     private var sectionSelector: some View {
         ScrollView(.horizontal) {
-            HStack(spacing: 8) {
-                ForEach(LibrarySection.allCases) { item in
-                    Button {
-                        withAnimation(.snappy) {
-                            section = item
+            GlassEffectContainer(spacing: 8) {
+                HStack(spacing: 8) {
+                    ForEach(LibrarySection.allCases) { item in
+                        Button {
+                            withAnimation(.snappy) {
+                                section = item
+                            }
+                        } label: {
+                            Label(item.rawValue, systemImage: item.icon)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(section == item ? Color.accentColor : Color.primary)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 10)
+                                .contentShape(Capsule())
                         }
-                    } label: {
-                        Label(item.rawValue, systemImage: item.icon)
-                            .font(.subheadline.weight(.semibold))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 9)
-                            .background(
-                                section == item ? AnyShapeStyle(.tint.opacity(0.18)) : AnyShapeStyle(.thinMaterial),
-                                in: Capsule()
-                            )
+                        .buttonStyle(.plain)
+                        .therapyGlass(in: Capsule(), tint: section == item ? Color.accentColor.opacity(0.22) : nil, interactive: true)
+                        .accessibilityAddTraits(section == item ? .isSelected : [])
                     }
-                    .buttonStyle(.plain)
                 }
+                .padding(.vertical, 2)
             }
         }
         .scrollIndicators(.hidden)
+        .scrollClipDisabled()
     }
 
     private var mediaSection: some View {
@@ -1360,7 +1204,7 @@ struct SettingsView: View {
                         VStack(alignment: .leading, spacing: 14) {
                             SectionHeader(title: "Vollständige Datensicherung", icon: "lock.doc.fill", subtitle: "Passwortsicherung oder lesbares ZIP – mit oder ohne Bilder.")
                             Text("Alle Einträge und Einstellungen exportieren, in Dateien sichern und später auf diesem oder einem anderen iPhone wiederherstellen.").font(.subheadline).foregroundStyle(.secondary)
-                            Button { showBackupCenter = true } label: { Label("Export & Import öffnen", systemImage: "externaldrive").frame(maxWidth: .infinity) }.buttonStyle(.borderedProminent)
+                            Button { showBackupCenter = true } label: { Label("Export & Import öffnen", systemImage: "externaldrive").frame(maxWidth: .infinity) }.buttonStyle(.glassProminent)
                         }
                     }
                     backupCard
@@ -1437,12 +1281,12 @@ struct SettingsView: View {
                 TextField("Dein Name", text: $store.data.profile.userName)
                     .textInputAutocapitalization(.words)
                     .padding(12)
-                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                    .therapyInsetSurface(cornerRadius: 13)
 
                 TextField("Therapeutin / Therapeut", text: $store.data.profile.therapistName)
                     .textInputAutocapitalization(.words)
                     .padding(12)
-                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                    .therapyInsetSurface(cornerRadius: 13)
             }
         }
     }
@@ -1603,7 +1447,7 @@ struct SettingsView: View {
                         Label("Ordner wählen", systemImage: "folder.badge.plus")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.glassProminent)
 
                     Button {
                         do {
@@ -1616,7 +1460,7 @@ struct SettingsView: View {
                         Label("Jetzt sichern", systemImage: "arrow.clockwise.icloud")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.glass)
                 }
 
                 Button {
@@ -1624,7 +1468,7 @@ struct SettingsView: View {
                 } label: {
                     Label("Backup wiederherstellen", systemImage: "clock.arrow.circlepath")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.glass)
                 .disabled(!BackupService.shared.hasSelectedFolder)
 
                 if let statusMessage {
@@ -1669,7 +1513,7 @@ struct SettingsView: View {
                 Button("Alle Therapiedaten löschen", role: .destructive) {
                     showDeleteDialog = true
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.glass)
             }
         }
     }
@@ -1882,11 +1726,11 @@ struct AudioRecordingView: View {
                             VStack(spacing: 12) {
                                 TextField("Titel", text: $title)
                                     .padding(12)
-                                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                                    .therapyInsetSurface(cornerRadius: 13)
 
                                 TextField("Tags, durch Komma getrennt", text: $tags)
                                     .padding(12)
-                                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                                    .therapyInsetSurface(cornerRadius: 13)
 
                                 PrimaryActionButton(
                                     title: recorder.isRecording ? "Aufnahme beenden" : "Aufnahme starten",

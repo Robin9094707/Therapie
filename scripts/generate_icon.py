@@ -70,7 +70,14 @@ images.append({"idiom": "ios-marketing", "size": "1024x1024", "scale": "1x", "fi
 (OUT.parent / "Contents.json").write_text(json.dumps({"images": images, "info": {"author": "xcode", "version": 1}}, indent=2) + "\n")
 mark = OUT.parent.parent / "TherapyMark.imageset"
 mark.mkdir(exist_ok=True)
-final.resize((312, 312), Image.Resampling.LANCZOS).save(mark / "TherapyMark.png")
+# Transparent continuous corners let the launch screen draw the same rounded mark
+# that the animated in-app splash continues from (120 pt at 3x).
+MARK = 360
+mark_image = final.resize((MARK, MARK), Image.Resampling.LANCZOS).convert("RGBA")
+corner_mask = Image.new("L", (MARK * 4, MARK * 4), 0)
+ImageDraw.Draw(corner_mask).rounded_rectangle((0, 0, MARK * 4 - 1, MARK * 4 - 1), radius=int(MARK * 4 * 0.2237), fill=255)
+mark_image.putalpha(corner_mask.resize((MARK, MARK), Image.Resampling.LANCZOS))
+mark_image.save(mark / "TherapyMark.png")
 (mark / "Contents.json").write_text(json.dumps({"images": [{"idiom": "universal", "filename": "TherapyMark.png", "scale": "3x"}], "info": {"author": "xcode", "version": 1}}, indent=2) + "\n")
 
 # Xcode 26 may keep the 3x icon only in Assets.car. Also ship the registered
