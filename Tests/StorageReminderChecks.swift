@@ -53,7 +53,7 @@ struct StorageReminderChecks {
         data.aiConversations[0].contextDays = 14
         data.aiConversations[0].draftText = "Noch nicht gesendeter Gedanke"
         data.accentTheme = .purple; data.wellbeingPreferences.estimateBattery = true; data.wellbeingPreferences.hourlyDecline = 2
-        data.aiSettings.speakReplies = true
+        data.aiSettings.speakReplies = true; data.aiSettings.thinking = "deep"
         data.aiConversations[0].memory = "Familie und Pausen"; data.aiConversations[0].tags = ["Familie"]
         data.guidedCheckIns[0].conversationTranscript = "Du: Meine Schwester hilft."
         data.guidedCheckIns[0].satisfaction = 4

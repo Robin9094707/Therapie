@@ -13,7 +13,7 @@ enum TherapyDesign {
     static let tileRadius: CGFloat = 20
     static let insetRadius: CGFloat = 14
     static let isUITesting = ProcessInfo.processInfo.arguments.contains("--ui-testing")
-    static var appVersion: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "4000.0.0" }
+    static var appVersion: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "5000.0.0" }
 }
 
 private struct TherapyAccentKey: EnvironmentKey {
@@ -229,6 +229,28 @@ struct StatusPill: View {
     }
 }
 
+/// A small glass capsule with a tinted symbol, used for status rows.
+struct TherapyChip: View {
+    let text: String
+    let icon: String
+    var tint: Color = .accentColor
+
+    var body: some View {
+        Label {
+            Text(text).foregroundStyle(.primary)
+        } icon: {
+            Image(systemName: icon).foregroundStyle(tint)
+        }
+        .font(.caption.weight(.semibold))
+        .lineLimit(1)
+        .minimumScaleFactor(0.85)
+        .padding(.horizontal, 11)
+        .padding(.vertical, 7)
+        .therapyGlass(in: Capsule(), tint: tint.opacity(0.12))
+        .accessibilityElement(children: .combine)
+    }
+}
+
 // MARK: - Buttons
 
 struct PrimaryActionButton: View {
@@ -262,13 +284,14 @@ struct QuickActionButton: View {
     let title: String
     let subtitle: String
     let icon: String
+    var tint: Color = .accentColor
     let action: () -> Void
     @ScaledMetric(relativeTo: .title3) private var tileSize: CGFloat = 40
 
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 12) {
-                TherapyIconTile(icon: icon, size: tileSize)
+                TherapyIconTile(icon: icon, size: tileSize, tint: tint)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title)
@@ -536,18 +559,20 @@ struct WhatsNewView: View {
     }
 
     private let items: [Item] = [
-        Item(icon: "sparkles", title: "Therapie 4 – aufgeräumt & hochwertig",
-             text: "Ruhigere Seiten, klarere Abschnitte und überall dasselbe Liquid-Glass-Design – auch in allen Menüs, Editoren und Einstellungen."),
-        Item(icon: "person.crop.circle.fill", title: "Neues Profil",
-             text: "Alle Einstellungen sind jetzt übersichtlich gruppiert wie in der Einstellungen-App. Jeder Bereich hat seine eigene ruhige Seite."),
-        Item(icon: "shower.fill", title: "Duschtage besser verwalten",
-             text: "Wochenleiste und Zielring auf einen Blick. Vergangene Einträge kannst du als „doch nicht geduscht“ korrigieren, als falsch eingetragen markieren, bearbeiten oder entfernen."),
-        Item(icon: "timer", title: "Dynamic Island, die mitläuft",
-             text: "Die Therapiestunde startet ihre Live-Aktivität sofort, auch wenn du die App gleich verlässt. Ring, Restzeit und Abschnitte laufen im Hintergrund korrekt weiter."),
-        Item(icon: "square.grid.2x2.fill", title: "Bessere Übersicht",
-             text: "Schnellzugriffe als Kachelreihe, „Alles im Blick“ mit Duschtagen und ein neuer Zeitring in der Therapiestunde."),
+        Item(icon: "sparkles", title: "Therapie 5 – neu aufgebaut",
+             text: "Vier ruhige Bereiche: Heute, Therapie, Alltag und Verlauf. Alles ist mit weniger Tippen erreichbar, mit mehr Symbolen und durchgehend Liquid Glass."),
+        Item(icon: "magnifyingglass", title: "Suche & alle Funktionen",
+             text: "Der Such-Tab zeigt jede Funktion der App als Kachel und findet Notizen, Aufgaben, Check-ins, Themen und mehr."),
+        Item(icon: "figure.mind.and.body", title: "Neuer Bereich „Alltag“",
+             text: "Routinen, Aufgaben, Wecker, Duschtage, Notfallplan und Methoden an einem Ort – mit dem heutigen Stand auf einen Blick."),
+        Item(icon: "timer", title: "Dynamic Island, die wirklich mitläuft",
+             text: "Die Live-Aktivität startet sofort, bleibt beim Verlassen der App erhalten und zeigt Abschnittswechsel und das Ende auch ohne geöffnete App. Eine Mini-Leiste über der Tableiste führt zurück zur Stunde."),
+        Item(icon: "brain.head.profile", title: "Klügere KI",
+             text: "Der Begleiter kennt jetzt dein Lagebild (Tageszeit, nächste Therapie, offene Aufgaben) und denkt standardmäßig kurz nach. Die Denktiefe stellst du in den KI-Einstellungen ein."),
+        Item(icon: "person.crop.circle.fill", title: "Profil oben rechts",
+             text: "Profil und Einstellungen öffnest du jetzt über deinen Avatar oben rechts – auf jeder Seite."),
         Item(icon: "lock.shield.fill", title: "Deine Daten bleiben",
-             text: "Alle bisherigen Einträge, Fotos, Aufnahmen, Sicherungen und Einstellungen funktionieren weiter. Vor der Umstellung legt die App automatisch eine Kopie deiner Daten an.")
+             text: "Alle Einträge, Fotos, Aufnahmen, Sicherungen und Einstellungen funktionieren unverändert. Beim ersten Start legt die App zusätzlich eine Kopie deiner Daten an.")
     ]
 
     var body: some View {

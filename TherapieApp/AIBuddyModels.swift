@@ -14,8 +14,10 @@ struct AIBuddySettings: Codable, Equatable {
     var includeJournal = true
     var allowPhotoUploads = false
     var allowVoiceUploads = false
+    /// How long the model may think before answering: "fast", "balanced" (default since Therapie 5) or "deep".
+    var thinking = AIBuddyThinking.balanced.rawValue
     init() {}
-    enum CodingKeys: String, CodingKey { case speakReplies, lastWeeklyReviewAttempt, weeklyReviewEnabled, lastWeeklyReview, preferGuidedCheckIns, enabled, model, transcriptionModel, contextDays, automaticRange, includeJournal, allowPhotoUploads, allowVoiceUploads }
+    enum CodingKeys: String, CodingKey { case speakReplies, lastWeeklyReviewAttempt, weeklyReviewEnabled, lastWeeklyReview, preferGuidedCheckIns, enabled, model, transcriptionModel, contextDays, automaticRange, includeJournal, allowPhotoUploads, allowVoiceUploads, thinking }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         speakReplies = try c.decodeIfPresent(Bool.self, forKey: .speakReplies) ?? false
@@ -31,6 +33,36 @@ struct AIBuddySettings: Codable, Equatable {
         includeJournal = try c.decodeIfPresent(Bool.self, forKey: .includeJournal) ?? true
         allowPhotoUploads = try c.decodeIfPresent(Bool.self, forKey: .allowPhotoUploads) ?? false
         allowVoiceUploads = try c.decodeIfPresent(Bool.self, forKey: .allowVoiceUploads) ?? false
+        thinking = AIBuddyThinking(rawValue: try c.decodeIfPresent(String.self, forKey: .thinking) ?? "")?.rawValue ?? AIBuddyThinking.balanced.rawValue
+    }
+}
+/// Reasoning depth for the companion. Older data has no value and starts with `balanced`.
+enum AIBuddyThinking: String, CaseIterable, Identifiable {
+    case fast, balanced, deep
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .fast: "Schnell"
+        case .balanced: "Ausgewogen"
+        case .deep: "Gründlich"
+        }
+    }
+    var detail: String {
+        switch self {
+        case .fast: "Antwortet am schnellsten und günstigsten, denkt kaum vor."
+        case .balanced: "Denkt kurz nach: bessere Zusammenhänge bei kaum längerer Wartezeit."
+        case .deep: "Denkt länger nach, z. B. für Wochenrückblicke und Planung. Langsamer und etwas teurer."
+        }
+    }
+    /// Responses API reasoning effort for a model, or nil when the model does not take one.
+    func effort(for model: String) -> String? {
+        guard model.hasPrefix("gpt-5") || model.hasPrefix("gpt-6") else { return nil }
+        let noneCapable = ["gpt-5.6-luna", "gpt-6-luna", "gpt-5.6-terra"].contains(model)
+        switch self {
+        case .fast: return noneCapable ? "none" : "low"
+        case .balanced: return "low"
+        case .deep: return "medium"
+        }
     }
 }
 enum AIBuddyActionKind: String, Codable, CaseIterable {
@@ -250,8 +282,10 @@ struct AIBuddyContext {
             session = "Laufende Stunde: " + current.title
             session += ", Phasen: " + phases
             session += ", begonnen " + formatter.string(from: current.startedAt)
+            if let index = current.phaseIndex(at: requestTime) { session += ", jetzt Abschnitt \(index + 1): " + current.phases[index].title }
+            session += current.pausedAt == nil ? ", noch \(Int(current.remaining(at: requestTime) / 60)) Min." : ", pausiert"
         }
-        var text = session + "\nZeitraum " + formatter.string(from: start) + " bis " + formatter.string(from: end)
+        var text = AIBuddySituation.summary(data, at: requestTime, calendar: calendar) + "\n" + session + "\nZeitraum " + formatter.string(from: start) + " bis " + formatter.string(from: end)
         text += ", \(days) Kalendertage. __SENT__ Einträge, __OMITTED__ aus Platzgründen oder nach Relevanz nicht enthalten."
         text += " Selbstberichtete Tagesmittel: \(average) bei \(moods.count) Tagen mit Stimmung; Trend \(trend) auf Skala 1–5, keine Diagnose."
         text += " Nächste Therapie: " + next
@@ -265,7 +299,7 @@ struct AIBuddyContext {
         }
         let planning = broad || intent.contains("dusch") || intent.contains("erledigt") || intent.contains("verschieb") || intent.contains("auslassen") || ["routine", "aufgabe", "erinner", "alarm", "tablett", "termin", "therapie", "ziel"].contains(where: intent.contains)
         if planning {
-            text += "\nROUTINEN (IDs):\n" + data.routines.prefix(12).map { $0.id.uuidString + " | " + $0.title + " | " + String($0.details.prefix(160)) + " | " + ($0.enabled ? "aktiv" : "pausiert") + " | " + $0.times.map { String(format: "%02d:%02d", $0.hour, $0.minute) + " Tage " + $0.weekdays.map(String.init).joined(separator: ",") }.joined(separator: "; ") }.joined(separator: "\n")
+            text += "\nROUTINEN (IDs):\n" + data.routines.prefix(12).map(routineLine).joined(separator: "\n")
             text += "\nHEUTE OFFENE ROUTINEN (teilweise später geplant):\n" + due + "\nOFFENE AUFGABEN:\n" + String(openTasks.prefix(3000))
         }
         if broad || intent.contains("therapie") || intent.contains("runde") || intent.contains("stunde") {
@@ -277,7 +311,7 @@ struct AIBuddyContext {
         }
         text = BuddyInteraction.completeLines(text, limit: question.isEmpty ? 7000 : 5000)
         if data.aiSettings.includeJournal && ["methode", "asmr", "gedankenstopp", "beruhig", "überforder", "notfall"].contains(where: intent.contains) {
-            text += "\nMEINE METHODEN (persönliche Zuordnungen, keine Wirksamkeitsgarantie):\n" + data.copingMethods.prefix(10).map { $0.id.uuidString + " | " + $0.title + " | " + $0.situation + " | " + $0.stages.map(\.title).joined(separator: ", ") + " | " + String($0.details.prefix(300)) }.joined(separator: "\n")
+            text += "\nMEINE METHODEN (persönliche Zuordnungen, keine Wirksamkeitsgarantie):\n" + data.copingMethods.prefix(10).map(methodLine).joined(separator: "\n")
         }
         text += "\nAKTIONSKONTEXT (heutige Planung unabhängig vom Rückblickzeitraum):\n" + BuddyCapabilities.context(data, question: question, now: requestTime)
         text += "\nNative Bereiche: " + BuddyDestinations.catalogue + "\nEINTRÄGE:\n"
@@ -288,6 +322,61 @@ struct AIBuddyContext {
         }
         text = text.replacingOccurrences(of: "__SENT__", with: String(sent)).replacingOccurrences(of: "__OMITTED__", with: String(records.count - sent))
         return .init(start: start, end: end, days: days, recordCount: sent, omittedCount: records.count - sent, text: text)
+    }
+    private static func routineLine(_ routine: DailyRoutine) -> String {
+        let times: [String] = routine.times.map { time in
+            let clock: String = String(format: "%02d:%02d", time.hour, time.minute)
+            let days: String = time.weekdays.map(String.init).joined(separator: ",")
+            return clock + " Tage " + days
+        }
+        let fields: [String] = [routine.id.uuidString, routine.title, String(routine.details.prefix(160)), routine.enabled ? "aktiv" : "pausiert", times.joined(separator: "; ")]
+        return fields.joined(separator: " | ")
+    }
+    private static func methodLine(_ method: CopingMethod) -> String {
+        let stages: String = method.stages.map(\.title).joined(separator: ", ")
+        let fields: [String] = [method.id.uuidString, method.title, method.situation, stages, String(method.details.prefix(300))]
+        return fields.joined(separator: " | ")
+    }
+}
+
+/// A compact picture of "now" that is always part of the context, so the companion can personalise its answer,
+/// pick the right moment (morning plan vs. evening review) and refer to the next therapy without guessing.
+enum AIBuddySituation {
+    static func daypart(_ date: Date, calendar: Calendar = .current) -> String {
+        switch calendar.component(.hour, from: date) {
+        case 5..<11: return "Morgen"
+        case 11..<14: return "Mittag"
+        case 14..<18: return "Nachmittag"
+        case 18..<23: return "Abend"
+        default: return "Nacht"
+        }
+    }
+    static func summary(_ data: AppData, at now: Date, calendar: Calendar = .current) -> String {
+        var parts: [String] = []
+        let name = data.profile.userName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let first = name.split(separator: " ").first { parts.append("Vorname " + String(first.prefix(40))) }
+        let therapist = data.profile.therapistName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !therapist.isEmpty { parts.append("Therapie bei " + String(therapist.prefix(60))) }
+        parts.append(daypart(now, calendar: calendar) + ", " + now.formatted(.dateTime.weekday(.wide).locale(Locale(identifier: "de_DE"))))
+        if let next = TherapyDateHelper.nextOccurrence(schedule: data.schedule, after: now, calendar: calendar) {
+            let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: calendar.startOfDay(for: next)).day ?? 0
+            let relative: String = days <= 0 ? "heute" : days == 1 ? "morgen" : "in \(days) Tagen"
+            parts.append("nächste Therapie " + relative)
+        }
+        if let session = data.currentSession { parts.append(session.pausedAt == nil ? "Therapiestunde läuft gerade" : "Therapiestunde pausiert") }
+        let openTasks = data.weeklyTasks.filter { !$0.completed }.count
+        if openTasks > 0 { parts.append("\(openTasks) offene Aufgaben") }
+        let due = RoutinePlanner.occurrences(data: data, now: calendar.startOfDay(for: now), days: 1, calendar: calendar).filter { !RoutinePlanner.resolved($0, completions: data.routineCompletions) }
+        if !due.isEmpty { parts.append("\(due.count) Routinen heute offen") }
+        if data.routines.contains(where: ShowerPlanner.isShower) || !data.showerEntries.isEmpty {
+            parts.append("Duschen diese Woche \(ShowerPlanner.weekCount(data, at: now))/\(data.showerPreferences.weeklyGoal)")
+        }
+        let today = WellnessAnalytics.daily(data, period: WellnessPeriod.rolling(days: 1, now: now)).last
+        if let mood = today?.mood { parts.append(String(format: "Stimmung heute %.1f/5", mood)) }
+        if let battery = today?.battery { parts.append(String(format: "Akku heute %.1f/5", battery)) }
+        let topics: [String] = data.therapyTopics.filter(\.isCurrent).prefix(4).map { String($0.title.prefix(60)) }
+        if !topics.isEmpty { parts.append("aktuelle Themen: " + topics.joined(separator: ", ")) }
+        return "LAGEBILD (nur selbst eingetragene App-Daten): " + parts.joined(separator: " · ")
     }
 }
 

@@ -6,11 +6,11 @@ import sys
 
 app = Path(sys.argv[1])
 info = plistlib.loads((app / "Info.plist").read_bytes())
-assert info["CFBundleShortVersionString"] == "4000.0.0"
+assert info["CFBundleShortVersionString"] == "5000.0.0"
 assert info["CFBundleIdentifier"] == "eu.rjuhas.therapie", "Existing app identity must be preserved"
 assert info["CFBundleDevelopmentRegion"] == "de"
 assert "de" in info["CFBundleLocalizations"]
-assert info["CFBundleVersion"] == "27", "Expected release build number"
+assert info["CFBundleVersion"] == "28", "Expected release build number"
 assert "therapie" in info["CFBundleURLTypes"][0]["CFBundleURLSchemes"], "Widget deep-link scheme missing"
 assert info["UIDeviceFamily"] == [1], "Expected a native iPhone target"
 assert info["UILaunchStoryboardName"] == "LaunchScreen"
@@ -18,6 +18,8 @@ assert (app / "LaunchScreen.storyboardc").is_dir(), "Compiled launch storyboard 
 assert "UIApplicationSceneManifest" in info, "SwiftUI scene declaration missing"
 assert (app / "Assets.car").is_file(), "Compiled asset catalog missing"
 assert info.get("NSSupportsLiveActivities") is True, "Live Activity capability missing"
+assert "fetch" in info.get("UIBackgroundModes", []), "Background refresh for the running session's Live Activity missing"
+assert "eu.rjuhas.therapie.session-refresh" in info.get("BGTaskSchedulerPermittedIdentifiers", []), "Live Activity refresh task not permitted"
 assert info.get("UIFileSharingEnabled") is True, "App folder not shared in Files"
 assert info.get("LSSupportsOpeningDocumentsInPlace") is True, "Documents provider disabled"
 backup_type = next(item for item in info["UTExportedTypeDeclarations"] if item["UTTypeIdentifier"] == "eu.rjuhas.therapie.backup")

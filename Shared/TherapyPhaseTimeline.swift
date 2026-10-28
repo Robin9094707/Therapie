@@ -10,6 +10,13 @@ enum TherapyPhaseTimeline {
     static func activeIndex(in phases: [Phase], at date: Date) -> Int? {
         phases.firstIndex { $0.start <= date && date < $0.end }
     }
+    /// Session name for compact surfaces; neutral mode hides it.
+    static func sessionTitle(_ title: String, privateMode: Bool) -> String? {
+        guard !privateMode else { return nil }
+        let clean = title.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
+        guard !clean.isEmpty else { return nil }
+        return clean.count > 32 ? String(clean.prefix(31)) + "…" : clean
+    }
     static func displayTitle(_ title: String, index: Int, privateMode: Bool) -> String {
         guard !privateMode else { return "Abschnitt \(index + 1)" }
         let clean = title.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")

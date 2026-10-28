@@ -20,14 +20,14 @@ struct TherapyLiveActivityBundle: WidgetBundle {
 struct TherapyLiveActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: TherapyActivityAttributes.self) { context in
-            SessionLockScreenView(state: context.state, isStale: context.isStale)
+            SessionLockScreenView(state: context.state)
                 .padding(16)
                 .activitySystemActionForegroundColor(.teal)
                 .widgetURL(URL(string: "therapie://session"))
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    SessionRing(state: context.state, size: 46)
+                    SessionRing(state: context.state, size: 48)
                         .padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
@@ -35,26 +35,26 @@ struct TherapyLiveActivityWidget: Widget {
                         SessionActivityClock(state: context.state)
                             .font(.system(.title2, design: .rounded, weight: .semibold))
                             .multilineTextAlignment(.trailing)
-                            .frame(maxWidth: 96, alignment: .trailing)
-                        Text(context.state.finished == true ? "geschafft" : context.state.paused ? "pausiert" : "verbleibend")
+                            .frame(maxWidth: 100, alignment: .trailing)
+                        Text(context.state.isOver() ? "geschafft" : context.state.paused ? "pausiert" : "verbleibend")
                             .font(.caption2).foregroundStyle(.secondary)
                     }
                     .padding(.trailing, 4)
                 }
                 DynamicIslandExpandedRegion(.center) {
                     VStack(spacing: 1) {
-                        Text("Therapiestunde").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
-                        SessionPhaseTitle(state: context.state, isStale: context.isStale).font(.headline).lineLimit(1)
+                        SessionCaption(state: context.state).font(.caption2.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1)
+                        SessionPhaseTitle(state: context.state).font(.headline).lineLimit(1)
                     }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(alignment: .leading, spacing: 10) {
-                        SessionPhaseStrip(state: context.state)
+                        if !context.state.isOver() { SessionPhaseStrip(state: context.state) }
                         HStack {
                             SessionEndLabel(state: context.state)
                             Spacer()
                             Link(destination: URL(string: "therapie://session")!) {
-                                Label("Öffnen", systemImage: "arrow.up.forward.app").font(.caption.weight(.semibold))
+                                Label("Öffnen", systemImage: "arrow.up.forward.app.fill").font(.caption.weight(.semibold))
                             }
                         }
                         .font(.caption).foregroundStyle(.secondary)
@@ -79,33 +79,38 @@ struct TherapyLiveActivityWidget: Widget {
     }
 }
 
-/// Lock Screen layout. Every clock and bar is timer-driven, so it stays correct while the app is suspended.
+/// Lock Screen layout. Clocks and bars are timer-driven; names and the "time is up" state are evaluated when iOS
+/// draws the activity, which it does again at every stale date (the next phase boundary) without the app.
 struct SessionLockScreenView: View {
     let state: TherapyActivityAttributes.ContentState
-    let isStale: Bool
     var body: some View {
+        let over = state.isOver()
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
-                SessionRing(state: state, size: 44)
+                SessionRing(state: state, size: 46)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(state.finished == true ? "Therapiestunde beendet" : state.paused ? "Therapiestunde · Pause" : "Therapiestunde")
-                        .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                    SessionPhaseTitle(state: state, isStale: isStale).font(.headline).lineLimit(1)
+                    SessionCaption(state: state).font(.caption.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1)
+                    SessionPhaseTitle(state: state).font(.headline).lineLimit(1)
                 }
                 Spacer(minLength: 8)
-                if state.finished != true {
+                if !over {
                     SessionActivityClock(state: state)
                         .font(.system(.title, design: .rounded, weight: .semibold))
                         .multilineTextAlignment(.trailing)
                         .frame(maxWidth: 120, alignment: .trailing)
                 }
             }
-            if state.finished == true {
-                Text("Gut gemacht. Öffne die App, um in Ruhe festzuhalten, was dir wichtig war.")
+            if over {
+                Label("Gut gemacht. Öffne die App, um in Ruhe festzuhalten, was dir wichtig war.", systemImage: "heart.text.square.fill")
                     .font(.subheadline).foregroundStyle(.secondary)
             } else {
                 SessionPhaseStrip(state: state)
-                SessionEndLabel(state: state).font(.caption).foregroundStyle(.secondary)
+                HStack {
+                    SessionEndLabel(state: state)
+                    Spacer()
+                    SessionNextLabel(state: state)
+                }
+                .font(.caption).foregroundStyle(.secondary)
             }
         }
     }
@@ -116,7 +121,7 @@ struct SessionRing: View {
     var size: CGFloat
     var body: some View {
         ZStack {
-            if state.finished == true {
+            if state.isOver() {
                 Image(systemName: "checkmark.circle.fill").resizable().scaledToFit().foregroundStyle(.green)
             } else {
                 if state.paused {
@@ -139,16 +144,27 @@ struct SessionRing: View {
     }
 }
 
-/// Phase name chosen when the activity renders. The app marks the activity stale at the next phase
-/// boundary; from then on a plain-text name could be outdated, so a neutral heading is shown until
-/// the app refreshes the activity. Clocks and phase bars stay timer-driven either way.
+/// "Therapiestunde · Abschnitt 2 von 4 · bis 15:20" – the end time keeps the line honest if iOS has not redrawn yet.
+struct SessionCaption: View {
+    let state: TherapyActivityAttributes.ContentState
+    var body: some View {
+        let name = state.title ?? "Therapiestunde"
+        if state.isOver() { Text(name + " · beendet") }
+        else if state.paused { Text(name + " · Pause") }
+        else if let position = state.phasePosition(), let phase = state.currentPhase(), position.count > 1 {
+            Text("Abschnitt \(position.index + 1) von \(position.count) · bis \(phase.end, style: .time)")
+        } else { Text(name) }
+    }
+}
+
+/// Phase name chosen when iOS draws the activity. The app sets the stale date to the next phase boundary, so iOS
+/// redraws right there and the name follows the plan even while the app is suspended.
 struct SessionPhaseTitle: View {
     let state: TherapyActivityAttributes.ContentState
-    let isStale: Bool
     var body: some View {
-        if state.finished == true { Text("Geschafft") }
-        else if !isStale, let phase = state.currentPhase() { Text((state.paused ? "Pausiert · " : "") + phase.title) }
-        else { Text(state.paused ? "Pausiert" : "Deine Zeit läuft") }
+        if state.isOver() { Text("Geschafft") }
+        else if let phase = state.currentPhase() { Text((state.paused ? "Pausiert · " : "") + phase.title) }
+        else { Text(state.paused ? "Pausiert" : (state.title ?? "Deine Zeit läuft")) }
     }
 }
 
@@ -156,15 +172,17 @@ struct SessionPhaseStrip: View {
     let state: TherapyActivityAttributes.ContentState
     var body: some View {
         let phases = Array(state.phases.prefix(8))
+        let current = state.phasePosition()?.index
         if phases.isEmpty {
             bar(start: state.start, end: state.end)
         } else {
             HStack(alignment: .top, spacing: 6) {
-                ForEach(Array(phases.enumerated()), id: \.offset) { _, phase in
+                ForEach(Array(phases.enumerated()), id: \.offset) { index, phase in
                     VStack(alignment: .leading, spacing: 4) {
                         bar(start: phase.start, end: phase.end)
                         if phases.count <= 4 {
-                            Text(phase.title).font(.caption2.weight(.medium)).foregroundStyle(.secondary).lineLimit(1)
+                            Text(phase.title).font(.caption2.weight(index == current ? .bold : .medium))
+                                .foregroundStyle(index == current ? Color.primary : Color.secondary).lineLimit(1)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -185,15 +203,25 @@ struct SessionPhaseStrip: View {
 struct SessionEndLabel: View {
     let state: TherapyActivityAttributes.ContentState
     var body: some View {
-        if state.paused { Label("Zum Fortsetzen die App öffnen", systemImage: "hand.tap") }
+        if state.isOver() { Label("Zeit ist um", systemImage: "checkmark.seal.fill") }
+        else if state.paused { Label("Zum Fortsetzen die App öffnen", systemImage: "hand.tap.fill") }
         else { Label("Ende \(state.end, style: .time)", systemImage: "flag.checkered") }
+    }
+}
+
+struct SessionNextLabel: View {
+    let state: TherapyActivityAttributes.ContentState
+    var body: some View {
+        if !state.paused, let position = state.phasePosition(), position.index + 1 < state.phases.count {
+            Label("Danach: " + state.phases[position.index + 1].title, systemImage: "arrow.turn.down.right").lineLimit(1)
+        }
     }
 }
 
 struct SessionActivityClock: View {
     let state: TherapyActivityAttributes.ContentState
     var body: some View {
-        if state.finished == true { Text("0:00").monospacedDigit() }
+        if state.isOver() { Text("0:00").monospacedDigit() }
         else if state.paused { Text(String(format: "%d:%02d", state.remaining / 60, state.remaining % 60)).monospacedDigit() }
         else { Text(timerInterval: state.start...state.end, countsDown: true, showsHours: false).monospacedDigit() }
     }

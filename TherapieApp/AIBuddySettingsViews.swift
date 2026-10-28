@@ -55,6 +55,10 @@ struct AIBuddySettingsView: View {
                         if !["gpt-5.6-luna", "gpt-6-luna", "gpt-5.6-terra", "gpt-6.1-sol"].contains(store.data.aiSettings.model) { Text(store.data.aiSettings.model).tag(store.data.aiSettings.model) }
                     }
                     TextField("Eigene kompatible Modell-ID", text: $store.data.aiSettings.model).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    Picker(selection: $store.data.aiSettings.thinking) {
+                        ForEach(AIBuddyThinking.allCases) { Text($0.title).tag($0.rawValue) }
+                    } label: { Label("Denktiefe", systemImage: "brain.head.profile") }
+                    Text((AIBuddyThinking(rawValue: store.data.aiSettings.thinking) ?? .balanced).detail).font(.caption).foregroundStyle(.secondary)
                     Picker("Sprache zu Text", selection: $store.data.aiSettings.transcriptionModel) { Text("GPT-4o Mini Transcribe · günstig").tag("gpt-4o-mini-transcribe"); Text("GPT Transcribe · aktuelles Modell").tag("gpt-transcribe") }
                     Text("Preisstand 01.10.2026: GPT-5.6 Luna $0,20 / $1,20 und GPT-6 Luna $0,10 / $0,50 je Mio. Eingabe-/Ausgabetokens. Mini Transcribe etwa $0,003 pro Minute, GPT Transcribe etwa $0,0045. Bilder und Wiederholungen können zusätzliche Kosten verursachen; tatsächliche Abrechnung bei OpenAI.").font(.caption).foregroundStyle(.secondary)
                     Link("Aktuelle OpenAI-API-Preise", destination: URL(string: "https://developers.openai.com/api/docs/pricing")!)
