@@ -86,6 +86,27 @@ final class TherapySessionController: ObservableObject {
             self?.endBackgroundAssertion()
         }
     }
+    /// Manual repair while the app is visible: replaces the session's Live Activity with a freshly requested one.
+    func reconnectLiveActivity() {
+        guard let store, store.storageReady, let session = store.data.currentSession else { return }
+        let preferences = store.data.sessionPreferences
+        guard preferences.liveActivityEnabled else { liveStatus = "Live-Aktivität ausgeschaltet. Schalte sie in den Timer-Einstellungen ein."; return }
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+            liveStatus = "Live-Aktivitäten sind in den iPhone-Einstellungen deaktiviert (Einstellungen › Therapie)."
+            return
+        }
+        let previous = Self.activities()
+        enqueueActivityWork { for activity in previous { await activity.end(nil, dismissalPolicy: .immediate) } }
+        do {
+            _ = try Activity.request(attributes: TherapyActivityAttributes(sessionID: session.id.uuidString), content: activityContent(session, preferences: preferences), pushType: nil)
+            liveStatus = "Live-Aktivität neu verbunden · Sperrbildschirm & Dynamic Island"
+            TherapyEffects.shared.light()
+        } catch {
+            liveStatus = "Live-Aktivität konnte nicht gestartet werden: " + error.localizedDescription
+        }
+        lastPresentedPhase = phaseSignature(session)
+        scheduleBackgroundRefresh(for: session)
+    }
     private func phaseSignature(_ session: RunningTherapySession) -> String {
         let preferences = store?.data.sessionPreferences
         return session.id.uuidString + ":" + String(session.phaseIndex() ?? -1) + ":" + String(session.pausedAt != nil) + ":" + String(preferences?.usesPrivateLiveActivity ?? false) + ":" + String(preferences?.liveActivityEnabled ?? false)
