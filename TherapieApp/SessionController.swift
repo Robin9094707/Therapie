@@ -94,8 +94,8 @@ final class TherapySessionController: ObservableObject {
             return
         }
         let state = activityState(session, privateMode: preferences.usesPrivateLiveActivity)
-        // iOS re-renders a Live Activity when it turns stale. Marking it stale at the next phase boundary lets the
-        // Dynamic Island show the new phase even while the app is suspended; all clocks are timer-based.
+        // Stale at the next phase boundary: from then on the widget hides the plain-text phase name until the app
+        // refreshes it, while ring, countdown and phase bars stay timer-driven.
         let now = Date()
         let staleDate = session.pausedAt == nil ? state.phases.map(\.end).first(where: { $0 > now }) ?? session.expectedEnd : nil
         let content = ActivityContent(state: state, staleDate: staleDate, relevanceScore: 100)

@@ -368,6 +368,8 @@ enum RoutineHistoryMutation {
         data.routineCompletions[index].corrections = (old.corrections ?? []) + [correction]
         data.routineCompletions[index].outcome = outcome
         data.routineCompletions[index].note = note
+        // Any explicit correction supersedes a "wrongly entered" mark; marking sets it again afterwards.
+        data.routineCompletions[index].markedWrong = nil
         // Keep the original occurrence and confirmation timestamp; corrections never reopen reminders.
         return true
     }

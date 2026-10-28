@@ -208,6 +208,11 @@ struct ModelChecks {
         try expect(ShowerHistory.setMarkedWrong(plannedID, false, in: &history, at: wednesday) && history.routineCompletions[0].outcome == .done && history.routineCompletions[0].markedWrong == nil && history.routineCompletions[0].corrections?.count == 2, "Mark can be lifted with an audit trail")
         try expect(ShowerHistory.setShowered(plannedID, false, in: &history, at: wednesday) && history.routineCompletions[0].outcome == .skipped && history.routineCompletions[0].markedWrong == nil, "Admitting a missed shower keeps the day resolved")
         try expect(RoutinePlanner.resolved(wednesdayShower, completions: history.routineCompletions), "Corrections never reopen reminders")
+        try expect(ShowerHistory.setShowered(plannedID, true, in: &history, at: wednesday) && ShowerHistory.setMarkedWrong(plannedID, true, in: &history, at: wednesday), "Planned shower marked wrong again")
+        try expect(RoutineHistoryMutation.correct(id: plannedID, outcome: .done, note: "", reason: "Doch richtig", in: &history, now: wednesday) && history.routineCompletions[0].markedWrong == nil && ShowerHistory.items(history).first { $0.id == plannedID }?.markedWrong == false, "Routine-history correction clears the wrong-entry mark")
+        history.routineCompletions[0].markedWrong = true
+        try expect(ShowerHistory.setMarkedWrong(plannedID, false, in: &history, at: wednesday) && history.routineCompletions[0].markedWrong == nil && history.routineCompletions[0].outcome == .done, "A stuck mark on a done entry can still be lifted")
+        try expect(ShowerHistory.setShowered(plannedID, false, in: &history, at: wednesday), "Planned shower reset to not showered")
         try expect(ShowerHistory.setMarkedWrong(extraID, true, in: &history, at: wednesday) && ShowerPlanner.weekCount(history, at: wednesday) == 0 && history.showerEntries.count == 1, "Extra entry marked wrong is kept but not counted")
         try expect(!ShowerHistory.setMarkedWrong(extraID, true, in: &history, at: wednesday), "Repeated mark is idempotent")
         try expect(ShowerHistory.setMarkedWrong(extraID, false, in: &history, at: wednesday) && ShowerPlanner.weekCount(history, at: wednesday) == 1, "Extra entry counts again after unmarking")

@@ -20,7 +20,7 @@ struct TherapyLiveActivityBundle: WidgetBundle {
 struct TherapyLiveActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: TherapyActivityAttributes.self) { context in
-            SessionLockScreenView(state: context.state)
+            SessionLockScreenView(state: context.state, isStale: context.isStale)
                 .padding(16)
                 .activitySystemActionForegroundColor(.teal)
                 .widgetURL(URL(string: "therapie://session"))
@@ -44,7 +44,7 @@ struct TherapyLiveActivityWidget: Widget {
                 DynamicIslandExpandedRegion(.center) {
                     VStack(spacing: 1) {
                         Text("Therapiestunde").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
-                        SessionPhaseTitle(state: context.state).font(.headline).lineLimit(1)
+                        SessionPhaseTitle(state: context.state, isStale: context.isStale).font(.headline).lineLimit(1)
                     }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
@@ -82,6 +82,7 @@ struct TherapyLiveActivityWidget: Widget {
 /// Lock Screen layout. Every clock and bar is timer-driven, so it stays correct while the app is suspended.
 struct SessionLockScreenView: View {
     let state: TherapyActivityAttributes.ContentState
+    let isStale: Bool
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
@@ -89,7 +90,7 @@ struct SessionLockScreenView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(state.finished == true ? "Therapiestunde beendet" : state.paused ? "Therapiestunde · Pause" : "Therapiestunde")
                         .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                    SessionPhaseTitle(state: state).font(.headline).lineLimit(1)
+                    SessionPhaseTitle(state: state, isStale: isStale).font(.headline).lineLimit(1)
                 }
                 Spacer(minLength: 8)
                 if state.finished != true {
@@ -139,12 +140,14 @@ struct SessionRing: View {
 }
 
 /// Phase name chosen when the activity renders. The app marks the activity stale at the next phase
-/// boundary, which makes iOS render it again with the new phase while the app sleeps.
+/// boundary; from then on a plain-text name could be outdated, so a neutral heading is shown until
+/// the app refreshes the activity. Clocks and phase bars stay timer-driven either way.
 struct SessionPhaseTitle: View {
     let state: TherapyActivityAttributes.ContentState
+    let isStale: Bool
     var body: some View {
         if state.finished == true { Text("Geschafft") }
-        else if let phase = state.currentPhase() { Text((state.paused ? "Pausiert · " : "") + phase.title) }
+        else if !isStale, let phase = state.currentPhase() { Text((state.paused ? "Pausiert · " : "") + phase.title) }
         else { Text(state.paused ? "Pausiert" : "Deine Zeit läuft") }
     }
 }

@@ -406,8 +406,10 @@ enum ShowerHistory {
                   RoutineHistoryMutation.correct(id: id, outcome: .skipped, note: log.note, reason: wrongReason, in: &data, now: now) else { return false }
             data.routineCompletions[index].markedWrong = true
         } else {
-            guard log.markedWrong == true,
-                  RoutineHistoryMutation.correct(id: id, outcome: .done, note: log.note, reason: "Markierung „falsch eingetragen“ aufgehoben", in: &data, now: now) else { return false }
+            guard log.markedWrong == true else { return false }
+            if log.outcome != .done {
+                guard RoutineHistoryMutation.correct(id: id, outcome: .done, note: log.note, reason: "Markierung „falsch eingetragen“ aufgehoben", in: &data, now: now) else { return false }
+            }
             data.routineCompletions[index].markedWrong = nil
         }
         return true
