@@ -18,7 +18,7 @@ struct NoteAttachmentsSection: View {
                 PhotosPicker(selection: $photo, matching: .images) { Label("Bild", systemImage: "photo.badge.plus") }.accessibilityIdentifier("note.attach.photo")
                 Spacer()
                 Button("Sprache", systemImage: "mic", action: record).accessibilityIdentifier("note.attach.audio")
-            }.buttonStyle(.bordered).disabled(importing)
+            }.buttonStyle(.glass).disabled(importing)
             Button("Aus dem Archiv anhängen", systemImage: "paperclip", action: choose).disabled(importing).accessibilityIdentifier("note.attach.archive")
             if importing { ProgressView("Bild wird hinzugefügt …") }
             ForEach(note.mediaIDs ?? [], id: \.self) { id in

@@ -79,7 +79,7 @@ struct DayCheckInButtons: View {
                         open(entry)
                     } label: {
                         VStack(alignment: .leading, spacing: 5) { Label(slot.title.replacingOccurrences(of: "-Check-in", with: ""), systemImage: slot.kind.symbol).font(.subheadline.bold()); Text(exists ? (entry.isDraft ? "Entwurf fortsetzen" : "Heute erledigt · bearbeiten") : slot.windowText).font(.caption).foregroundStyle(.secondary) }.frame(maxWidth: .infinity, alignment: .leading).padding(10)
-                    }.buttonStyle(.bordered).disabled(!allowed).accessibilityHint(allowed ? "Check-in starten" : "Verfügbar zwischen " + slot.windowText)
+                    }.buttonStyle(.glass).disabled(!allowed).accessibilityHint(allowed ? "Check-in starten" : "Verfügbar zwischen " + slot.windowText)
                 }
             }
         }
@@ -125,7 +125,8 @@ struct InsightsHubView: View {
     @State private var report = false
     private var period: WellnessPeriod { range.period }
     var body: some View {
-        NavigationStack {
+        // Hosted by the tab's or presenter's NavigationStack; a nested stack doubled the bars and broke Back.
+        Group {
             TherapyScreen {
                 LazyVStack(alignment: .leading, spacing: 16) {
                     GlassCard(emphasized: true) {
@@ -133,7 +134,7 @@ struct InsightsHubView: View {
                             Text(store.data.profile.userName.isEmpty ? "Dein persönlicher Überblick" : "Der Überblick für " + store.data.profile.userName).font(.system(.title2, design: .rounded, weight: .bold))
                             Text("Stimmung, Akku, kleine Schritte – so, wie du sie festgehalten hast.").foregroundStyle(.secondary)
                             Picker("Zeitraum", selection: $range) { ForEach(WellnessRange.allCases) { Text($0.rawValue).tag($0) } }
-                            Button("Stimmung eintragen", systemImage: "face.smiling") { mood = MoodCheckIn() }.buttonStyle(.borderedProminent)
+                            Button("Stimmung eintragen", systemImage: "face.smiling") { mood = MoodCheckIn() }.buttonStyle(.glassProminent)
                             NavigationLink { WellnessHubView() } label: { Label("Alle Einträge & Wochenrückblicke", systemImage: "list.bullet.rectangle") }
                         }
                     }
@@ -169,7 +170,7 @@ struct InsightsHubView: View {
                     GlassCard(emphasized: true) {
                         VStack(alignment: .leading, spacing: 12) {
                             SectionHeader(title: "Für deine Therapie", icon: "doc.text", subtitle: "Den Überblick gemeinsam ansehen oder die letzte Woche als PDF mitnehmen.")
-                            Button("Wochenbericht als PDF / drucken", systemImage: "printer") { report = true }.buttonStyle(.borderedProminent)
+                            Button("Wochenbericht als PDF / drucken", systemImage: "printer") { report = true }.buttonStyle(.glassProminent)
                             NavigationLink { TherapyHubView() } label: { Label("Therapie, Ziele & Beiträge", systemImage: "leaf") }
                             Text("Vergleiche beschreiben deine Angaben. Sie sind keine Diagnose; freie Tage werden nicht als schlechte Stimmung gewertet.").font(.caption).foregroundStyle(.secondary)
                         }
@@ -190,6 +191,8 @@ struct PersonalWelcomeCard: View {
     var body: some View {
         SwiftUI.TimelineView(.periodic(from: .now, by: 60)) { context in
             VStack(alignment: .leading, spacing: 8) {
+                Text(context.date, format: .dateTime.weekday(.wide).day().month(.wide))
+                    .font(.caption.weight(.semibold)).textCase(.uppercase).tracking(0.6).foregroundStyle(Color.accentColor)
                 Text(PersonalGreeting.title(at: context.date, name: store.data.profile.userName)).font(.system(.title, design: .rounded, weight: .bold))
                 Text(store.data.dashboard.welcomeMessage.isEmpty ? PersonalGreeting.sentence(at: context.date) : store.data.dashboard.welcomeMessage).font(.subheadline).foregroundStyle(.secondary)
             }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)

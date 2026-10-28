@@ -71,9 +71,10 @@ struct TherapyCelebrationOverlay: View {
                     }.accessibilityHidden(true)
                 }
                 Label("Geschafft!", systemImage: "checkmark.seal.fill")
-                    .font(.headline).padding(.horizontal, 18).padding(.vertical, 12)
-                    .background(.regularMaterial, in: Capsule()).padding(.top, 12)
-                    .transition(.opacity)
+                    .font(.system(.headline, design: .rounded)).padding(.horizontal, 20).padding(.vertical, 12)
+                    .symbolRenderingMode(.multicolor)
+                    .therapyGlass(in: Capsule(), tint: Color.green.opacity(0.22)).padding(.top, 12)
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
             }
         }
         .allowsHitTesting(false)

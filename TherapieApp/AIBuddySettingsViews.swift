@@ -7,7 +7,7 @@ struct AIBuddySettingsCard: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
                 SectionHeader(title: "Dein optionaler KI-Begleiter", icon: "sparkles", subtitle: store.data.aiSettings.enabled ? "Gespräche, Rückblicke und bearbeitbare App-Vorschläge" : "Die App funktioniert vollständig ohne KI.")
-                Button("KI & OpenAI-Schlüssel einrichten", systemImage: "key") { show = true }.buttonStyle(.bordered)
+                Button("KI & OpenAI-Schlüssel einrichten", systemImage: "key") { show = true }.buttonStyle(.glass)
                 if store.data.aiSettings.enabled || !store.data.aiConversations.isEmpty { NavigationLink { AIBuddyView() } label: { Label("Meine KI-Gespräche", systemImage: "bubble.left.and.bubble.right") } }
                 NavigationLink { TherapyJournalView() } label: { Label("Mein Therapietagebuch", systemImage: "book.closed") }
                 Text("Der Rückgängig-Knopf bleibt nach einer Änderung zehn Sekunden sichtbar, solange die App geöffnet bleibt.").font(.caption).foregroundStyle(.secondary)
@@ -87,7 +87,7 @@ struct TherapyJournalView: View {
                 GlassCard(emphasized: true) {
                     VStack(alignment: .leading, spacing: 12) {
                         SectionHeader(title: "Raum für deine Gedanken", icon: "book.closed", subtitle: "Ein Gedanke, ein Satz oder ein Rückblick – in deinem Tempo.")
-                        Button("Tagebucheintrag schreiben", systemImage: "square.and.pencil") { edited = TherapyNote(title: "Mein Tag", text: "", tags: ["Tagebuch"], category: "Therapietagebuch") }.buttonStyle(.borderedProminent)
+                        Button("Tagebucheintrag schreiben", systemImage: "square.and.pencil") { edited = TherapyNote(title: "Mein Tag", text: "", tags: ["Tagebuch"], category: "Therapietagebuch") }.buttonStyle(.glassProminent)
                         if store.data.aiSettings.enabled { NavigationLink { AIBuddyView() } label: { Label("Gemeinsam mit KI reflektieren", systemImage: "sparkles") } }
                     }
                 }

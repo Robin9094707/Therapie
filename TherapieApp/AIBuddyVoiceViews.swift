@@ -25,12 +25,12 @@ struct AIBuddyVoiceView: View {
                 Section {
                     if recorder.isRecording {
                         Text("Aufnahme · \(Int(recorder.elapsed)) Sek.").font(.title2.monospacedDigit()).foregroundStyle(.red)
-                        Button("Aufnahme stoppen", systemImage: "stop.circle.fill") { duration = recorder.stop() }.buttonStyle(.borderedProminent)
+                        Button("Aufnahme stoppen", systemImage: "stop.circle.fill") { duration = recorder.stop() }.buttonStyle(.glassProminent)
                     } else {
                         if duration > 0 { Label("\(Int(ceil(duration))) Sekunden aufgenommen", systemImage: "checkmark.circle"); Button("Neu aufnehmen", systemImage: "arrow.clockwise") { start() } }
                         else { Button(starting ? "Mikrofon vorbereiten …" : "Aufnahme starten", systemImage: "mic.circle.fill") { start() }.disabled(starting) }
                         if duration > 0 {
-                            Button(busy ? "Transkribiere …" : "An OpenAI zum Transkribieren senden", systemImage: "arrow.up.circle") { transcribe() }.buttonStyle(.borderedProminent).disabled(busy)
+                            Button(busy ? "Transkribiere …" : "An OpenAI zum Transkribieren senden", systemImage: "arrow.up.circle") { transcribe() }.buttonStyle(.glassProminent).disabled(busy)
                             Text("\(store.data.aiSettings.transcriptionModel) · API-Kosten laut OpenAI-Tarif. Dein Transkript wird anschließend in das Eingabefeld übernommen.").font(.caption).foregroundStyle(.secondary)
                         }
                     }

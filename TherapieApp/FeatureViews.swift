@@ -31,7 +31,7 @@ struct BuddySuggestionsCard: View {
                     Text(suggestion.reply.journalText).font(.subheadline).textSelection(.enabled)
                     Text(suggestion.date.formatted(date: .abbreviated, time: .shortened)).font(.caption2).foregroundStyle(.secondary)
                     ScrollView(.horizontal, showsIndicators: false) { HStack {
-                        ForEach(suggestion.reply.quickReplies ?? []) { quick in Button(quick.title) { open(suggestion, question: quick.text) }.buttonStyle(.bordered) }
+                        ForEach(suggestion.reply.quickReplies ?? []) { quick in Button(quick.title) { open(suggestion, question: quick.text) }.buttonStyle(.glass) }
                     } }
                     Button("Im Chat weiterdenken", systemImage: "bubble.left.and.bubble.right") { open(suggestion, question: nil) }
                 } else { Text("Ein kurzer Gedanke aus deinen letzten Einträgen. Höchstens einmal täglich automatisch beim Öffnen der App.").font(.subheadline).foregroundStyle(.secondary) }
@@ -95,7 +95,7 @@ struct TodoTimelineView: View {
                     Text(group.date.formatted(date: .complete, time: .omitted)).font(.headline).padding(.top, 8)
                     ForEach(group.values) { item in row(item) }
                 }
-                if items.count > limit { Button("Weitere 50 Punkte laden") { limit += 50 }.buttonStyle(.bordered) }
+                if items.count > limit { Button("Weitere 50 Punkte laden") { limit += 50 }.buttonStyle(.glass) }
             }
         }.navigationTitle("Meine Aufgaben").searchable(text: $search, prompt: "Aufgabe oder Thema suchen")
             .onChange(of: kind) { _, _ in limit = 50 }.onChange(of: search) { _, _ in limit = 50 }
@@ -190,7 +190,7 @@ struct EntryMapView: View {
                 if entries.isEmpty { ContentUnavailableView("Noch keine Standorte", systemImage: "map", description: Text("Neue Einträge erscheinen hier nach deiner Standortfreigabe.")) }
                 if let entry = entries.first(where: { $0.id == selected }) { row(entry) }
                 LazyVStack { ForEach(Array(entries.prefix(limit))) { row($0) } }
-                if entries.count > limit { Button("Weitere 100 Einträge anzeigen") { limit += 100 }.buttonStyle(.bordered) }
+                if entries.count > limit { Button("Weitere 100 Einträge anzeigen") { limit += 100 }.buttonStyle(.glass) }
             }
         }.navigationTitle("Meine Eintragskarte").searchable(text: $search, prompt: "Einträge suchen")
             .onChange(of: days) { _, _ in limit = 100 }.onChange(of: search) { _, _ in limit = 100 }

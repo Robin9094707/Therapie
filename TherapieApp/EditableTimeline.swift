@@ -63,7 +63,7 @@ struct TherapyEditableTimeline: View {
                     }.padding(.top, 8)
                 }
             }
-            if records.count > recordLimit { Button("Weitere 60 Einträge laden") { recordLimit += 60 }.buttonStyle(.bordered) }
+            if records.count > recordLimit { Button("Weitere 60 Einträge laden") { recordLimit += 60 }.buttonStyle(.glass) }
         }
         .onChange(of: searchText) { _, _ in recordLimit = 60 }
         .onChange(of: kind) { _, _ in recordLimit = 60 }

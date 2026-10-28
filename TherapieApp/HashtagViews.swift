@@ -21,9 +21,9 @@ struct HashtagEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Hashtags").font(.subheadline.bold())
-            ScrollView(.horizontal) { HStack { ForEach(AppHashtags.clean(tags), id: \.self) { tag in Button { tags.removeAll { AppHashtags.key($0) == AppHashtags.key(tag) } } label: { Label("#" + tag, systemImage: "xmark.circle") }.buttonStyle(.bordered).accessibilityLabel("Hashtag " + tag + " entfernen") } } }
+            ScrollView(.horizontal) { HStack { ForEach(AppHashtags.clean(tags), id: \.self) { tag in Button { tags.removeAll { AppHashtags.key($0) == AppHashtags.key(tag) } } label: { Label("#" + tag, systemImage: "xmark.circle") }.buttonStyle(.glass).accessibilityLabel("Hashtag " + tag + " entfernen") } } }
             HStack { TextField("Hashtag hinzufügen", text: $input).submitLabel(.done).onSubmit(add); Button("Hinzufügen", action: add).disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
-            ScrollView(.horizontal) { HStack { ForEach(AppHashtags.catalog(store.data).filter { known in !tags.contains { AppHashtags.key($0) == AppHashtags.key(known) } }.prefix(20), id: \.self) { tag in Button("#" + tag) { tags = AppHashtags.clean(tags + [tag], known: AppHashtags.catalog(store.data)) }.buttonStyle(.bordered) } } }
+            ScrollView(.horizontal) { HStack { ForEach(AppHashtags.catalog(store.data).filter { known in !tags.contains { AppHashtags.key($0) == AppHashtags.key(known) } }.prefix(20), id: \.self) { tag in Button("#" + tag) { tags = AppHashtags.clean(tags + [tag], known: AppHashtags.catalog(store.data)) }.buttonStyle(.glass) } } }
         }
     }
     private func add() { tags = AppHashtags.clean(tags + input.split(separator: ",").map(String.init), known: AppHashtags.catalog(store.data)); input = "" }

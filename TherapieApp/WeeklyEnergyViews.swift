@@ -8,7 +8,7 @@ struct WeeklyEnergyCard: View {
             VStack(alignment: .leading, spacing: 12) {
                 SectionHeader(title: "Deine Energie seit der letzten Therapie", icon: "battery.100percent",
                               subtitle: "Was hat dir Kraft gegeben? Was hat sie gekostet?")
-                Button { store.openEnergyReview = true } label: { Label("Wochenenergie visuell eintragen", systemImage: "plus.circle.fill").frame(maxWidth: .infinity).fixedSize(horizontal: false, vertical: true) }.buttonStyle(.borderedProminent)
+                Button { store.openEnergyReview = true } label: { Label("Wochenenergie visuell eintragen", systemImage: "plus.circle.fill").frame(maxWidth: .infinity).fixedSize(horizontal: false, vertical: true) }.buttonStyle(.glassProminent)
                 Text("Dein Therapietag: " + TherapyDateHelper.weekdayName(store.data.schedule.weekday)).font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -148,7 +148,7 @@ struct WeeklyEnergyEditorView: View {
             ScrollView(.horizontal) {
                 HStack {
                     ForEach(gives ? ["Freunde", "Ruhe", "Musik", "Spaziergang"] : ["Viele Reize", "Wenig Schlaf", "Viele Termine", "Medikamente"], id: \.self) { title in
-                        Button(title) { factorDraft = EnergyFactorDraft(factor: WeeklyEnergyFactor(title: title), gives: gives) }.buttonStyle(.bordered)
+                        Button(title) { factorDraft = EnergyFactorDraft(factor: WeeklyEnergyFactor(title: title), gives: gives) }.buttonStyle(.glass)
                     }
                 }
             }.scrollIndicators(.hidden)

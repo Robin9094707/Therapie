@@ -74,7 +74,7 @@ struct GuidedCheckInDetailView: View {
                                 }
                             }
                         }
-                        ShareLink(item: GuidedCheckInExport.text(entry), subject: Text(entry.displayTitle)) { Label("Übersicht teilen", systemImage: "square.and.arrow.up") }.buttonStyle(.bordered)
+                        ShareLink(item: GuidedCheckInExport.text(entry), subject: Text(entry.displayTitle)) { Label("Übersicht teilen", systemImage: "square.and.arrow.up") }.buttonStyle(.glass)
                     }.accessibilityIdentifier("checkin.detail")
                 } else { ContentUnavailableView("Check-in nicht mehr vorhanden", systemImage: "doc.badge.ellipsis") }
             }.navigationTitle("Dein Check-in").navigationBarTitleDisplayMode(.inline)

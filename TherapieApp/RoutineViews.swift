@@ -21,7 +21,7 @@ struct RoutineHubView: View {
                             Button("Beispiel: Medikament") { draft = DailyRoutine(title: "", symbol: "pills.fill", pauseOnVacation: false, times: [RoutineTime(title: "Morgens"), RoutineTime(title: "Abends", hour: 20, minute: 30)], urgentAlarm: true) }
                             Button("Beispiel: Duschen") { draft = DailyRoutine(title: "Duschen", symbol: "shower.fill", times: [RoutineTime(weekdays: [2, 4, 6], hour: 19, minute: 0)]) }
                             Button("Beispiel: Frühstück vorbereiten") { draft = DailyRoutine(title: "Frühstück vorbereiten", symbol: "fork.knife", times: [RoutineTime(weekdays: [2, 3, 4, 5, 6], hour: 6, minute: 15)]) }
-                        } label: { Label("Routine anlegen", systemImage: "plus.circle.fill").frame(maxWidth: .infinity).padding(8) }.buttonStyle(.borderedProminent)
+                        } label: { Label("Routine anlegen", systemImage: "plus.circle.fill").frame(maxWidth: .infinity).padding(8) }.buttonStyle(.glassProminent)
                         Toggle("Urlaubsmodus", isOn: Binding(get: { store.data.companionSettings.vacationUntil.map { $0 > Date() } ?? false }, set: { store.data.companionSettings.vacationUntil = $0 ? vacationEnd : nil }))
                         if let date = store.data.companionSettings.vacationUntil, date > Date() {
                             DatePicker("Pause bis", selection: Binding(get: { date }, set: { vacationEnd = $0; store.data.companionSettings.vacationUntil = $0 }), in: Date()..., displayedComponents: [.date, .hourAndMinute])
@@ -29,8 +29,8 @@ struct RoutineHubView: View {
                         Text("Nur Routinen mit aktivierter Urlaubspause pausieren. Die Uhrzeiten und deine Ziele bleiben gespeichert.").font(.caption).foregroundStyle(.secondary)
                     }
                 }
-                NavigationLink { ShowerDaysView() } label: { Label("Meine Duschtage · fest oder flexibel", systemImage: "shower.fill") }.buttonStyle(.bordered)
-                Button("Gesamten Routinenverlauf ansehen", systemImage: "clock.arrow.circlepath") { showHistory = true }.buttonStyle(.bordered)
+                NavigationLink { ShowerDaysView() } label: { Label("Meine Duschtage · fest oder flexibel", systemImage: "shower.fill") }.buttonStyle(.glass)
+                Button("Gesamten Routinenverlauf ansehen", systemImage: "clock.arrow.circlepath") { showHistory = true }.buttonStyle(.glass)
                 RoutinePermissionCard()
                 SwiftUI.TimelineView(.periodic(from: .now, by: 30)) { context in
                     let due = RoutinePlanner.due(data: store.data, now: context.date)
@@ -51,9 +51,9 @@ struct RoutineHubView: View {
                             Text("\(done) bestätigte Schritte diese Woche").font(.caption.weight(.semibold))
                             if let paused = routine.pausedUntil, paused > Date() { Text("Pausiert bis " + paused.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.orange) }
                             ResponsiveButtonRow {
-                                Button("Bearbeiten", systemImage: "pencil") { draft = routine }.buttonStyle(.bordered)
-                                Button("Verlauf", systemImage: "clock.arrow.circlepath") { historyRoutine = routine }.buttonStyle(.bordered)
-                                Button("Löschen", systemImage: "trash", role: .destructive) { deleting = routine; confirmDelete = true }.buttonStyle(.bordered)
+                                Button("Bearbeiten", systemImage: "pencil") { draft = routine }.buttonStyle(.glass)
+                                Button("Verlauf", systemImage: "clock.arrow.circlepath") { historyRoutine = routine }.buttonStyle(.glass)
+                                Button("Löschen", systemImage: "trash", role: .destructive) { deleting = routine; confirmDelete = true }.buttonStyle(.glass)
                             }
                         }
                     }
@@ -91,8 +91,8 @@ struct RoutinePermissionCard: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 10) {
                 SectionHeader(title: "Erinnerungen", icon: "bell.badge")
-                Button("Mitteilungen erlauben", systemImage: "bell") { Task { await TaskNotificationCoordinator.shared.requestAccess(store) } }.buttonStyle(.bordered)
-                Button("Dringende Wecker erlauben", systemImage: "alarm") { Task { await RoutineAlarmCoordinator.shared.requestAccess(store) } }.buttonStyle(.bordered)
+                Button("Mitteilungen erlauben", systemImage: "bell") { Task { await TaskNotificationCoordinator.shared.requestAccess(store) } }.buttonStyle(.glass)
+                Button("Dringende Wecker erlauben", systemImage: "alarm") { Task { await RoutineAlarmCoordinator.shared.requestAccess(store) } }.buttonStyle(.glass)
                 Text(store.routineReminderStatus.isEmpty ? "Erinnerungen werden beim Speichern geplant." : store.routineReminderStatus).font(.caption).foregroundStyle(.secondary)
                 if !store.routineAlarmStatus.isEmpty { Text(store.routineAlarmStatus).font(.caption).foregroundStyle(.secondary) }
                 Text("iOS hält einen begrenzten Erinnerungsvorrat. Öffne die App regelmäßig, um ihn zu erneuern. Ton und Zustellung hängen von deinen Freigaben und iPhone-Einstellungen ab. Ein Wecker-Stopp bestätigt keine Erledigung.").font(.caption).foregroundStyle(.secondary)
@@ -127,7 +127,7 @@ struct RoutineDueCard: View {
                     if let buttons = routine.actionButtons {
                         ForEach(buttons.filter(\.enabled)) { button in
                             if button.action == .emergency {
-                                NavigationLink { EmergencyPlanView() } label: { Label(button.title.isEmpty ? "Notfallplan" : button.title, systemImage: button.action.symbol) }.buttonStyle(.bordered)
+                                NavigationLink { EmergencyPlanView() } label: { Label(button.title.isEmpty ? "Notfallplan" : button.title, systemImage: button.action.symbol) }.buttonStyle(.glass)
                             } else {
                             Button(button.title.isEmpty ? button.action.title : button.title, systemImage: button.action.symbol) {
                                 switch button.action {
@@ -137,14 +137,14 @@ struct RoutineDueCard: View {
                                 case .emergency: store.notificationApplePage = "emergency"
                                 case .home: TherapyHomeService.shared.run(for: routine.id)
                                 }
-                            }.buttonStyle(.bordered).disabled(button.action == .snooze && (routine.maxSnoozes.map { (store.data.routineSnoozes.first { $0.id == occurrence.id }?.count ?? 0) >= $0 } ?? false))
+                            }.buttonStyle(.glass).disabled(button.action == .snooze && (routine.maxSnoozes.map { (store.data.routineSnoozes.first { $0.id == occurrence.id }?.count ?? 0) >= $0 } ?? false))
                             }
                         }
                         Menu("Weitere Aktionen") { Button("Erledigt") { confirmDone = true }; Button("Auslassen") { showSkip = true }; NavigationLink("Notfallplan") { EmergencyPlanView() } }
                     } else {
                     ResponsiveButtonRow {
-                        Button(routine.doneButtonTitle?.isEmpty == false ? routine.doneButtonTitle! : "Erledigt", systemImage: "checkmark.circle.fill") { confirmDone = true }.buttonStyle(.borderedProminent)
-                        Button(routine.snoozeButtonTitle?.isEmpty == false ? routine.snoozeButtonTitle! : "\(routine.snoozeMinutes ?? 60) Minuten später", systemImage: "clock") { store.snoozeRoutine(occurrence) }.buttonStyle(.bordered).disabled(routine.maxSnoozes.map { (store.data.routineSnoozes.first { $0.id == occurrence.id }?.count ?? 0) >= $0 } ?? false)
+                        Button(routine.doneButtonTitle?.isEmpty == false ? routine.doneButtonTitle! : "Erledigt", systemImage: "checkmark.circle.fill") { confirmDone = true }.buttonStyle(.glassProminent)
+                        Button(routine.snoozeButtonTitle?.isEmpty == false ? routine.snoozeButtonTitle! : "\(routine.snoozeMinutes ?? 60) Minuten später", systemImage: "clock") { store.snoozeRoutine(occurrence) }.buttonStyle(.glass).disabled(routine.maxSnoozes.map { (store.data.routineSnoozes.first { $0.id == occurrence.id }?.count ?? 0) >= $0 } ?? false)
                     }
                     Button(routine.skipButtonTitle?.isEmpty == false ? routine.skipButtonTitle! : "Heute auslassen", systemImage: "forward.end") { showSkip = true }.font(.caption)
                     }

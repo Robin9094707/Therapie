@@ -60,7 +60,8 @@ struct UndoChangesButton: View {
     var body: some View {
         if store.undoAvailable && store.visibleAIComposerIDs.isEmpty {
             Button { store.undoLastChange() } label: { Label("Letzte Eingabe rückgängig", systemImage: "arrow.uturn.backward").font(.subheadline.bold()).padding(.horizontal, 16).padding(.vertical, 10) }
-                .buttonStyle(.plain).background(.regularMaterial, in: Capsule()).shadow(color: .black.opacity(0.08), radius: 6).padding(8)
+                .buttonStyle(.plain).therapyGlass(in: Capsule(), interactive: true).padding(8)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
                 .accessibilityIdentifier("input.undo").accessibilityHint("Die Schaltfläche verschwindet zehn Sekunden nach der letzten Änderung")
         }
     }

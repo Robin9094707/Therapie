@@ -59,7 +59,7 @@ struct ChatVoiceRecorder: View {
                 HStack {
                     Button("Verwerfen", systemImage: "trash") { reset() }.disabled(busy)
                     Spacer()
-                    Button(busy ? "Transkribiere …" : "Audio senden", systemImage: "arrow.up.circle.fill") { send() }.buttonStyle(.borderedProminent).disabled(busy || disabled)
+                    Button(busy ? "Transkribiere …" : "Audio senden", systemImage: "arrow.up.circle.fill") { send() }.buttonStyle(.glassProminent).disabled(busy || disabled)
                 }.font(.caption)
             } else {
                 HStack {

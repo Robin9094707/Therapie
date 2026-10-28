@@ -40,8 +40,8 @@ struct MethodsHubView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Dein Methodenkoffer ist bereit").font(.title3.bold())
                             Text("Lege eigene Methoden an oder passe ein Beispiel an. Beispiele werden erst gespeichert, wenn du sie bestätigst.").foregroundStyle(.secondary)
-                            Button("ASMR-Beispiel anpassen", systemImage: "headphones") { draft = .asmrExample }.buttonStyle(.bordered)
-                            Button("Gedankenstopp anpassen", systemImage: "hand.raised") { draft = .thoughtStopExample }.buttonStyle(.bordered)
+                            Button("ASMR-Beispiel anpassen", systemImage: "headphones") { draft = .asmrExample }.buttonStyle(.glass)
+                            Button("Gedankenstopp anpassen", systemImage: "hand.raised") { draft = .thoughtStopExample }.buttonStyle(.glass)
                         }
                     }
                 } else if methods.isEmpty { ContentUnavailableView.search(text: query.isEmpty ? "Diese Zuordnung" : query) }

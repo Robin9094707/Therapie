@@ -20,7 +20,7 @@ struct TherapyDiscussionCard: View {
                             Button(discussed ? "Wieder auf die Gesprächsliste" : "Als besprochen markieren", systemImage: discussed ? "arrow.uturn.backward" : "checkmark.circle") {
                                 if discussed { store.data.therapyDiscussionAcknowledgedIDs.removeAll { $0 == point.id } }
                                 else { store.data.therapyDiscussionAcknowledgedIDs.append(point.id) }
-                            }.font(.caption).buttonStyle(.bordered)
+                            }.font(.caption).buttonStyle(.glass)
                         }
                         Divider()
                     }

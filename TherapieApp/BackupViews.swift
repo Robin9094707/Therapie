@@ -158,10 +158,10 @@ struct BackupCenterView: View {
                 if !repeatedPassword.isEmpty && password != repeatedPassword { Text("Die Passwörter stimmen noch nicht überein.").font(.caption).foregroundStyle(.orange) }
                 }
                 Button { createExport() } label: { Label(encryptedExport ? "Verschlüsselte Datei erstellen" : "Lesbares ZIP erstellen", systemImage: encryptedExport ? "lock.doc" : "doc.zipper").frame(maxWidth: .infinity).fixedSize(horizontal: false, vertical: true) }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.glassProminent)
                     .disabled((encryptedExport && (password.count < 8 || password != repeatedPassword)) || store.loadError != nil)
                 if let exportedURL {
-                    Button { exported = ExportedBackup(url: exportedURL) } label: { Label("In Dateien sichern", systemImage: "folder").frame(maxWidth: .infinity) }.buttonStyle(.bordered)
+                    Button { exported = ExportedBackup(url: exportedURL) } label: { Label("In Dateien sichern", systemImage: "folder").frame(maxWidth: .infinity) }.buttonStyle(.glass)
                 }
             }.disabled(busy != nil)
         }
@@ -171,14 +171,14 @@ struct BackupCenterView: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 14) {
                 SectionHeader(title: "Importieren", icon: "square.and.arrow.down", subtitle: "Auch direkt nach einer Neuinstallation möglich.")
-                Button { showImporter = true } label: { Label("Sicherungsdatei auswählen", systemImage: "doc.badge.arrow.up").frame(maxWidth: .infinity).fixedSize(horizontal: false, vertical: true) }.buttonStyle(.bordered)
+                Button { showImporter = true } label: { Label("Sicherungsdatei auswählen", systemImage: "doc.badge.arrow.up").frame(maxWidth: .infinity).fixedSize(horizontal: false, vertical: true) }.buttonStyle(.glass)
                 if let selectedFile {
                     Text(selectedFile.lastPathComponent).font(.footnote).lineLimit(3)
                     if selectedFile.pathExtension.lowercased() != "zip" {
                         SecureField("Passwort dieser Sicherung", text: $importPassword).textFieldStyle(.roundedBorder).textInputAutocapitalization(.never).autocorrectionDisabled()
                     }
                     Button { verifyImport() } label: { Label(selectedFile.pathExtension.lowercased() == "zip" ? "ZIP prüfen & Vorschau öffnen" : "Entschlüsseln & prüfen", systemImage: "checkmark.shield").frame(maxWidth: .infinity) }
-                        .buttonStyle(.borderedProminent).disabled(selectedFile.pathExtension.lowercased() != "zip" && importPassword.isEmpty)
+                        .buttonStyle(.glassProminent).disabled(selectedFile.pathExtension.lowercased() != "zip" && importPassword.isEmpty)
                 }
                 Text("Berechtigungen, Kalender-Verknüpfungen und der automatische Backup-Ordner werden auf diesem Gerät neu eingerichtet. Die persönlichen Einstellungen bleiben erhalten.")
                     .font(.footnote).foregroundStyle(.secondary)
@@ -199,8 +199,8 @@ struct BackupCenterView: View {
                     Label("\(prepared.manifest.omittedAttachments) Anhänge wurden ausgelassen. Die Einträge sind enthalten.", systemImage: "photo.badge.exclamationmark").font(.footnote).foregroundStyle(.orange)
                 }
                 ResponsiveButtonRow {
-                    Button("Daten wiederherstellen", systemImage: "arrow.counterclockwise") { confirmImport = true }.buttonStyle(.borderedProminent)
-                    Button("Verwerfen", role: .cancel) { prepared.discard(); self.prepared = nil; importPassword = "" }.buttonStyle(.bordered)
+                    Button("Daten wiederherstellen", systemImage: "arrow.counterclockwise") { confirmImport = true }.buttonStyle(.glassProminent)
+                    Button("Verwerfen", role: .cancel) { prepared.discard(); self.prepared = nil; importPassword = "" }.buttonStyle(.glass)
                 }
             }
         }
@@ -271,7 +271,7 @@ struct BackupCenterView: View {
                 SectionHeader(title: "Dein Ordner in Dateien", icon: "folder.fill", subtitle: "Auf meinem iPhone → Therapie → Therapiedaten")
                 Text("Hier liegen deine Datendatei, Anhänge und lesbaren Einträge. Du kannst den Ordner manuell kopieren, auch wenn die App nicht mehr startet.").font(.subheadline)
                 Text(store.readableFileStatus).font(.caption).foregroundStyle(.secondary)
-                Button("Lesbare Dateien jetzt aktualisieren", systemImage: "arrow.clockwise") { store.refreshReadableFiles() }.buttonStyle(.bordered).disabled(busy != nil || store.loadError != nil)
+                Button("Lesbare Dateien jetzt aktualisieren", systemImage: "arrow.clockwise") { store.refreshReadableFiles() }.buttonStyle(.glass).disabled(busy != nil || store.loadError != nil)
                 Text("Der Ordner gehört zur App und wird mit ihr gelöscht. Kopiere ihn vor einer Deinstallation an einen anderen Speicherort. Kopieren ist sicherer als Änderungen an den laufenden Datendateien.").font(.footnote).foregroundStyle(.secondary)
             }
         }

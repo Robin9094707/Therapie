@@ -43,7 +43,7 @@ struct MedicalPassView: View {
                     ForEach(store.data.copingMethods) { method in NavigationLink { MethodDetailView(methodID: method.id) } label: { VStack(alignment: .leading, spacing: 4) { Text(method.title).bold(); if !method.situation.isEmpty { Text(method.situation).font(.caption).foregroundStyle(.secondary) } } } }
                     if store.data.copingMethods.isEmpty { Text("Deine gespeicherten Methoden erscheinen hier.").foregroundStyle(.secondary) }
                 } }
-                NavigationLink { EmergencyPlanView() } label: { Label("Mein Notfallplan", systemImage: "lifepreserver.fill") }.buttonStyle(.borderedProminent)
+                NavigationLink { EmergencyPlanView() } label: { Label("Mein Notfallplan", systemImage: "lifepreserver.fill") }.buttonStyle(.glassProminent)
             }
         }.navigationTitle("Therapiepass").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Bearbeiten", systemImage: "pencil") { editing = true } } }

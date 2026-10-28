@@ -15,7 +15,7 @@ struct EmergencyPlanView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack { Label(plan.title, systemImage: "lifepreserver.fill").font(.headline); Spacer(); Button("Anpassen", systemImage: "slider.horizontal.3") { editing = true }.labelStyle(.iconOnly) }
                 if !plan.hasContent {
-                    GlassCard { VStack(alignment: .leading, spacing: 12) { Text("Deine Hilfe auf einen Blick").font(.title3.bold()); Text("Lege Gedankenstopps, kleine Schritte und Unterstützung als eigene Karten an."); Button("Plan gestalten", systemImage: "plus") { editing = true }.buttonStyle(.borderedProminent) } }
+                    GlassCard { VStack(alignment: .leading, spacing: 12) { Text("Deine Hilfe auf einen Blick").font(.title3.bold()); Text("Lege Gedankenstopps, kleine Schritte und Unterstützung als eigene Karten an."); Button("Plan gestalten", systemImage: "plus") { editing = true }.buttonStyle(.glassProminent) } }
                 }
                 if !plan.firstStep.isEmpty { helpCard("Jetzt zuerst", text: plan.firstStep, symbol: "arrow.right.circle.fill") }
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
@@ -30,7 +30,7 @@ struct EmergencyPlanView: View {
                     if !plan.support.isEmpty { helpCard("Meine Unterstützung", text: plan.support, symbol: "person.2.fill") }
                 }
                 if let id = plan.imageID, let item = store.data.media.first(where: { $0.id == id }) { EmergencyPlanImage(item: item).frame(maxHeight: 220) }
-                NavigationLink { GroundingExerciseView() } label: { Label("5-4-3-2-1 starten", systemImage: "hand.raised.fingers.spread.fill").frame(maxWidth: .infinity).padding(.vertical, 8) }.buttonStyle(.borderedProminent)
+                NavigationLink { GroundingExerciseView() } label: { Label("5-4-3-2-1 starten", systemImage: "hand.raised.fingers.spread.fill").frame(maxWidth: .infinity).padding(.vertical, 8) }.buttonStyle(.glassProminent)
                 Button("KI-Entwurf prüfen", systemImage: "sparkles") { showAI = true }.font(.footnote)
             }
         }.navigationTitle("Notfallplan").navigationBarTitleDisplayMode(.inline)
@@ -180,8 +180,8 @@ struct GroundingExerciseView: View {
                         }
                     }
                     Text("Du kannst Dinge laut benennen oder nur daran denken. Eingaben sind freiwillig. Jeder Schritt darf übersprungen werden.").font(.subheadline).foregroundStyle(.secondary)
-                    Button("Weiter", systemImage: "arrow.right") { step += 1 }.buttonStyle(.borderedProminent).controlSize(.large)
-                    Button("Diesen Sinn überspringen") { step += 1 }.buttonStyle(.bordered)
+                    Button("Weiter", systemImage: "arrow.right") { step += 1 }.buttonStyle(.glassProminent).controlSize(.large)
+                    Button("Diesen Sinn überspringen") { step += 1 }.buttonStyle(.glass)
                     if step > 0 { Button("Zurück") { step -= 1 } }
                 } else {
                     GlassCard(emphasized: true) {
@@ -192,7 +192,7 @@ struct GroundingExerciseView: View {
                             Button(saved ? "Übung gespeichert" : "Übung in meinem Verlauf speichern", systemImage: saved ? "checkmark.circle.fill" : "square.and.arrow.down") {
                                 let values = (0..<5).map { row in Array(answers[row].prefix(GroundingGuide.counts[row])).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty } }
                                 var snapshot = store.data; snapshot.groundingPractices.removeAll { $0.id == recordID }; snapshot.groundingPractices.insert(GroundingPractice(id: recordID, answers: values, note: note), at: 0); store.data = snapshot; saved = store.lastSaveError == nil
-                            }.buttonStyle(.borderedProminent).disabled(saved)
+                            }.buttonStyle(.glassProminent).disabled(saved)
                             Button("Ohne Speichern schließen") { dismiss() }.disabled(saved)
                             Button("Noch einmal starten") { step = 0; answers = Array(repeating: Array(repeating: "", count: 5), count: 5); note = ""; saved = false; recordID = UUID() }
                             if saved { Button("Fertig") { dismiss() } }
@@ -221,7 +221,7 @@ struct ShowerTodayCard: View {
                     let goal = max(2, min(7, store.data.showerPreferences.weeklyGoal))
                     ProgressView(value: Double(min(count, goal)), total: Double(goal)).tint(.accentColor)
                     Text("Diese Woche: \(count) von \(goal) Duschtagen · \(max(0, goal - count)) fehlen zu deinem Ziel").font(.caption).foregroundStyle(.secondary)
-                    Button("Außer der Reihe geduscht", systemImage: "plus.circle") { entry = ShowerEntry() }.buttonStyle(.bordered)
+                    Button("Außer der Reihe geduscht", systemImage: "plus.circle") { entry = ShowerEntry() }.buttonStyle(.glass)
                     if showDetailsLink { NavigationLink { ShowerDaysView() } label: { Label("Wochenplan & Verlauf", systemImage: "calendar") } }
                 }
             }
@@ -265,7 +265,7 @@ struct ShowerDayActions: View {
         } message: { Text("Heute wird als ausgelassen gespeichert. Der nächste reguläre Duschtag bleibt bestehen.") }
     }
     private func doneButton(_ occurrence: RoutineOccurrence) -> some View {
-        Button("Geduscht", systemImage: "checkmark.circle.fill") { confirming = occurrence }.buttonStyle(.borderedProminent)
+        Button("Geduscht", systemImage: "checkmark.circle.fill") { confirming = occurrence }.buttonStyle(.glassProminent)
     }
     private func postponeMenu(_ occurrence: RoutineOccurrence) -> some View {
         Menu {
@@ -276,7 +276,7 @@ struct ShowerDayActions: View {
             }
             Button("Bis zum nächsten regulären Duschtag", systemImage: "calendar") { pendingSkip = occurrence }
             Button("Heute auslassen", systemImage: "minus.circle") { pendingSkip = occurrence }
-        } label: { Label("Verschieben / auslassen", systemImage: "ellipsis.circle") }.buttonStyle(.bordered)
+        } label: { Label("Verschieben / auslassen", systemImage: "ellipsis.circle") }.buttonStyle(.glass)
     }
     private func resolve(_ occurrence: RoutineOccurrence, outcome: RoutineOutcome) {
         var snapshot = store.data
@@ -324,8 +324,8 @@ struct ShowerDaysView: View {
                             }.buttonStyle(.plain)
                         }
                         if store.data.routines.filter(ShowerPlanner.isShower).isEmpty {
-                            Button("Montag, Mittwoch, Freitag planen", systemImage: "calendar.badge.plus") { routine = ShowerPlanner.defaultRoutine() }.buttonStyle(.bordered)
-                            Button("Alle zwei Tage planen", systemImage: "repeat") { routine = ShowerPlanner.defaultRoutine(everyTwoDays: true) }.buttonStyle(.bordered)
+                            Button("Montag, Mittwoch, Freitag planen", systemImage: "calendar.badge.plus") { routine = ShowerPlanner.defaultRoutine() }.buttonStyle(.glass)
+                            Button("Alle zwei Tage planen", systemImage: "repeat") { routine = ShowerPlanner.defaultRoutine(everyTwoDays: true) }.buttonStyle(.glass)
                         }
                         Text("Tage und Uhrzeit bestätigst du im Editor. Bestehende Pläne werden weiterverwendet.").font(.caption).foregroundStyle(.secondary)
                         NavigationLink { RoutineHubView() } label: { Label("Routinen & Erinnerungen bearbeiten", systemImage: "pencil") }

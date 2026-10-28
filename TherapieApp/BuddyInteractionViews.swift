@@ -189,7 +189,7 @@ struct BuddyWellbeingProfileView: View {
                             Text("Die Schätzung beginnt bei deinem letzten heutigen Akkuwert. Bestätigte Akku-Geber/-Nehmer wirken mit 5 Prozentpunkten je Wirkungsstufe; optional kommt der selbst eingestellte zeitliche Verbrauch hinzu. Das ist ein persönliches Planungsmodell, keine Messung. Ohne heutigen Ausgangswert wird nichts geschätzt.").font(.caption).foregroundStyle(.secondary)
                         }
                     }
-                    Button("Mit KI über mein Befinden sprechen", systemImage: "sparkles") { showAI = true }.buttonStyle(.bordered).disabled(!store.data.aiSettings.enabled)
+                    Button("Mit KI über mein Befinden sprechen", systemImage: "sparkles") { showAI = true }.buttonStyle(.glass).disabled(!store.data.aiSettings.enabled)
                 }
             }
         }.navigationTitle("Mein Befinden").sheet(isPresented: $showAI) { AIBuddyEntryView() }

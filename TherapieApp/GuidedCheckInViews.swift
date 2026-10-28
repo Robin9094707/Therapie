@@ -69,7 +69,7 @@ struct GuidedCheckInView: View {
                 ToolbarItem(placement: .topBarTrailing) { if entry.isDraft && store.data.aiSettings.enabled { Button("Mit KI fortsetzen", systemImage: "sparkles") { persistDraft(); if store.lastSaveError == nil { showAI = true } } } }
                 ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Tastatur schließen") { dismissKeyboard() }.accessibilityIdentifier("checkin.keyboard.done") }
             }
-            .safeAreaInset(edge: .bottom) { footer.padding(16).background(.regularMaterial) }
+            .safeAreaInset(edge: .bottom) { footer.padding(16).therapyGlass(in: RoundedRectangle(cornerRadius: TherapyDesign.cardRadius, style: .continuous)).padding(.horizontal, 10).padding(.bottom, 4) }
             .interactiveDismissDisabled(entry.hasUserContent)
             .alert("Bearbeitung beenden?", isPresented: $showExit) { Button("Weiter bearbeiten", role: .cancel) {}; if entry.isDraft { Button("Als Entwurf speichern") { persistDraft(); if store.lastSaveError == nil { dismiss() } } }; Button("Änderungen verwerfen", role: .destructive) { if entry.isDraft { discardDraft() }; dismiss() } } message: { Text("Änderungen am abgeschlossenen Check-in werden erst beim abschließenden Speichern übernommen. Neu importierte Fotos bleiben als Materialien im Archiv.") }
             .onAppear { battery = entry.batteryPercent ?? 50; moodDial = entry.moodPercent ?? ((entry.mood ?? 3) - 1) * 25 }
@@ -88,11 +88,11 @@ struct GuidedCheckInView: View {
         case 1:
             Text("Wie geht es dir gerade?")
             MoodBarometerControl(percent: $moodDial).onChange(of: moodDial) { _, value in entry.moodPercent = value; entry.mood = MoodBarometer.score(value) }
-            Button(entry.mood == nil ? "Diese Stimmung übernehmen" : "Stimmung wurde gewählt", systemImage: "checkmark.circle") { entry.moodPercent = moodDial; entry.mood = MoodBarometer.score(moodDial) }.buttonStyle(.bordered)
+            Button(entry.mood == nil ? "Diese Stimmung übernehmen" : "Stimmung wurde gewählt", systemImage: "checkmark.circle") { entry.moodPercent = moodDial; entry.mood = MoodBarometer.score(moodDial) }.buttonStyle(.glass)
         case 2:
             Text("Ziehe im Akku oder nutze den Regler. Auch 0 % ist okay.").foregroundStyle(.secondary)
             EnergyBatteryControl(percent: $battery).onChange(of: battery) { _, value in entry.batteryPercent = value }
-            Button(entry.batteryPercent == nil ? "Diesen Akkustand übernehmen" : "Akku wurde gewählt", systemImage: "checkmark.circle") { entry.batteryPercent = battery }.buttonStyle(.bordered)
+            Button(entry.batteryPercent == nil ? "Diesen Akkustand übernehmen" : "Akku wurde gewählt", systemImage: "checkmark.circle") { entry.batteryPercent = battery }.buttonStyle(.glass)
             CheckInKeywordSection(points: Binding(get: { entry.energyPoints ?? [] }, set: { entry.energyPoints = $0 }), add: { pointDraft = BatteryPoint(direction: $0) }, edit: { pointDraft = $0 })
             if !entry.givesEnergy.isEmpty || !entry.takesEnergy.isEmpty {
                 DisclosureGroup("Bisherige Beschreibungen behalten / bearbeiten") {
@@ -154,15 +154,15 @@ struct GuidedCheckInView: View {
                 HStack {
                     Text("\(entry.tasks.count) Aufgabe\(entry.tasks.count == 1 ? "" : "n")").font(.caption.weight(.semibold)).foregroundStyle(.secondary).accessibilityIdentifier("checkin.tasks.count")
                     Spacer()
-                    Button("Aufgabe hinzufügen", systemImage: "plus.circle.fill") { dismissKeyboard(); entry.tasks.append(CheckInTaskDraft()) }.buttonStyle(.bordered).accessibilityIdentifier("checkin.task.add")
+                    Button("Aufgabe hinzufügen", systemImage: "plus.circle.fill") { dismissKeyboard(); entry.tasks.append(CheckInTaskDraft()) }.buttonStyle(.glass).accessibilityIdentifier("checkin.task.add")
                 }
             }
             HStack(spacing: 12) {
-                if step > 0 { Button("Zurück") { advance(-1) }.buttonStyle(.bordered) }
+                if step > 0 { Button("Zurück") { advance(-1) }.buttonStyle(.glass) }
                 Button(step == 7 ? "Check-in speichern" : "Weiter", systemImage: step == 7 ? "checkmark" : "arrow.right") {
                     if step == 7 { dismissKeyboard(); store.saveGuided(entry, complete: true); if store.lastSaveError == nil { dismiss() } else { error = store.lastSaveError } }
                     else { advance(1) }
-                }.buttonStyle(.borderedProminent).frame(maxWidth: .infinity).disabled(importing)
+                }.buttonStyle(.glassProminent).frame(maxWidth: .infinity).disabled(importing)
             }
             if step > 0 && step < 7 { Button("Frage überspringen") { clearStep(); advance(1) }.font(.subheadline).disabled(importing) }
         }
