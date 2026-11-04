@@ -285,6 +285,7 @@ final class TherapySessionController: ObservableObject {
         notificationGeneration = UUID()
         let generation = notificationGeneration
         let previous = notificationTask
+        let quiet = store?.data.quietMode ?? QuietModeSettings()
         busy = true
         notificationTask = Task {
             await previous?.value
@@ -300,6 +301,8 @@ final class TherapySessionController: ObservableObject {
                 cursor = cursor.addingTimeInterval(TimeInterval(max(1, phase.minutes) * 60))
                 let last = index == session.phases.count - 1
                 guard (last ? preferences.notifyAtEnd : preferences.notifyAtPhases), cursor > Date() else { continue }
+                // Quiet mode: a running session follows its own exemption (see QuietModeSettings).
+                guard QuietPolicy.reason(category: .session, source: last ? "session" : "session.phase", id: "therapy.session.\(session.id).\(index)", fireAt: cursor, settings: quiet) == nil else { continue }
                 guard generation == notificationGeneration else { return }
                 let content = UNMutableNotificationContent()
                 content.title = last ? "Deine geplante Zeit ist um" : "Nächster Zeitabschnitt"

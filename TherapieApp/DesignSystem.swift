@@ -13,11 +13,16 @@ enum TherapyDesign {
     static let tileRadius: CGFloat = 20
     static let insetRadius: CGFloat = 14
     static let isUITesting = ProcessInfo.processInfo.arguments.contains("--ui-testing")
-    static var appVersion: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "5000.0.0" }
+    static let appName = "Kompass"
+    static let appTagline = "Therapie & Betreutes Wohnen"
+    static var appVersion: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "6000.0.0" }
 }
 
 private struct TherapyAccentKey: EnvironmentKey {
     static let defaultValue: AppAccent = .indigo
+}
+private struct TherapySurfaceKey: EnvironmentKey {
+    static let defaultValue = SurfacePreferences()
 }
 
 extension EnvironmentValues {
@@ -25,6 +30,11 @@ extension EnvironmentValues {
     var therapyAccent: AppAccent {
         get { self[TherapyAccentKey.self] }
         set { self[TherapyAccentKey.self] = newValue }
+    }
+    /// The chosen glass style, coverage and tint strength.
+    var therapySurface: SurfacePreferences {
+        get { self[TherapySurfaceKey.self] }
+        set { self[TherapySurfaceKey.self] = newValue }
     }
 }
 
@@ -49,21 +59,34 @@ struct TherapyGlassModifier<S: Shape>: ViewModifier {
     var tint: Color?
     var interactive: Bool
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.therapySurface) private var surface
+    @Environment(\.colorScheme) private var colorScheme
 
     @ViewBuilder func body(content: Content) -> some View {
-        if reduceTransparency {
+        if reduceTransparency || surface.style == .solid {
+            // Matt: an opaque card with a hairline and a soft shadow.
             content
+                .background { shape.fill(tint ?? Color.clear) }
                 .background(Color(uiColor: .secondarySystemGroupedBackground), in: shape)
-                .overlay { shape.stroke(tint ?? Color.primary.opacity(0.08), lineWidth: 1).allowsHitTesting(false) }
+                .overlay { shape.stroke(Color.primary.opacity(colorScheme == .dark ? 0.12 : 0.07), lineWidth: 1).allowsHitTesting(false) }
+                .shadow(color: .black.opacity(colorScheme == .dark ? 0 : 0.06), radius: 10, y: 4)
+        } else if surface.style == .soft {
+            // Sanftes Glas: Liquid Glass edges and highlights over a calm body that hides most of the background.
+            content
+                .background { shape.fill(tint ?? Color.clear) }
+                .background(Color(uiColor: .secondarySystemGroupedBackground).opacity(bodyOpacity), in: shape)
+                .glassEffect(glass, in: shape)
         } else {
             content.glassEffect(glass, in: shape)
         }
     }
 
+    private var bodyOpacity: Double { max(0, min(0.96, surface.coverage * (colorScheme == .dark ? 0.82 : 0.92))) }
+
     private var glass: Glass {
         var glass = Glass.regular
         if let tint { glass = glass.tint(tint) }
-        return interactive ? glass.interactive() : glass
+        return interactive && surface.interactiveGlass ? glass.interactive() : glass
     }
 }
 
@@ -88,6 +111,7 @@ extension View {
 
 struct AppBackground: View {
     @AppStorage("therapy.calmInterface") private var calmInterface = true
+    @Environment(\.therapySurface) private var surface
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.therapyAccent) private var accent
@@ -115,7 +139,7 @@ struct AppBackground: View {
     }
 
     private var meshColors: [Color] {
-        let strength = (calmInterface ? 0.62 : 1.0) * (colorScheme == .dark ? 1.3 : 1.0)
+        let strength = (calmInterface ? 0.75 : 1.0) * (colorScheme == .dark ? 1.3 : 1.0) * (0.2 + surface.backgroundIntensity * 1.3)
         let main = accent.color, second = accent.companion
         func tone(_ color: Color, _ opacity: Double) -> Color { color.opacity(min(1, opacity * strength)) }
         return [
@@ -153,23 +177,24 @@ struct TherapyScreen<Content: View>: View {
 struct GlassCard<Content: View>: View {
     var emphasized = false
     @AppStorage("therapy.calmInterface") private var calmInterface = true
+    @Environment(\.therapySurface) private var surface
     @ViewBuilder var content: Content
 
     var body: some View {
         content
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .therapyGlass(in: shape, tint: emphasized ? Color.accentColor.opacity(calmInterface ? 0.08 : 0.15) : nil)
+            .therapyGlass(in: shape, tint: emphasized ? Color.accentColor.opacity((calmInterface ? 0.06 : 0.1) + surface.tintStrength * 0.12) : nil)
             .overlay {
                 if emphasized {
-                    shape.strokeBorder(LinearGradient(colors: [Color.accentColor.opacity(0.5), Color.accentColor.opacity(0.06)],
+                    shape.strokeBorder(LinearGradient(colors: [Color.accentColor.opacity(0.2 + surface.tintStrength * 0.4), Color.accentColor.opacity(0.04)],
                                                       startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
                         .allowsHitTesting(false)
                 }
             }
     }
 
-    private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: TherapyDesign.cardRadius, style: .continuous) }
+    private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: surface.roundedCards ? TherapyDesign.cardRadius : 16, style: .continuous) }
 }
 
 struct TherapyIconTile: View {
@@ -246,8 +271,16 @@ struct TherapyChip: View {
         .minimumScaleFactor(0.85)
         .padding(.horizontal, 11)
         .padding(.vertical, 7)
-        .therapyGlass(in: Capsule(), tint: tint.opacity(0.12))
+        .modifier(TherapyChipSurface(tint: tint))
         .accessibilityElement(children: .combine)
+    }
+}
+
+private struct TherapyChipSurface: ViewModifier {
+    let tint: Color
+    @Environment(\.therapySurface) private var surface
+    func body(content: Content) -> some View {
+        content.therapyGlass(in: Capsule(), tint: tint.opacity(0.06 + surface.tintStrength * 0.14))
     }
 }
 
@@ -507,9 +540,9 @@ struct TherapySplashView: View {
             TherapyLogoMark(size: Self.logoSize, glow: revealed)
                 .overlay(alignment: .top) {
                     VStack(spacing: 6) {
-                        Text("Therapie")
+                        Text(TherapyDesign.appName)
                             .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                        Text("Dein ruhiger Begleiter")
+                        Text(TherapyDesign.appTagline)
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(.secondary)
                     }
@@ -524,7 +557,7 @@ struct TherapySplashView: View {
         .contentShape(Rectangle())
         .onTapGesture { finish() }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Therapie wird geöffnet")
+        .accessibilityLabel("Kompass wird geöffnet")
         .accessibilityAddTraits(.isButton)
         .accessibilityHint("Tippen zum Überspringen")
         .task { await run() }
@@ -559,20 +592,18 @@ struct WhatsNewView: View {
     }
 
     private let items: [Item] = [
-        Item(icon: "sparkles", title: "Therapie 5 – neu aufgebaut",
-             text: "Vier ruhige Bereiche: Heute, Therapie, Alltag und Verlauf. Alles ist mit weniger Tippen erreichbar, mit mehr Symbolen und durchgehend Liquid Glass."),
-        Item(icon: "magnifyingglass", title: "Suche & alle Funktionen",
-             text: "Der Such-Tab zeigt jede Funktion der App als Kachel und findet Notizen, Aufgaben, Check-ins, Themen und mehr."),
-        Item(icon: "figure.mind.and.body", title: "Neuer Bereich „Alltag“",
-             text: "Routinen, Aufgaben, Wecker, Duschtage, Notfallplan und Methoden an einem Ort – mit dem heutigen Stand auf einen Blick."),
-        Item(icon: "timer", title: "Dynamic Island, die wirklich mitläuft",
-             text: "Die Live-Aktivität startet sofort, bleibt beim Verlassen der App erhalten und zeigt Abschnittswechsel und das Ende auch ohne geöffnete App. Eine Mini-Leiste über der Tableiste führt zurück zur Stunde."),
-        Item(icon: "brain.head.profile", title: "Klügere KI",
-             text: "Der Begleiter kennt jetzt dein Lagebild (Tageszeit, nächste Therapie, offene Aufgaben) und denkt standardmäßig kurz nach. Die Denktiefe stellst du in den KI-Einstellungen ein."),
-        Item(icon: "person.crop.circle.fill", title: "Profil oben rechts",
-             text: "Profil und Einstellungen öffnest du jetzt über deinen Avatar oben rechts – auf jeder Seite."),
-        Item(icon: "lock.shield.fill", title: "Deine Daten bleiben",
-             text: "Alle Einträge, Fotos, Aufnahmen, Sicherungen und Einstellungen funktionieren unverändert. Beim ersten Start legt die App zusätzlich eine Kopie deiner Daten an.")
+        Item(icon: "location.north.circle.fill", title: "Therapie heißt jetzt Kompass",
+             text: "Ein neuer Name für Therapie und Betreutes Wohnen. Alle Einträge, Fotos, Aufnahmen, Sicherungen und Einstellungen sind unverändert da – beim ersten Start legt die App zusätzlich eine Kopie deiner Daten an."),
+        Item(icon: "house.fill", title: "Neu: Betreutes Wohnen",
+             text: "Ein eigener Tab für dein ambulant betreutes Wohnen: nächste Termine (auch regelmäßige), Gesprächsthemen sammeln, Gesprächsbegleitung mit Stimmung vorher/nachher, Absprachen und kleine Ziele."),
+        Item(icon: "moon.zzz.fill", title: "Ruhe – auch 24 Stunden",
+             text: "Mitteilungen & Wecker an einem Ort: Ruhe für eine Stunde, bis morgen früh oder 24 Stunden – und jederzeit vorzeitig beenden. Einzelne Bereiche ruhen lassen, tägliche Ruhezeiten und eine Übersicht aller kommenden Erinnerungen."),
+        Item(icon: "circle.lefthalf.filled", title: "Liquid Glass nach deinem Geschmack",
+             text: "Neu „Sanftes Glas“: ruhiger und weniger durchsichtig. Deckkraft, Farbtönung und Hintergrund stellst du unter Darstellung & Glas ein – oder wählst Klar oder Matt."),
+        Item(icon: "bolt.fill", title: "Schneller eintragen",
+             text: "„Schnell festhalten“ auf Heute: ein Feld für Notiz, Aufgabe, Therapie- oder BeWo-Thema, dazu die Stimmung mit einem Tipp. Alltag, Routinen und Hilfen sind jetzt direkt auf Heute."),
+        Item(icon: "alarm.fill", title: "Zuverlässiger nach dem Wecker",
+             text: "Wenn du einen Wecker beendest, zeigt die App sofort den aktuellen Stand – ohne sie erst schließen zu müssen. Die Live-Aktivität der Therapiestunde zeigt keine überlappenden Symbole mehr.")
     ]
 
     var body: some View {
@@ -582,10 +613,10 @@ struct WhatsNewView: View {
                 VStack(spacing: 26) {
                     VStack(spacing: 14) {
                         TherapyLogoMark(size: 88)
-                        Text("Neu in Therapie")
+                        Text("Neu in Kompass")
                             .font(.system(.largeTitle, design: .rounded, weight: .bold))
                             .multilineTextAlignment(.center)
-                        Text("Version \(TherapyDesign.appVersion) · gleiches Zuhause, frisch gestaltet.")
+                        Text("Version \(TherapyDesign.appVersion) · Kompass 6 – dein Zuhause, neu gedacht.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)

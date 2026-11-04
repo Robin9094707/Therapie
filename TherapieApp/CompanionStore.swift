@@ -97,6 +97,9 @@ extension AppStore {
     }
     func consumeRoutineAlarmRoute() {
         guard storageReady else { return }
+        let defaults = UserDefaults.standard
+        let consumed = ["therapy.apple.shortcut", "therapy.companion.open", "therapy.routine.open"].contains { defaults.string(forKey: $0) != nil }
+        defer { if consumed { refreshAfterIntent() } }
         if let route = UserDefaults.standard.string(forKey: "therapy.apple.shortcut") {
             UserDefaults.standard.removeObject(forKey: "therapy.apple.shortcut")
             let page = route.replacingOccurrences(of: "page|", with: "")
@@ -117,6 +120,8 @@ extension AppStore {
             if parts.first == "therapy" { notificationTherapy = true }
             if parts.first == "energy" { openEnergyReview = true }
             if parts.first == "wellness" { notificationMood = true }
+            if parts.first == "bewo" { openAssistedLiving() }
+            if parts.first == "quiet" { notificationQuietCenter = true }
             if parts.count >= 2 {
                 switch parts[0] {
                 case "session": if let id = UUID(uuidString: parts[1]), data.currentSession?.id == id { notificationSession = true }

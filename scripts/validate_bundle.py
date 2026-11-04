@@ -6,11 +6,12 @@ import sys
 
 app = Path(sys.argv[1])
 info = plistlib.loads((app / "Info.plist").read_bytes())
-assert info["CFBundleShortVersionString"] == "5000.0.0"
+assert info["CFBundleShortVersionString"] == "6000.0.0"
 assert info["CFBundleIdentifier"] == "eu.rjuhas.therapie", "Existing app identity must be preserved"
 assert info["CFBundleDevelopmentRegion"] == "de"
 assert "de" in info["CFBundleLocalizations"]
-assert info["CFBundleVersion"] == "28", "Expected release build number"
+assert info["CFBundleVersion"] == "29", "Expected release build number"
+assert info["CFBundleDisplayName"] == "Kompass", "Expected the Kompass display name"
 assert "therapie" in info["CFBundleURLTypes"][0]["CFBundleURLSchemes"], "Widget deep-link scheme missing"
 assert info["UIDeviceFamily"] == [1], "Expected a native iPhone target"
 assert info["UILaunchStoryboardName"] == "LaunchScreen"

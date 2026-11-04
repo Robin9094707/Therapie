@@ -1,7 +1,7 @@
 import Foundation
 
 enum HomeCard: String, CaseIterable, Identifiable {
-    case welcome, showers, methods, appointment, discussion, checkIns, routines, overview, quickActions, session, pinned, wellness, therapy, week, task, latest, reminders, goals
+    case welcome, showers, methods, appointment, assistedLiving, discussion, checkIns, routines, overview, quickActions, session, pinned, wellness, therapy, week, task, latest, reminders, goals
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -9,6 +9,7 @@ enum HomeCard: String, CaseIterable, Identifiable {
         case .methods: "Mein Methodenkoffer"
         case .discussion: "Gesprächsliste am Therapietag"
         case .appointment: "Nächste Therapie"
+        case .assistedLiving: "Betreutes Wohnen"
         case .checkIns: "Check-ins"
         case .routines: "Heute fällige Routinen"
         case .overview: "Tagesübersicht"
@@ -31,6 +32,7 @@ enum HomeCard: String, CaseIterable, Identifiable {
         case .methods: "sparkles"
         case .discussion: "text.bubble"
         case .appointment: "calendar.badge.clock"
+        case .assistedLiving: "house.fill"
         case .checkIns: "sparkles"
         case .routines: "checkmark.circle"
         case .overview: "sun.max"

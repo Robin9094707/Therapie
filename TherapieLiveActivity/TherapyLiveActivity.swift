@@ -27,7 +27,7 @@ struct TherapyLiveActivityWidget: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    SessionRing(state: context.state, size: 48)
+                    SessionBadge(state: context.state, size: 44)
                         .padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
@@ -63,7 +63,9 @@ struct TherapyLiveActivityWidget: Widget {
                     .padding(.top, 4)
                 }
             } compactLeading: {
-                SessionRing(state: context.state, size: 22)
+                // Only a symbol: the system circular progress has a fixed drawing size and an overlaid symbol
+                // collided with it in the compact island.
+                SessionGlyph(state: context.state)
             } compactTrailing: {
                 SessionActivityClock(state: context.state)
                     .font(.caption.weight(.semibold))
@@ -71,7 +73,7 @@ struct TherapyLiveActivityWidget: Widget {
                     .frame(width: 48, alignment: .trailing)
                     .foregroundStyle(.teal)
             } minimal: {
-                SessionRing(state: context.state, size: 22)
+                SessionGlyph(state: context.state)
             }
             .widgetURL(URL(string: "therapie://session"))
             .keylineTint(.teal)
@@ -88,7 +90,7 @@ struct SessionLockScreenView: View {
         let over = state.isOver()
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
-                SessionRing(state: state, size: 46)
+                SessionBadge(state: state, size: 44)
                 VStack(alignment: .leading, spacing: 2) {
                     SessionCaption(state: state).font(.caption.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1)
                     SessionPhaseTitle(state: state, isStale: isStale).font(.headline).lineLimit(1)
@@ -114,6 +116,34 @@ struct SessionLockScreenView: View {
                 .font(.caption).foregroundStyle(.secondary)
             }
         }
+    }
+}
+
+/// A calm round badge with one symbol. Progress is shown by the phase bars and the clock, never stacked on top
+/// of the symbol, so nothing overlaps at any Dynamic Island size.
+struct SessionBadge: View {
+    let state: TherapyActivityAttributes.ContentState
+    var size: CGFloat
+    var body: some View {
+        let over = state.isOver()
+        Image(systemName: over ? "checkmark" : state.paused ? "pause.fill" : "leaf.fill")
+            .font(.system(size: size * 0.42, weight: .bold))
+            .foregroundStyle(over ? Color.green : Color.teal)
+            .frame(width: size, height: size)
+            .background(Circle().fill((over ? Color.green : Color.teal).opacity(0.18)))
+            .overlay(Circle().strokeBorder((over ? Color.green : Color.teal).opacity(0.45), lineWidth: 1.5))
+            .accessibilityHidden(true)
+    }
+}
+
+/// Compact and minimal island: a single tinted symbol sized by the system.
+struct SessionGlyph: View {
+    let state: TherapyActivityAttributes.ContentState
+    var body: some View {
+        Image(systemName: state.isOver() ? "checkmark.circle.fill" : state.paused ? "pause.circle.fill" : "leaf.fill")
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(state.isOver() ? Color.green : Color.teal)
+            .accessibilityHidden(true)
     }
 }
 

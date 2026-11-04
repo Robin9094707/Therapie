@@ -39,6 +39,10 @@ enum ReadableBackup {
         return String(path.dropFirst(prefix.count))
     }
     static let labels: [String: String] = [
+        "quietMode": "Ruhemodus (Mitteilungen & Wecker)", "pauses": "Ruhephasen", "silenced": "Einzeln stummgeschaltet", "mutedCategories": "Dauerhaft stumme Bereiche", "quietHours": "Taegliche Ruhezeit", "areas": "Bereiche", "start": "Beginn", "until": "Bis", "key": "Erinnerungs-Schluessel", "wholeSource": "Alle Hinweise dieser Quelle", "wakeAlarmsIgnorePause": "Aufsteh-Wecker trotz Ruhe", "runningSessionIgnoresPause": "Laufende Stunde trotz Ruhe", "announceEnd": "Hinweis am Ende der Ruhe", "startMinute": "Beginn Minute", "endMinute": "Ende Minute", "enabled": "Aktiv",
+        "surface": "Liquid-Glass-Darstellung", "style": "Stil", "coverage": "Deckkraft der Karten", "tintStrength": "Farbtoenung", "backgroundIntensity": "Farbverlauf im Hintergrund", "interactiveGlass": "Glas reagiert auf Beruehrung", "roundedCards": "Runde Karten",
+        "assistedLivingSettings": "Betreutes Wohnen - Einstellungen", "assistedLivingAppointments": "Betreutes Wohnen - Termine", "assistedLivingTopics": "Betreutes Wohnen - Gespraechsthemen", "assistedLivingGoals": "Betreutes Wohnen - Ziele", "providerName": "Traeger", "caregiverName": "Betreuer:in", "caregiverPhone": "Telefon Betreuung", "officePhone": "Telefon Buero", "defaultLocation": "Ueblicher Ort", "defaultDurationMinutes": "Uebliche Dauer in Minuten", "hoursPerWeek": "Bewilligte Stunden pro Woche", "remindersEnabled": "Erinnerungen", "reminderOffsetsMinutes": "Erinnerung Minuten vorher", "privateTitles": "Neutrale Texte", "regularVisits": "Regelmaessige Termine", "skippedRegularDates": "Ausgefallene regelmaessige Termine", "preparationPrompts": "Vorbereitungsfragen", "durationMinutes": "Dauer in Minuten", "kind": "Art", "caregiver": "Betreuer:in", "location": "Ort", "preparation": "Vorbereitung", "moodBefore": "Stimmung vorher (1-5)", "moodAfter": "Stimmung nachher (1-5)", "wentWell": "Was gutgetan hat", "agreements": "Absprachen", "owner": "Zustaendig", "done": "Erledigt", "doneAt": "Erledigt am", "topicIDs": "Verknuepfte Themen", "cancelReason": "Grund der Absage", "regularVisitID": "Regelmaessiger Termin", "discussedAt": "Besprochen am", "appointmentID": "Besprochen im Termin", "priority": "Wichtigkeit", "everyWeeks": "Alle x Wochen", "weekday": "Wochentag", "hour": "Stunde", "minute": "Minute",
+
         "showerPreferences": "Duschtage-Einstellungen", "weeklyGoal": "Persoenliches Wochenziel", "routineDeferrals": "Einzeln verschobene Routinentermine", "deferredUntil": "Verschoben auf", "repeatEveryDays": "Alle x Kalendertage",
         "medicalPass": "Therapiepass", "appleIntegration": "Apple-Integration", "wakeAlarms": "Wecker", "wakeRuns": "Wecker-Protokoll", "panels": "Hilfekarten", "birthDate": "Geburtsdatum", "heightCM": "Koerpergroesse", "medications": "Medikamente", "allergies": "Allergien", "contacts": "Kontakte",
         "copingMethods": "Meine Methoden", "emergencyPlan": "Mein Notfallplan", "groundingPractices": "5-4-3-2-1-Uebungen", "showerEntries": "Duschtage", "warningSigns": "Meine Warnzeichen", "firstStep": "Mein erster Schritt", "methodIDs": "Verknuepfte Methoden", "imageID": "Bild aus dem Archiv", "stages": "Wann die Methode passt", "categories": "Akkuthemen", "situation": "Situation", "batteryPointIDs": "Verknuepfte Akku-Punkte", "steps": "Schritte", "answers": "Sinneswahrnehmungen", "welcomeFirst": "Begruessung ganz oben", "showFeatureLinks": "Schnellzugriffe anzeigen", "showAIImpulse": "KI-Impuls anzeigen", "welcomeMessage": "Eigener Begruessungssatz",
@@ -134,16 +138,17 @@ enum ReadableBackup {
         }
         try writeText(index, to: root.appendingPathComponent("UEBERSICHT.md"))
         try writeText("""
-        THERAPIE – LESBARE DATEN
+        KOMPASS (THERAPIE & BETREUTES WOHNEN) – LESBARE DATEN
 
         Diese Dateien sind NICHT passwortverschlüsselt.
         UEBERSICHT.md und Eintraege/ enthalten lesbare Einzeldateien für sämtliche gespeicherten Einträge und Einstellungen.
         therapy-data.json enthält den vollständigen maschinenlesbaren Datenstand.
         appearance-preferences.json enthält Darstellung, ruhige Oberfläche, Haptik und Konfetti-Einstellung.
+        Liquid-Glass-Stil, Ruhemodus und Betreutes Wohnen stehen in therapy-data.json und in Eintraege/.
         Media/ und Recordings/ enthalten vorhandene Fotos, Dokumente und Sprachaufnahmen.
         Therapieordner und Themenzuordnungen stehen in den Einzeldateien; IDs erhalten die Beziehungen eindeutig.
 
-        Du findest den laufenden Datenordner unter Dateien > Auf meinem iPhone > Therapie > Therapiedaten.
+        Du findest den laufenden Datenordner unter Dateien > Auf meinem iPhone > Kompass > Therapiedaten.
         Kopiere diesen Ordner an einen anderen Speicherort, wenn die App nicht mehr startet.
         Der Ordner wird beim Löschen der App ebenfalls gelöscht. Vor einer Deinstallation extern sichern!
         Bearbeite oder entferne Dateien des laufenden Datenordners nicht, während die App benutzt wird.

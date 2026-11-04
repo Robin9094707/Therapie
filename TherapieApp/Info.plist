@@ -5,7 +5,7 @@
     <key>CFBundleDevelopmentRegion</key><string>de</string>
     <key>CFBundleLocalizations</key><array><string>de</string></array>
 	<key>CFBundleDisplayName</key>
-	<string>Therapie</string>
+	<string>Kompass</string>
 	<key>CFBundleName</key>
 	<string>Therapie</string>
 	<key>CFBundleIdentifier</key>
@@ -46,21 +46,21 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>Therapie synchronisiert deine Therapietermine und Erinnerungen mit deinem iPhone-Kalender.</string>
+	<string>Kompass synchronisiert deine Therapietermine und Erinnerungen mit deinem iPhone-Kalender.</string>
 	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
-	<string>Therapie kann deine Therapietermine in deinem iPhone-Kalender eintragen.</string>
+	<string>Kompass kann deine Therapietermine in deinem iPhone-Kalender eintragen.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Wenn du möchtest, speichert Therapie den aktuellen Ort als Metadatum zu Fotos und Einträgen.</string>
+	<string>Wenn du möchtest, speichert Kompass den aktuellen Ort als Metadatum zu Fotos und Einträgen.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Therapie benötigt das Mikrofon, damit du private Sprachaufzeichnungen für deine Therapie speichern kannst.</string>
+	<string>Kompass benötigt das Mikrofon, damit du private Sprachaufzeichnungen für deine Therapie speichern kannst.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Therapie lässt dich Fotos für Aufgaben, Pläne und Rückblicke auswählen.</string>
-	<key>NSRemindersFullAccessUsageDescription</key><string>Therapie erstellt auf Wunsch eine eigene Apple-Erinnerungen-Liste und übernimmt bestätigte Routinen und Aufgaben.</string>
-    <key>NSHomeKitUsageDescription</key><string>Auf deinen Wunsch führt Therapie ausgewählte Home-Szenen beim Öffnen einer fälligen Routine oder eines Weckers aus.</string>
-    <key>NSCameraUsageDescription</key><string>Für eine von dir gewählte Wecker-Aufgabe nimmt Therapie ein frisches Foto in der App auf. Nur nach Bestätigung wird es zur KI-Prüfung gesendet.</string>
-    <key>NSMotionUsageDescription</key><string>Therapie zählt bei einer freiwilligen Wecker-Aufgabe sanfte Bewegungen oder Schritte, während die Aufgabe geöffnet ist.</string>
+	<string>Kompass lässt dich Fotos für Aufgaben, Pläne und Rückblicke auswählen.</string>
+	<key>NSRemindersFullAccessUsageDescription</key><string>Kompass erstellt auf Wunsch eine eigene Apple-Erinnerungen-Liste und übernimmt bestätigte Routinen und Aufgaben.</string>
+    <key>NSHomeKitUsageDescription</key><string>Auf deinen Wunsch führt Kompass ausgewählte Home-Szenen beim Öffnen einer fälligen Routine oder eines Weckers aus.</string>
+    <key>NSCameraUsageDescription</key><string>Für eine von dir gewählte Wecker-Aufgabe nimmt Kompass ein frisches Foto in der App auf. Nur nach Bestätigung wird es zur KI-Prüfung gesendet.</string>
+    <key>NSMotionUsageDescription</key><string>Kompass zählt bei einer freiwilligen Wecker-Aufgabe sanfte Bewegungen oder Schritte, während die Aufgabe geöffnet ist.</string>
     <key>NSAlarmKitUsageDescription</key>
-	<string>Therapie verwendet Alarme für wichtige Therapietermine und von dir aktivierte Aufgaben-Erinnerungen.</string>
+	<string>Kompass verwendet Alarme für wichtige Therapie- und BeWo-Termine, Aufsteh-Wecker und von dir aktivierte Erinnerungen.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIApplicationSceneManifest</key>

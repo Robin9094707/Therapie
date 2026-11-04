@@ -10,6 +10,7 @@ final class AppStore: ObservableObject {
             save()
             if lastSaveError == nil {
                 if !data.aiSettings.enabled && selectedTab == 5 { selectedTab = 0 }
+                if oldValue.quietMode != data.quietMode && data.currentSession != nil { sessionController.synchronize() }
                 if AppleReminderSyncPolicy.inputsChanged(from: oldValue, to: data) {
                     AppleRemindersService.shared.refresh(self)
                 }
@@ -59,6 +60,12 @@ final class AppStore: ObservableObject {
     @Published var widgetStatus = ""
     @Published var routineAlarmStatus = ""
     @Published var undoAvailable = false
+    @Published var quietStatus = ""
+    @Published var notificationQuietCenter = false
+    @Published var notificationAssistedLiving = false
+    @Published var notificationTasks = false
+    /// Bumped when the app returns from an alarm or intent so every screen redraws from current data.
+    @Published var surfaceRevision = 0
     var undoSteps: [AppUndoStep] = []
     var undoExpiryTask: Task<Void, Never>?
     var deferredMediaDeletion: [String: Date] = [:]
@@ -219,6 +226,10 @@ final class AppStore: ObservableObject {
                 }
                 let snapshot = rootURL.appendingPathComponent("therapy-data.pre-3009.json")
                 if version < 11 && !fm.fileExists(atPath: snapshot.path) { try raw.write(to: snapshot, options: [.atomic, .completeFileProtection]) }
+                if version < 19 {
+                    let beforeSix = rootURL.appendingPathComponent("therapy-data.pre-6000.json")
+                    if !fm.fileExists(atPath: beforeSix.path) { try raw.write(to: beforeSix, options: [.atomic, .completeFileProtection]) }
+                }
                 // Therapie 5 keeps schema 18, but the first launch after the update still keeps an untouched copy.
                 let beforeFive = rootURL.appendingPathComponent("therapy-data.pre-5000.json")
                 if !UserDefaults.standard.bool(forKey: "therapy.snapshot5000") && !fm.fileExists(atPath: beforeFive.path) {

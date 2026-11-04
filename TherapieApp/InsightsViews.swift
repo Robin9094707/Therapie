@@ -203,11 +203,17 @@ struct WelcomeStatusChips: View {
                     if let next {
                         Button { store.selectedTab = TherapyTab.therapy } label: { TherapyChip(text: Self.relative(next, from: now), icon: "calendar.badge.clock", tint: .indigo) }
                     }
-                    Button { store.selectedTab = TherapyTab.everyday } label: {
+                    if let visit = AssistedLivingPlanner.next(data, now: now), visit.date.timeIntervalSince(now) < 3 * 86400 {
+                        Button { store.selectedTab = TherapyTab.assistedLiving } label: { TherapyChip(text: "BeWo " + AssistedLivingPlanner.countdown(to: visit.date, now: now), icon: "house.fill", tint: .brown) }
+                    }
+                    Button { store.notificationRoutines = true } label: {
                         TherapyChip(text: openRoutines == 0 ? "Routinen erledigt" : "\(openRoutines) Routinen offen", icon: openRoutines == 0 ? "checkmark.circle.fill" : "repeat", tint: .green)
                     }
                     if openTasks > 0 {
-                        Button { store.selectedTab = TherapyTab.everyday } label: { TherapyChip(text: "\(openTasks) Aufgaben offen", icon: "checklist", tint: .orange) }
+                        Button { store.notificationTasks = true } label: { TherapyChip(text: "\(openTasks) Aufgaben offen", icon: "checklist", tint: .orange) }
+                    }
+                    if QuietPolicy.globalPause(data.quietMode, at: now) != nil {
+                        Button { store.notificationQuietCenter = true } label: { TherapyChip(text: "Ruhe an", icon: "moon.zzz.fill", tint: .indigo) }
                     }
                 }
                 .buttonStyle(.plain)
