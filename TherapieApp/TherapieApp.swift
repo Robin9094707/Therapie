@@ -16,5 +16,9 @@ struct TherapieApp: App {
                 .preferredColorScheme((TherapyAppearance(rawValue: appearance) ?? .system).colorScheme)
                 .environment(\.locale, Locale(identifier: "de_DE"))
         }
+        // Redraws or ends a running session's Live Activity near its next phase boundary while the app is suspended.
+        .backgroundTask(.appRefresh(TherapySessionController.refreshTaskIdentifier)) {
+            await TherapySessionController.refreshLiveActivitiesInBackground()
+        }
     }
 }

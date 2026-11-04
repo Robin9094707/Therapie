@@ -258,29 +258,41 @@ struct TherapyMediaEditorView: View {
 }
 
 struct TherapyHubView: View {
-    @State private var section = 0
+    @EnvironmentObject private var store: AppStore
+    @SceneStorage("therapy.hub.section") private var section = 0
+    @State private var sheet: TherapyFeature?
+
+    private let sections: [(title: String, icon: String)] = [
+        ("Themen", "folder.fill"), ("Ziele", "scope"), ("Materialien", "doc.on.doc.fill"), ("Therapeut:in", "person.text.rectangle.fill"), ("Wichtig", "pin.fill")
+    ]
+
     var body: some View {
         // Hosted by the tab's or presenter's NavigationStack; a nested stack doubled the bars and broke Back.
-        Group {
-            TherapyScreen {
-                VStack(spacing: 16) {
-                    GlassCard(emphasized: true) {
-                        VStack(alignment: .leading, spacing: 12) {
-                            SectionHeader(title: "Dein Therapieraum", icon: "leaf", subtitle: "Themen, Ziele und Materialien in deinem Tempo.")
-                            NavigationLink { SessionConductorView() } label: { Label("Therapiestunde begleiten", systemImage: "timer").font(.headline) }
-                            NavigationLink { TherapyCalendarView() } label: { Label("Kalender & Termine", systemImage: "calendar") }
-                            NavigationLink { TasksView() } label: { Label("Wochenaufgaben", systemImage: "checklist") }
+        TherapyScreen {
+            VStack(spacing: 20) {
+                TherapySessionHeroCard()
+                FeatureGridSection(title: "Rund um deine Therapie", icon: "leaf.fill", tint: .green,
+                                   features: TherapyFeature.features(["appointments", "calendar", "tasks", "timeline", "medicalpass", "weeklyReport", "sessionSettings"], data: store.data),
+                                   compact: true) { sheet = $0 }
+                TherapyDiscussionCard()
+                VStack(alignment: .leading, spacing: 12) {
+                    Label {
+                        Text("Dein Therapieraum").font(.system(.headline, design: .rounded))
+                    } icon: {
+                        Image(systemName: "books.vertical.fill").foregroundStyle(Color.accentColor)
+                    }
+                    .accessibilityAddTraits(.isHeader)
+                    .padding(.horizontal, 4)
+                    ScrollView(.horizontal) {
+                        GlassEffectContainer(spacing: 8) {
+                            HStack(spacing: 8) {
+                                ForEach(Array(sections.enumerated()), id: \.offset) { index, item in sectionButton(item.title, item.icon, index) }
+                            }
+                            .padding(.vertical, 4)
                         }
                     }
-                    ScrollView(.horizontal) {
-                        HStack(spacing: 8) {
-                            sectionButton("Themen", "folder", 0)
-                            sectionButton("Ziele", "scope", 1)
-                            sectionButton("Materialien", "doc.on.doc", 2)
-                            sectionButton("Therapeutin", "person.text.rectangle", 3)
-                            sectionButton("Wichtige Notizen", "pin", 4)
-                        }
-                    }.scrollIndicators(.hidden)
+                    .scrollIndicators(.hidden)
+                    .scrollClipDisabled()
                     switch section {
                     case 0: TherapyFolderContentView(folderID: nil)
                     case 1: TherapyGoalsView()
@@ -290,17 +302,113 @@ struct TherapyHubView: View {
                     }
                 }
             }
-            .navigationTitle("Therapie")
+        }
+        .navigationTitle("Therapie")
+        .sheet(item: $sheet) { feature in TherapyFeatureDestination(id: feature.id) }
+    }
+
+    private func sectionButton(_ title: String, _ symbol: String, _ value: Int) -> some View {
+        let selected = section == value
+        return Button {
+            TherapyEffects.shared.light()
+            withAnimation(.snappy(duration: 0.22)) { section = value }
+        } label: {
+            Label(title, systemImage: symbol)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(selected ? Color.white : Color.primary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .therapyGlass(in: Capsule(), tint: selected ? Color.accentColor.opacity(0.85) : nil, interactive: true)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+/// The therapy session at a glance: live progress while it runs, otherwise the next appointment and quick starts.
+struct TherapySessionHeroCard: View {
+    @EnvironmentObject private var store: AppStore
+
+    var body: some View {
+        SwiftUI.TimelineView(.periodic(from: .now, by: 1)) { context in
+            GlassCard(emphasized: true) {
+                if let session = store.data.currentSession {
+                    running(session, now: context.date)
+                } else {
+                    idle(now: context.date)
+                }
+            }
         }
     }
-    private func sectionButton(_ title: String, _ symbol: String, _ value: Int) -> some View {
-        Button {
-            TherapyEffects.shared.light()
-            withAnimation(.easeInOut(duration: 0.16)) { section = value }
-        } label: {
-            Label(title, systemImage: symbol).font(.subheadline.bold()).padding(.horizontal, 13).padding(.vertical, 12)
-                .background(section == value ? Color.accentColor.opacity(0.16) : Color.secondary.opacity(0.08), in: Capsule())
-        }.buttonStyle(.plain).accessibilityAddTraits(section == value ? .isSelected : [])
+
+    private func running(_ session: RunningTherapySession, now: Date) -> some View {
+        let progress = min(1, session.elapsed(at: now) / max(1, session.totalSeconds))
+        let remaining = Int(session.remaining(at: now))
+        let index = session.phaseIndex(at: now)
+        let caption: String = session.pausedAt != nil ? "Pausiert" : (index.map { "Abschnitt \($0 + 1) von \(session.phases.count)" } ?? "Läuft")
+        let title: String = index.map { session.phases[$0].title } ?? session.title
+        let clock: String = String(format: "noch %d:%02d", remaining / 60, remaining % 60) + " · Ende " + session.expectedEnd.formatted(date: .omitted, time: .shortened)
+        return VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 16) {
+                ZStack {
+                    Circle().stroke(Color.teal.opacity(0.2), lineWidth: 7)
+                    Circle().trim(from: 0, to: progress)
+                        .stroke(Color.teal.gradient, style: StrokeStyle(lineWidth: 7, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                    Image(systemName: session.pausedAt == nil ? "leaf.fill" : "pause.fill")
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(.teal)
+                        .symbolEffect(.pulse, isActive: session.pausedAt == nil)
+                }
+                .frame(width: 68, height: 68)
+                .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(caption).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    Text(title).font(.system(.title3, design: .rounded, weight: .bold)).lineLimit(2)
+                    Text(clock).font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            ResponsiveButtonRow {
+                NavigationLink { SessionConductorView() } label: { Label("Zur Stunde", systemImage: "arrow.up.forward.circle.fill").frame(maxWidth: .infinity) }
+                    .buttonStyle(.glassProminent)
+                Button { store.sessionController.pauseOrResume() } label: {
+                    Label(session.pausedAt == nil ? "Pausieren" : "Fortsetzen", systemImage: session.pausedAt == nil ? "pause.fill" : "play.fill").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.glass)
+            }
+        }
+    }
+
+    private func idle(now: Date) -> some View {
+        let templates = Array(store.data.sessionTemplates.filter(\.isValid).prefix(2))
+        let next = TherapyDateHelper.nextOccurrence(schedule: store.data.schedule, after: now)
+        return VStack(alignment: .leading, spacing: 14) {
+            SectionHeader(title: "Therapiestunde", icon: "timer",
+                          subtitle: next.map { TherapyCountdown.label(until: $0, from: now) } ?? "Timer mit Abschnitten, Notizen und Dynamic Island")
+            NavigationLink { SessionConductorView() } label: {
+                Label("Stunde vorbereiten & starten", systemImage: "play.circle.fill").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.glassProminent)
+            .controlSize(.large)
+            .accessibilityIdentifier("therapy.session.open")
+            if !templates.isEmpty {
+                ScrollView(.horizontal) {
+                    HStack(spacing: 8) {
+                        ForEach(templates) { template in
+                            Button { store.sessionController.start(template) } label: {
+                                Label(template.title, systemImage: "play.fill").font(.caption.weight(.semibold)).lineLimit(1)
+                            }
+                            .buttonStyle(.glass)
+                        }
+                    }
+                }
+                .scrollIndicators(.hidden)
+                Text("Direkt starten – die Live-Aktivität läuft auf dem Sperrbildschirm und in der Dynamic Island weiter.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
     }
 }
 

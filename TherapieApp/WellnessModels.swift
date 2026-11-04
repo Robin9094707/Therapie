@@ -183,18 +183,20 @@ enum WellnessAnalytics {
         let days = Set(moods.keys).union(legacy.keys).union(guided.keys).sorted()
         var segment = 0
         var previous: Date?
-        return days.map { day in
+        func scaled(_ percent: Int) -> Double { 1 + Double(percent) / 25 }
+        return days.map { (day: Date) -> DailyWellnessValue in
             if let previous, calendar.dateComponents([.day], from: previous, to: day).day != 1 { segment += 1 }
             previous = day
-            let entries = moods[day] ?? []
-            let old = legacy[day] ?? []
-            let new = guided[day] ?? []
-            return DailyWellnessValue(date: day,
-                mood: average(entries.map { ($0.moodPercent.map { 1 + Double($0) / 25 } ?? Double($0.mood)) } + new.compactMap { $0.moodPercent.map { 1 + Double($0) / 25 } ?? $0.mood.map(Double.init) }),
-                battery: average(entries.map { Double($0.battery) } + old.map { $0.percent.map { 1 + Double($0) / 25 } ?? Double($0.level) } + new.compactMap { $0.batteryPercent.map { 1 + Double($0) / 25 } }),
-                stress: average(entries.compactMap { $0.stress.map(Double.init) } + new.compactMap { $0.stress.map(Double.init) }),
-                sensory: average(entries.compactMap { $0.sensoryLoad.map(Double.init) } + new.compactMap { $0.sensoryLoad.map(Double.init) }),
-                count: entries.count + old.count + new.count, segment: segment)
+            let entries: [MoodCheckIn] = moods[day] ?? []
+            let old: [EnergyEntry] = legacy[day] ?? []
+            let new: [GuidedCheckIn] = guided[day] ?? []
+            // Typed parts keep this quick to type-check; values are identical to the previous single expression.
+            let moodValues: [Double] = entries.map { $0.moodPercent.map(scaled) ?? Double($0.mood) } + new.compactMap { $0.moodPercent.map(scaled) ?? $0.mood.map(Double.init) }
+            let batteryValues: [Double] = entries.map { Double($0.battery) } + old.map { $0.percent.map(scaled) ?? Double($0.level) } + new.compactMap { $0.batteryPercent.map(scaled) }
+            let stressValues: [Double] = entries.compactMap { $0.stress.map(Double.init) } + new.compactMap { $0.stress.map(Double.init) }
+            let sensoryValues: [Double] = entries.compactMap { $0.sensoryLoad.map(Double.init) } + new.compactMap { $0.sensoryLoad.map(Double.init) }
+            return DailyWellnessValue(date: day, mood: average(moodValues), battery: average(batteryValues), stress: average(stressValues),
+                                      sensory: average(sensoryValues), count: entries.count + old.count + new.count, segment: segment)
         }
     }
     static func categoryTotals(_ points: [BatteryPoint]) -> [BatteryCategoryTotal] {

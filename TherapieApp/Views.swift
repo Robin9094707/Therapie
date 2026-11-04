@@ -72,7 +72,7 @@ struct RootView: View {
             default: break
             }
         }
-        .onChange(of: scenePhase) { _, phase in if phase == .inactive && store.storageReady { store.sessionController.prepareForBackground() }; if phase == .active { store.resumeProtectedStorage(); if store.storageReady { store.sessionController.synchronize(); store.consumeRoutineAlarmRoute(); store.refreshTherapyCalendar(force: false); TaskNotificationCoordinator.shared.refresh(store); AppleRemindersService.shared.refresh(store); TherapyWidgetBridge.refresh(store, force: true); presentRequested() } } }
+        .onChange(of: scenePhase) { _, phase in if phase != .active && store.storageReady { store.sessionController.prepareForBackground() }; if phase == .active { store.resumeProtectedStorage(); if store.storageReady { store.sessionController.synchronize(); store.consumeRoutineAlarmRoute(); store.refreshTherapyCalendar(force: false); TaskNotificationCoordinator.shared.refresh(store); AppleRemindersService.shared.refresh(store); TherapyWidgetBridge.refresh(store, force: true); presentRequested() } } }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in store.resumeProtectedStorage(); presentRequested() }
         .onChange(of: store.waitingForProtectedData) { _, waiting in if !waiting { presentRequested() } }
         .onChange(of: presentationRequestKey) { _, _ in presentRequested() }
@@ -304,41 +304,7 @@ struct OnboardingView: View {
     }
 }
 
-// MARK: - Main navigation
-
-struct MainTabView: View {
-    @EnvironmentObject private var store: AppStore
-
-    var body: some View {
-        TabView(selection: $store.selectedTab) {
-            Tab("Heute", systemImage: "sparkles", value: 0) {
-                DashboardView()
-                    .safeAreaInset(edge: .bottom) { UndoChangesButton() }
-            }
-
-            Tab("Insights", systemImage: "chart.xyaxis.line", value: 1) {
-                NavigationStack { InsightsHubView() }
-                    .safeAreaInset(edge: .bottom) { UndoChangesButton() }
-            }
-
-            Tab("Therapie", systemImage: "leaf", value: 2) {
-                NavigationStack { TherapyHubView() }
-                    .safeAreaInset(edge: .bottom) { UndoChangesButton() }
-            }
-
-            Tab("Archiv", systemImage: "square.stack.3d.up.fill", value: 3) {
-                NavigationStack { LibraryView() }
-                    .safeAreaInset(edge: .bottom) { UndoChangesButton() }
-            }
-
-            Tab("Profil", systemImage: "person.crop.circle.fill", value: 4) {
-                SettingsView()
-                    .safeAreaInset(edge: .bottom) { UndoChangesButton() }
-            }
-        }
-        .tabBarMinimizeBehavior(TherapyDesign.isUITesting ? .never : .onScrollDown)
-    }
-}
+// MARK: - Main navigation lives in AppNavigation.swift (Therapie 5).
 
 // MARK: - Dashboard
 
@@ -352,6 +318,9 @@ struct DashboardView: View {
     @State private var customize = false
     @State private var routineToComplete: RoutineOccurrence?
     @State private var confirmRoutineCompletion = false
+    @State private var showPhoto = false
+    @State private var showAudio = false
+    @State private var showTasks = false
 
     private var currentTask: WeeklyTask? {
         let week = Date().therapyWeek
@@ -383,23 +352,36 @@ struct DashboardView: View {
                     }
                     if store.data.dashboard.visibleCards.isEmpty {
                         ContentUnavailableView("Deine Heute-Seite", systemImage: "slider.horizontal.3", description: Text("Wähle deine Karten über „Heute gestalten“."))
-                        Button("Heute gestalten") { customize = true }.buttonStyle(.glassProminent)
                     }
+                    HStack(spacing: 10) {
+                        Button("Heute gestalten", systemImage: "slider.horizontal.3") { customize = true }
+                            .accessibilityIdentifier("today.customize")
+                        Button("Alle Funktionen", systemImage: "square.grid.3x3.fill") { store.selectedTab = TherapyTab.search }
+                    }
+                    .buttonStyle(.glass)
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.top, 4)
                 }
             }
             .navigationTitle("Heute")
             .navigationBarTitleDisplayMode(.large)
             .sheet(isPresented: $customize) { DashboardCustomizationView(preferences: store.data.dashboard) }
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { NavigationLink { EmergencyPlanView() } label: { Label("Notfallplan", systemImage: "lifepreserver.fill") } }
-                ToolbarItem(placement: .topBarLeading) { Button("Heute gestalten", systemImage: "slider.horizontal.3") { customize = true }.accessibilityIdentifier("today.customize") }
+                ToolbarItem(placement: .topBarLeading) { NavigationLink { EmergencyPlanView() } label: { Label("Notfallplan", systemImage: "lifepreserver.fill") }.tint(.red) }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button("Heute gestalten", systemImage: "slider.horizontal.3") { customize = true }
+                        Button("Wochenaufgaben", systemImage: "checklist") { showTasks = true }
+                        Button("Alle Funktionen", systemImage: "square.grid.3x3.fill") { store.selectedTab = TherapyTab.search }
+                    } label: { Label("Mehr", systemImage: "ellipsis") }
+                    .accessibilityIdentifier("today.menu")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     if store.data.aiSettings.enabled { NavigationLink { AIBuddyView() } label: { Label("KI-Begleiter", systemImage: "sparkles") }.accessibilityIdentifier("today.ai") }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink { TasksView() } label: { Label("Aufgaben", systemImage: "checklist") }
-                }
             }
+            .therapyRootToolbar()
+            .navigationDestination(isPresented: $showTasks) { TasksView() }
             .onAppear { if !openedNoteFixture && ProcessInfo.processInfo.arguments.contains("--show-note") { openedNoteFixture = true; showNote = true } }
             .sheet(isPresented: $showAI) { AIBuddyEntryView() }
             .sheet(isPresented: $showNote) {
@@ -414,6 +396,8 @@ struct DashboardView: View {
                 AddReflectionView()
                     .presentationDetents([.medium, .large])
             }
+            .sheet(isPresented: $showPhoto) { AddPhotoView().presentationDetents([.medium, .large]) }
+            .sheet(isPresented: $showAudio) { AudioRecordingView().presentationDetents([.medium, .large]) }
             .alert("Routine wirklich erledigt?", isPresented: $confirmRoutineCompletion, presenting: routineToComplete) { occurrence in
                 Button("Abbrechen", role: .cancel) { routineToComplete = nil }
                 Button("Ja, ich habe sie erledigt") { store.resolveRoutine(occurrence, outcome: .done); routineToComplete = nil }
@@ -448,25 +432,21 @@ struct DashboardView: View {
 
     private var quickActions: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Schnell erfassen")
-                .font(.system(.headline, design: .rounded))
-                .accessibilityAddTraits(.isHeader)
-                .padding(.horizontal, 2)
+            Label {
+                Text("Schnell erfassen").font(.system(.headline, design: .rounded))
+            } icon: {
+                Image(systemName: "bolt.fill").foregroundStyle(.orange)
+            }
+            .accessibilityAddTraits(.isHeader)
+            .padding(.horizontal, 2)
 
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 140), spacing: 12)],
-                spacing: 12
-            ) {
-                if store.data.aiSettings.enabled { QuickActionButton(title: "Mit KI", subtitle: "Gemeinsam festhalten", icon: "sparkles") { showAI = true } }
-                QuickActionButton(title: "Notiz", subtitle: "Gedanken", icon: "square.and.pencil") {
-                    showNote = true
-                }
-                QuickActionButton(title: "Stimmung", subtitle: "Check-in", icon: "face.smiling") {
-                    showEnergy = true
-                }
-                QuickActionButton(title: "Rückblick", subtitle: "Therapie", icon: "clock.arrow.circlepath") {
-                    showReflection = true
-                }
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 12)], spacing: 12) {
+                if store.data.aiSettings.enabled { QuickActionButton(title: "Mit KI", subtitle: "Gemeinsam festhalten", icon: "sparkles", tint: .indigo) { showAI = true } }
+                QuickActionButton(title: "Notiz", subtitle: "Gedanken", icon: "square.and.pencil", tint: .orange) { showNote = true }
+                QuickActionButton(title: "Stimmung", subtitle: "Check-in & Akku", icon: "face.smiling.inverse", tint: .yellow) { showEnergy = true }
+                QuickActionButton(title: "Rückblick", subtitle: "Nach der Therapie", icon: "text.bubble.fill", tint: .blue) { showReflection = true }
+                QuickActionButton(title: "Foto", subtitle: "Bild mit Notiz", icon: "camera.fill", tint: .pink) { showPhoto = true }
+                QuickActionButton(title: "Sprachnotiz", subtitle: "Einsprechen", icon: "mic.fill", tint: .red) { showAudio = true }
             }
         }
     }
@@ -1176,6 +1156,9 @@ struct TimelineView: View {
 
 struct SettingsView: View {
     @EnvironmentObject private var store: AppStore
+    @Environment(\.dismiss) private var dismiss
+    /// Shown when profile & settings open as a sheet from the avatar button.
+    var showsCloseButton = false
     @State private var showFolderPicker = false
     @State private var statusMessage: String?
     @State private var deletePhrase = ""
@@ -1251,6 +1234,11 @@ struct SettingsView: View {
             }
             .navigationTitle("Profil")
             .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                if showsCloseButton {
+                    ToolbarItem(placement: .confirmationAction) { Button("Fertig") { dismiss() }.accessibilityIdentifier("profile.close") }
+                }
+            }
             .sheet(isPresented: $showBackupCenter) { BackupCenterView() }
         }
     }

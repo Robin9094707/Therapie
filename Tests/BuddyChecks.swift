@@ -297,6 +297,13 @@ final class BuddyMockProtocol: URLProtocol {
         try expect((try JSONSerialization.jsonObject(with: enc.encode(restoredInteractive)) as! NSDictionary) == (try JSONSerialization.jsonObject(with: enc.encode(interactive)) as! NSDictionary) && restoredInteractive.editorDrafts[0].decode(GuidedCheckIn.self) == noAdvance, "All new draft, action and reminder values round-trip through AppData")
         let available = AIBuddyContext.make(data: interactive, days: 7, end: now)
         try expect(available.text.contains("CHECK-IN-FENSTER") && available.text.contains("ai.contextDays"), "AI receives current check-in availability and supported setting values")
+        try expect(available.text.hasPrefix("LAGEBILD") && available.text.contains("Duschen diese Woche") == (interactive.routines.contains(where: ShowerPlanner.isShower) || !interactive.showerEntries.isEmpty), "Every request starts with a compact situation summary")
+        let olderSettings = try JSONDecoder().decode(AIBuddySettings.self, from: Data(#"{"enabled":true,"model":"gpt-5.6-luna"}"#.utf8))
+        let unknownThinking = try JSONDecoder().decode(AIBuddySettings.self, from: Data(#"{"thinking":"forever"}"#.utf8))
+        try expect(olderSettings.enabled && olderSettings.thinking == "balanced" && unknownThinking.thinking == "balanced", "Older or unknown thinking values default to balanced")
+        var deepSettings = olderSettings; deepSettings.thinking = AIBuddyThinking.deep.rawValue
+        let reencoded = try JSONDecoder().decode(AIBuddySettings.self, from: JSONEncoder().encode(deepSettings))
+        try expect(reencoded.thinking == "deep" && AIBuddyThinking.fast.effort(for: "gpt-5.6-luna") == "none" && AIBuddyThinking.balanced.effort(for: "gpt-5.6-luna") == "low" && AIBuddyThinking.deep.effort(for: "gpt-6.1-sol") == "medium" && AIBuddyThinking.deep.effort(for: "o-custom") == nil, "Thinking depth persists and maps to supported reasoning efforts")
         var recurringRoutine = DailyRoutine(title: "Alle zwei Wochen", recurrenceAnchor: now, repeatEveryWeeks: 2)
         let nextWeek = Calendar.current.date(byAdding: .weekOfYear, value: 1, to: now)!
         let secondWeek = Calendar.current.date(byAdding: .weekOfYear, value: 2, to: now)!

@@ -1,3 +1,10 @@
+## Update 5000.0.0 · Therapie 5
+
+- Neue Struktur: Heute, Therapie, Alltag, Verlauf und der native Such-Tab mit einem Verzeichnis aller Funktionen; Profil über den Avatar oben rechts. Mehr Symbole, durchgehend Liquid Glass.
+- Dynamic Island: Live-Aktivität startet synchron, wird beim Verlassen der App aktualisiert, nie bei noch nicht geladenen Daten beendet und zeichnet Abschnittswechsel und Ende über Stale-Zeitpunkte und eine Hintergrundaktualisierung auch ohne geöffnete App neu. Mini-Leiste über der Tableiste während der Stunde.
+- KI: Lagebild in jeder Anfrage, klarere Denkweise, einstellbare Denktiefe (Standard „Ausgewogen“).
+- Daten: Schema 18 bleibt, ein additives Feld `aiSettings.thinking`; einmalige Kopie `therapy-data.pre-5000.json`. Details in `UPDATE-5000.md`.
+
 ## Update 3010.0.0 · Interaktiver Begleiter
 
 - Nachrichten werden unmittelbar nach lokalem Speichern aus dem Editor entfernt. Ein synchroner Sendezustand verhindert doppelte Taps. Fehlgeschlagene Antworten können ohne erneute Nutzernachricht wiederholt werden. Native Tipp-Punkte ersetzen die Lade-Karte.

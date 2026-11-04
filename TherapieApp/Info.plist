@@ -21,6 +21,8 @@
 	<key>CFBundleIconName</key>
 	<string>AppIcon</string>
 	<key>NSSupportsLiveActivities</key><true/>
+	<key>UIBackgroundModes</key><array><string>fetch</string></array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key><array><string>eu.rjuhas.therapie.session-refresh</string></array>
 	<key>UIFileSharingEnabled</key><true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key><true/>
 	<key>UTExportedTypeDeclarations</key><array><dict>
