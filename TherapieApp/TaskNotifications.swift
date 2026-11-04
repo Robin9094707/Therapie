@@ -9,6 +9,13 @@ final class TaskNotificationCoordinator: NSObject, UNUserNotificationCenterDeleg
     static let checkInCategory = "THERAPY_CHECKIN"
     static let energyCategory = "THERAPY_ENERGY_WEEK"
     static let energyIdentifier = "therapy.energy-week"
+    static let assistedLivingCategory = "THERAPY_BEWO"
+    static let quietEndIdentifier = "therapy.quiet.end"
+    /// Identifiers this coordinator owns; anything else (session, weekly check-in) is managed elsewhere.
+    static func owns(_ identifier: String) -> Bool {
+        identifier.hasPrefix("therapy.task.") || identifier.hasPrefix("therapy.routine.") || identifier.hasPrefix("therapy.checkin.")
+            || identifier.hasPrefix("therapy.bewo.") || identifier == energyIdentifier || identifier == quietEndIdentifier
+    }
     private weak var store: AppStore?
     private var updateTask: Task<Void, Never>?
     private var generation = 0
@@ -29,7 +36,8 @@ final class TaskNotificationCoordinator: NSObject, UNUserNotificationCenterDeleg
             UNNotificationAction(identifier: "ROUTINE_LATER", title: "Eine Stunde später", options: [.foreground])
         ], intentIdentifiers: [])
         let checkIn = UNNotificationCategory(identifier: Self.checkInCategory, actions: [UNNotificationAction(identifier: "CHECKIN_OPEN", title: "Check-in starten", options: [.foreground])], intentIdentifiers: [])
-        center.setNotificationCategories([category, energy, routine, checkIn])
+        let bewo = UNNotificationCategory(identifier: Self.assistedLivingCategory, actions: [UNNotificationAction(identifier: "BEWO_OPEN", title: "Vorbereiten", options: [.foreground])], intentIdentifiers: [])
+        center.setNotificationCategories([category, energy, routine, checkIn, bewo])
     }
     func refresh(_ store: AppStore) {
         self.store = store
@@ -55,7 +63,7 @@ final class TaskNotificationCoordinator: NSObject, UNUserNotificationCenterDeleg
         guard [.authorized, .provisional, .ephemeral].contains(settings.authorizationStatus) else {
             let pending = await center.pendingNotificationRequests()
             guard revision == generation else { return }
-            center.removePendingNotificationRequests(withIdentifiers: pending.filter { $0.identifier.hasPrefix("therapy.task.") || $0.identifier.hasPrefix("therapy.routine.") || $0.identifier.hasPrefix("therapy.checkin.") || $0.identifier == Self.energyIdentifier }.map(\.identifier))
+            center.removePendingNotificationRequests(withIdentifiers: pending.filter { Self.owns($0.identifier) }.map(\.identifier))
             store?.taskReminderStatus = "Für Aufgabenerinnerungen bitte Mitteilungen freigeben."
             store?.checkInReminderStatus = "Bitte Mitteilungen in den iPhone-Einstellungen erlauben."
             store?.routineReminderStatus = "Routine-Mitteilungen sind nicht freigegeben. Bitte in den iPhone-Einstellungen erlauben."
@@ -66,16 +74,27 @@ final class TaskNotificationCoordinator: NSObject, UNUserNotificationCenterDeleg
         let taskBudget = (snapshot.routines.contains { $0.enabled && $0.remindersEnabled } || !(snapshot.companionSettings.checkInReminders ?? []).filter(\.enabled).isEmpty) ? 16 : 40
         let slots = TaskReminderPlanner.admittedSlots(all, budget: taskBudget), admitted = Set(slots.map(\.taskID))
         var requests: [UNNotificationRequest] = []
+        let quiet = snapshot.quietMode
+        var quietTaskSlots = 0
         for slot in slots {
             guard let task = snapshot.weeklyTasks.first(where: { $0.id == slot.taskID }) else { continue }
+            // Quiet mode: a timed pause delivers the first occurrence after it once; permanent silence skips it.
+            let plan = ReminderInventory.taskPlan(slot, settings: quiet)
+            if plan != .repeating { quietTaskSlots += 1 }
+            if plan == .none { continue }
             let content = UNMutableNotificationContent()
             content.title = "Dein nächster kleiner Schritt"
             content.body = snapshot.reminderPreferences.privateTaskTitles ? "Eine offene Wochenaufgabe wartet auf dich. Du kannst weitermachen, verschieben oder sie als erledigt markieren." : String(task.title.prefix(160))
             content.categoryIdentifier = Self.taskCategory
             content.userInfo = ["taskID": task.id.uuidString]
             if snapshot.reminderPreferences.taskSound { content.sound = .default }
-            let components = DateComponents(hour: slot.hour, minute: slot.minute, weekday: slot.weekday)
-            requests.append(UNNotificationRequest(identifier: slot.identifier, content: content, trigger: UNCalendarNotificationTrigger(dateMatching: components, repeats: true)))
+            if case .once(let date) = plan {
+                let parts = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
+                requests.append(UNNotificationRequest(identifier: slot.identifier, content: content, trigger: UNCalendarNotificationTrigger(dateMatching: parts, repeats: false)))
+            } else {
+                let components = DateComponents(hour: slot.hour, minute: slot.minute, weekday: slot.weekday)
+                requests.append(UNNotificationRequest(identifier: slot.identifier, content: content, trigger: UNCalendarNotificationTrigger(dateMatching: components, repeats: true)))
+            }
         }
         if snapshot.reminderPreferences.energyReviewEnabled,
            let next = TherapyDateHelper.nextOccurrence(schedule: snapshot.schedule) {
@@ -86,12 +105,14 @@ final class TaskNotificationCoordinator: NSObject, UNUserNotificationCenterDeleg
             content.categoryIdentifier = Self.energyCategory
             content.userInfo = ["energyReview": true]
             content.sound = .default
-            if date > Date() {
+            if date > Date(), QuietPolicy.reason(category: .wellbeing, source: "energy", id: Self.energyIdentifier, fireAt: date, settings: quiet) == nil {
                 let parts = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
                 requests.append(UNNotificationRequest(identifier: Self.energyIdentifier, content: content, trigger: UNCalendarNotificationTrigger(dateMatching: parts, repeats: false)))
             }
         }
-        let allCheckInSlots = CheckInReminderPlanner.slots(data: snapshot)
+        let allCheckInSlots = CheckInReminderPlanner.slots(data: snapshot).filter {
+            QuietPolicy.reason(category: .checkIns, source: "checkin.\($0.kind.rawValue)", id: $0.id, fireAt: $0.fireAt, settings: quiet) == nil
+        }
         let checkInSlots = Array(allCheckInSlots.prefix(min(20, max(0, 48 - requests.count))))
         for slot in checkInSlots {
             let content = UNMutableNotificationContent()
@@ -105,7 +126,8 @@ final class TaskNotificationCoordinator: NSObject, UNUserNotificationCenterDeleg
         }
         let routineCandidates = RoutinePlanner.slots(data: snapshot).filter { slot in
             guard let routine = snapshot.routines.first(where: { $0.id == slot.occurrence.routineID }) else { return false }
-            return !(snapshot.appleIntegration.remindersEnabled && routine.appleReminders != false)
+            guard !(snapshot.appleIntegration.remindersEnabled && routine.appleReminders != false) else { return false }
+            return QuietPolicy.reason(category: .routines, source: "routine.\(routine.id)", id: slot.id, fireAt: slot.fireAt, settings: quiet) == nil
         }
         let routineSlots = RoutinePlanner.admittedSlots(routineCandidates, budget: max(0, 48 - requests.count))
         for slot in routineSlots {
@@ -121,14 +143,49 @@ final class TaskNotificationCoordinator: NSObject, UNUserNotificationCenterDeleg
             let parts = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: slot.fireAt)
             requests.append(UNNotificationRequest(identifier: slot.id, content: content, trigger: UNCalendarNotificationTrigger(dateMatching: parts, repeats: false)))
         }
+        for slot in AssistedLivingPlanner.reminderSlots(snapshot).prefix(max(0, 56 - requests.count))
+            where QuietPolicy.reason(category: .assistedLiving, source: "bewo", id: slot.id, fireAt: slot.fireAt, settings: quiet) == nil {
+            let content = UNMutableNotificationContent()
+            content.title = slot.title
+            content.body = snapshot.assistedLivingSettings.privateTitles ? "Öffne die App, um dich in Ruhe vorzubereiten." : "Sammle vorher kurz deine Themen – die App zeigt dir die offene Liste."
+            content.sound = .default
+            content.categoryIdentifier = Self.assistedLivingCategory
+            content.userInfo = ["bewo": slot.occurrence.id]
+            let parts = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: slot.fireAt)
+            requests.append(UNNotificationRequest(identifier: slot.id, content: content, trigger: UNCalendarNotificationTrigger(dateMatching: parts, repeats: false)))
+        }
+        // The weekly mood moment repeats on its own; quiet mode removes it while silenced and restores it afterwards.
+        if snapshot.wellnessSettings.reminderEnabled {
+            let settings = snapshot.wellnessSettings
+            let next = ReminderInventory.nextDates(weekday: max(1, min(7, settings.reminderWeekday)), hour: max(0, min(23, settings.reminderHour)), minute: max(0, min(59, settings.reminderMinute)), after: Date(), count: 1).first
+            if let next, QuietPolicy.reason(category: .wellbeing, source: "wellness", id: "therapy.weekly-checkin.\(Int(next.timeIntervalSince1970))", fireAt: next, settings: quiet) != nil {
+                center.removePendingNotificationRequests(withIdentifiers: [WeeklyReminderService.identifier])
+            } else {
+                let content = UNMutableNotificationContent()
+                content.title = "Ein Moment für dich"
+                content.body = "Wenn es für dich passt, halte kurz fest, wie deine Woche war."
+                content.sound = .default
+                let components = DateComponents(hour: settings.reminderHour, minute: settings.reminderMinute, weekday: settings.reminderWeekday)
+                try? await center.add(UNNotificationRequest(identifier: WeeklyReminderService.identifier, content: content, trigger: UNCalendarNotificationTrigger(dateMatching: components, repeats: true)))
+            }
+        }
+        if quiet.announceEnd, let resume = QuietPolicy.resumeDate(quiet), resume > Date() {
+            let content = UNMutableNotificationContent()
+            content.title = "Deine Ruhe ist vorbei"
+            content.body = "Öffne Kompass kurz, damit alle Erinnerungen wieder regelmäßig laufen."
+            let parts = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: resume)
+            requests.append(UNNotificationRequest(identifier: Self.quietEndIdentifier, content: content, trigger: UNCalendarNotificationTrigger(dateMatching: parts, repeats: false)))
+        }
         let previous = await center.pendingNotificationRequests()
         guard revision == generation else { return }
         let validIDs = Set(requests.map(\.identifier))
-        let stale = previous.filter { ($0.identifier.hasPrefix("therapy.task.") || $0.identifier.hasPrefix("therapy.routine.") || $0.identifier.hasPrefix("therapy.checkin.") || $0.identifier == Self.energyIdentifier) && !validIDs.contains($0.identifier) }.map(\.identifier)
+        // Repeating and one-shot task requests share an identifier; replace them so a changed trigger takes effect.
+        let changedTriggers = previous.filter { old in requests.contains { $0.identifier == old.identifier && ($0.trigger as? UNCalendarNotificationTrigger)?.repeats != (old.trigger as? UNCalendarNotificationTrigger)?.repeats } }.map(\.identifier)
+        let stale = previous.filter { Self.owns($0.identifier) && !validIDs.contains($0.identifier) }.map(\.identifier) + changedTriggers
         center.removePendingNotificationRequests(withIdentifiers: stale)
         let delivered = await center.deliveredNotifications()
         guard revision == generation else { return }
-        center.removeDeliveredNotifications(withIdentifiers: delivered.filter { ($0.request.identifier.hasPrefix("therapy.task.") || $0.request.identifier.hasPrefix("therapy.routine.") || $0.request.identifier.hasPrefix("therapy.checkin.")) && !validIDs.contains($0.request.identifier) }.map { $0.request.identifier })
+        center.removeDeliveredNotifications(withIdentifiers: delivered.filter { ($0.request.identifier.hasPrefix("therapy.task.") || $0.request.identifier.hasPrefix("therapy.routine.") || $0.request.identifier.hasPrefix("therapy.checkin.") || $0.request.identifier.hasPrefix("therapy.bewo.")) && !validIDs.contains($0.request.identifier) }.map { $0.request.identifier })
         do {
             for request in requests {
                 guard revision == generation else { return }
@@ -146,6 +203,7 @@ final class TaskNotificationCoordinator: NSObject, UNUserNotificationCenterDeleg
             store?.routineReminderStatus = routineSlots.isEmpty ? "Keine Routine-Mitteilungen ausstehend." : "\(routineSlots.count) Hinweise eingerichtet. Vollständige Wiederholungen bis \(coverage). App bis dahin erneut öffnen. Spätere Basis-Hinweise können schon geplant sein."
             if unplanned > 0 { store?.routineReminderStatus += " \(unplanned) Termine haben aktuell keinen Platz im Vorrat. Vergrößere Wiederholungsabstände oder reduziere aktive Erinnerungen." }
             let missing = Set(all.map(\.taskID)).subtracting(admitted).count
+            store?.quietStatus = QuietPolicy.globalPause(quiet).map { pause in pause.until.map { "Ruhe bis " + QuietPolicy.shortStamp($0) + "." } ?? "Ruhe ist aktiv, bis du sie beendest." } ?? (quietTaskSlots > 0 ? "\(quietTaskSlots) Aufgaben-Erinnerungen ruhen gerade." : "")
             store?.taskReminderStatus = missing == 0 ? "Erinnerungen für \(admitted.count) offene Aufgaben aktiv. Sie wiederholen sich bis zum Erledigen." : "\(admitted.count) Aufgaben mit Erinnerung; \(missing) weitere passen nicht mehr. Wähle täglich statt vieler einzelner Wochentage oder schalte nicht benötigte Erinnerungen aus."
         } catch { store?.checkInReminderStatus = "Check-in-Erinnerungen unvollständig: " + error.localizedDescription; store?.taskReminderStatus = "Erinnerungen konnten nicht vollständig eingerichtet werden: " + error.localizedDescription; store?.routineReminderStatus = "Routine-Mitteilungen unvollständig: " + error.localizedDescription }
     }
@@ -154,7 +212,7 @@ final class TaskNotificationCoordinator: NSObject, UNUserNotificationCenterDeleg
         let center = UNUserNotificationCenter.current()
         Task {
             let pending = await center.pendingNotificationRequests()
-            center.removePendingNotificationRequests(withIdentifiers: pending.filter { $0.identifier.hasPrefix("therapy.task.") || $0.identifier.hasPrefix("therapy.routine.") || $0.identifier.hasPrefix("therapy.checkin.") || $0.identifier == Self.energyIdentifier }.map(\.identifier))
+            center.removePendingNotificationRequests(withIdentifiers: pending.filter { Self.owns($0.identifier) }.map(\.identifier))
         }
     }
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
@@ -181,6 +239,12 @@ final class TaskNotificationCoordinator: NSObject, UNUserNotificationCenterDeleg
                 store.notificationRoutineID = routineID
                 refresh(store)
                 return
+            }
+            if response.notification.request.content.categoryIdentifier == Self.assistedLivingCategory {
+                store.openAssistedLiving(); return
+            }
+            if response.notification.request.identifier == Self.quietEndIdentifier {
+                store.notificationQuietCenter = true; refresh(store); return
             }
             if response.notification.request.content.categoryIdentifier == Self.energyCategory {
                 store.openEnergyReview = true; return

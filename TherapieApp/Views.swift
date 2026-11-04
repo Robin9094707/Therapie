@@ -3,8 +3,31 @@ import PhotosUI
 import UniformTypeIdentifiers
 import UIKit
 
+/// Redraws and re-plans when an alarm or intent opens the app (kept separate to keep RootView's body type-checkable).
+private struct IntentRefreshModifier: ViewModifier {
+    @EnvironmentObject private var store: AppStore
+    @Environment(\.scenePhase) private var scenePhase
+    @Binding var appearedInBackground: Bool
+    let present: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .therapyIntentRoute)) { _ in
+                store.resumeProtectedStorage()
+                if store.storageReady { store.consumeRoutineAlarmRoute(); present() }
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active && appearedInBackground {
+                    // Launched by an alarm or intent while not visible: the first visible frame must be rebuilt.
+                    appearedInBackground = false
+                    store.refreshAfterIntent()
+                }
+            }
+    }
+}
+
 private enum RootModal: Identifiable {
-    case apple(String), ai, permissions, session, checkIn(GuidedCheckIn), task(WeeklyTask), routine(UUID), showers, widgetSetup, routines, reminders, therapy, mood, energy, whatsNew
+    case apple(String), ai, permissions, session, checkIn(GuidedCheckIn), task(WeeklyTask), routine(UUID), showers, widgetSetup, routines, reminders, therapy, mood, energy, whatsNew, quiet, tasks
     var id: String {
         switch self {
         case .apple(let page): "apple-" + page
@@ -12,7 +35,7 @@ private enum RootModal: Identifiable {
         case .checkIn(let entry): "check-in-" + entry.id.uuidString
         case .task(let task): "task-" + task.id.uuidString
         case .routine(let id): "routine-" + id.uuidString
-        case .showers: "showers"; case .widgetSetup: "widget-setup"; case .routines: "routines"; case .reminders: "reminders"; case .therapy: "therapy"; case .mood: "mood"; case .energy: "energy"; case .whatsNew: "whats-new"
+        case .showers: "showers"; case .widgetSetup: "widget-setup"; case .routines: "routines"; case .reminders: "reminders"; case .therapy: "therapy"; case .mood: "mood"; case .energy: "energy"; case .whatsNew: "whats-new"; case .quiet: "quiet"; case .tasks: "tasks"
         }
     }
 }
@@ -25,12 +48,12 @@ struct RootView: View {
     @AppStorage("therapy.permissions3000") private var permissionSetupDone = false
     @State private var showPermissions = false
     @State private var showSplash = !TherapyDesign.isUITesting
+    @State private var appearedInBackground = false
     @AppStorage("therapy.lastSeenVersion") private var lastSeenVersion = ""
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @EnvironmentObject private var store: AppStore
 
-    var body: some View {
-        Group {
+    @ViewBuilder private var rootContent: some View {
             if store.waitingForProtectedData {
                 VStack(spacing: 16) {
                     TherapyLogoMark(size: 72)
@@ -44,11 +67,18 @@ struct RootView: View {
             } else if store.loadError != nil {
                 SettingsView()
             } else if store.data.profile.onboardingCompleted {
-                if ProcessInfo.processInfo.arguments.contains("--show-routines") { NavigationStack { RoutineHubView() }.safeAreaInset(edge: .bottom) { UndoChangesButton() } } else { MainTabView() }
+                if ProcessInfo.processInfo.arguments.contains("--show-routines") { NavigationStack { RoutineHubView() }.safeAreaInset(edge: .bottom) { UndoChangesButton() } } else {
+                    // A new identity after an alarm or intent redraws every tab from current data instead of the
+                    // snapshot iOS captured while the app was launched in the background.
+                    MainTabView().id(store.surfaceRevision)
+                }
             } else {
                 OnboardingView()
             }
-        }
+    }
+
+    var body: some View {
+        rootContent
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background { AppBackground() }
         .tint(Color.accentColor)
@@ -67,16 +97,19 @@ struct RootView: View {
             case "appointments": store.notificationTherapy = true
             case "routines": store.notificationRoutines = true
             case "reminders": store.notificationReminders = true
+            case "quiet": store.notificationQuietCenter = true
+            case "bewo": store.openAssistedLiving()
             case "routine": if let id = UUID(uuidString: url.lastPathComponent), store.data.routines.contains(where: { $0.id == id }) { store.notificationRoutineID = id } else { store.notificationRoutines = true }
             case "task": if let id = UUID(uuidString: url.lastPathComponent), store.data.weeklyTasks.contains(where: { $0.id == id }) { store.notificationTaskID = id } else { store.notificationReminders = true }
             default: break
             }
         }
+        .modifier(IntentRefreshModifier(appearedInBackground: $appearedInBackground, present: presentRequested))
         .onChange(of: scenePhase) { _, phase in if phase != .active && store.storageReady { store.sessionController.prepareForBackground() }; if phase == .active { store.resumeProtectedStorage(); if store.storageReady { store.sessionController.synchronize(); store.consumeRoutineAlarmRoute(); store.refreshTherapyCalendar(force: false); TaskNotificationCoordinator.shared.refresh(store); AppleRemindersService.shared.refresh(store); TherapyWidgetBridge.refresh(store, force: true); presentRequested() } } }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in store.resumeProtectedStorage(); presentRequested() }
         .onChange(of: store.waitingForProtectedData) { _, waiting in if !waiting { presentRequested() } }
         .onChange(of: presentationRequestKey) { _, _ in presentRequested() }
-        .onAppear { presentRequested() }
+        .onAppear { if scenePhase != .active { appearedInBackground = true }; presentRequested() }
         .task {
             store.resumeProtectedStorage()
             if store.storageReady { store.sessionController.synchronize(); store.refreshTherapyCalendar(force: false); AppleRemindersService.shared.refresh(store); store.consumeRoutineAlarmRoute() }
@@ -161,10 +194,12 @@ struct RootView: View {
         case .mood: return AnyView(MoodEditorView())
         case .energy: return AnyView(WeeklyEnergyEditorView())
         case .whatsNew: return AnyView(WhatsNewView())
+        case .quiet: return AnyView(NavigationStack { QuietCenterView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { modal = nil } } } })
+        case .tasks: return AnyView(NavigationStack { TasksView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { modal = nil } } } })
         }
     }
     private var presentationRequestKey: String {
-        let flags = [showPermissions, store.notificationSession, store.notificationAIHub, store.notificationShowers, store.notificationWidgetSetup, store.notificationRoutines, store.notificationReminders, store.notificationTherapy, store.notificationMood, store.openEnergyReview]
+        let flags = [showPermissions, store.notificationSession, store.notificationAIHub, store.notificationShowers, store.notificationWidgetSetup, store.notificationRoutines, store.notificationReminders, store.notificationTherapy, store.notificationMood, store.openEnergyReview, store.notificationQuietCenter, store.notificationTasks]
         return (store.notificationApplePage ?? "") + flags.map { $0 ? "1" : "0" }.joined() + (store.pendingGuidedCheckIn?.id.uuidString ?? "") + (store.notificationTaskID?.uuidString ?? "") + (store.notificationRoutineID?.uuidString ?? "")
     }
 
@@ -185,6 +220,8 @@ struct RootView: View {
         else if store.notificationTherapy { store.notificationTherapy = false; modal = .therapy }
         else if store.notificationMood { store.notificationMood = false; modal = .mood }
         else if store.openEnergyReview { store.openEnergyReview = false; modal = .energy }
+        else if store.notificationQuietCenter { store.notificationQuietCenter = false; modal = .quiet }
+        else if store.notificationTasks { store.notificationTasks = false; modal = .tasks }
         else if shouldShowWhatsNew { lastSeenVersion = TherapyDesign.appVersion; modal = .whatsNew }
     }
 
@@ -233,12 +270,12 @@ struct OnboardingView: View {
                         TherapyLogoMark(size: 112)
                             .padding(.bottom, 6)
 
-                        Text("Dein Therapiebegleiter")
+                        Text("Willkommen bei Kompass")
                             .font(.system(.largeTitle, design: .rounded, weight: .bold))
                             .multilineTextAlignment(.center)
                             .minimumScaleFactor(0.82)
 
-                        Text("Therapie, Aufgaben, Notizen, Fotos und Rückblicke – ruhig organisiert an einem Ort.")
+                        Text("Therapie, Betreutes Wohnen, Aufgaben, Notizen und Rückblicke – ruhig organisiert an einem Ort.")
                             .font(.body)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -270,7 +307,7 @@ struct OnboardingView: View {
                             }
 
                             PrimaryActionButton(
-                                title: "Therapiebegleiter starten",
+                                title: "Kompass starten",
                                 icon: "arrow.right.circle.fill"
                             ) {
                                 store.data.profile.userName = userName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -335,7 +372,8 @@ struct DashboardView: View {
             TherapyScreen {
                 LazyVStack(spacing: store.data.dashboard.compactCards ? 10 : 18) {
                     if store.data.dashboard.welcomeFirst && store.data.dashboard.visibleCards.contains(.welcome) { PersonalWelcomeCard() }
-                    if store.data.dashboard.showFeatureLinks { FeatureHubLinks() }
+                    QuietStatusBanner()
+                    QuickCaptureCard()
                     if store.data.dashboard.showAIImpulse && store.data.aiSettings.enabled && store.data.suggestionsEnabled != false { BuddySuggestionsCard(controller: store.aiController) }
                     ForEach(store.data.dashboard.visibleCards.filter { !(store.data.dashboard.welcomeFirst && $0 == .welcome) }) { card in
                         dashboardCard(card)
@@ -353,6 +391,7 @@ struct DashboardView: View {
                     if store.data.dashboard.visibleCards.isEmpty {
                         ContentUnavailableView("Deine Heute-Seite", systemImage: "slider.horizontal.3", description: Text("Wähle deine Karten über „Heute gestalten“."))
                     }
+                    if store.data.dashboard.showFeatureLinks { EverydayToolsSection().padding(.top, 6) }
                     HStack(spacing: 10) {
                         Button("Heute gestalten", systemImage: "slider.horizontal.3") { customize = true }
                             .accessibilityIdentifier("today.customize")
@@ -368,10 +407,13 @@ struct DashboardView: View {
             .sheet(isPresented: $customize) { DashboardCustomizationView(preferences: store.data.dashboard) }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { NavigationLink { EmergencyPlanView() } label: { Label("Notfallplan", systemImage: "lifepreserver.fill") }.tint(.red) }
+                ToolbarItem(placement: .topBarLeading) { QuietToolbarButton() }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button("Heute gestalten", systemImage: "slider.horizontal.3") { customize = true }
                         Button("Wochenaufgaben", systemImage: "checklist") { showTasks = true }
+                        Button("Mitteilungen & Wecker", systemImage: "moon.zzz") { store.notificationQuietCenter = true }
+                        Button("Betreutes Wohnen", systemImage: "house") { store.selectedTab = TherapyTab.assistedLiving }
                         Button("Alle Funktionen", systemImage: "square.grid.3x3.fill") { store.selectedTab = TherapyTab.search }
                     } label: { Label("Mehr", systemImage: "ellipsis") }
                     .accessibilityIdentifier("today.menu")
@@ -412,6 +454,7 @@ struct DashboardView: View {
         case .showers: ShowerTodayCard()
         case .methods: MethodsHomeCard()
         case .appointment: TherapyAppointmentCard()
+        case .assistedLiving: AssistedLivingHomeCard()
         case .discussion: TherapyDiscussionCard()
         case .checkIns: CompanionTodayCard()
         case .routines: TodayRoutinesCard { occurrence in routineToComplete = occurrence; confirmRoutineCompletion = true }
@@ -591,7 +634,7 @@ struct TherapyCalendarView: View {
             .padding(8)
             .frame(maxWidth: .infinity)
         }
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .therapyGlass(in: RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 
     private var selectedDayCard: some View {
@@ -1183,7 +1226,12 @@ struct SettingsView: View {
                         TherapySettingsLink(title: "Meine Entwürfe", icon: "square.and.pencil", tint: .orange, value: "\(store.data.editorDrafts.count)") { EditorDraftListView() }
                     }
 
+                    TherapySettingsSection(title: "Betreutes Wohnen") {
+                        TherapySettingsLink(title: "BeWo-Einstellungen", icon: "house.fill", subtitle: "Betreuung, regelmäßige Termine, Erinnerungen", tint: .brown) { AssistedLivingSettingsView() }
+                    }
+
                     TherapySettingsSection(title: "Alltag & Erinnerungen") {
+                        TherapySettingsLink(title: "Mitteilungen & Wecker", icon: "moon.zzz.fill", subtitle: "Ruhe, Stummschalten, alle kommenden Erinnerungen", tint: .indigo, value: QuietPolicy.globalPause(store.data.quietMode) == nil ? nil : "Ruhe") { QuietCenterView() }
                         TherapySettingsLink(title: "Routinen", icon: "repeat", tint: .green, value: "\(store.data.routines.count)") { RoutineHubView() }
                         TherapySettingsLink(title: "Duschtage", icon: "shower.fill", tint: .cyan) { ShowerDaysView() }
                         TherapySettingsLink(title: "Wecker & Aufstehen", icon: "alarm.fill", tint: .orange) { WakeAlarmHubView() }
@@ -1192,8 +1240,8 @@ struct SettingsView: View {
                     }
 
                     TherapySettingsSection(title: "Gestaltung") {
-                        TherapySettingsLink(title: "Darstellung", icon: "paintpalette.fill", tint: .purple, value: store.data.accentTheme.title) {
-                            TherapySettingsPage(title: "Darstellung") { AppearanceCard() }
+                        TherapySettingsLink(title: "Darstellung & Liquid Glass", icon: "paintpalette.fill", tint: .purple, value: store.data.surface.style.title) {
+                            TherapySettingsPage(title: "Darstellung & Glas") { AppearanceCard() }
                         }
                         TherapySettingsLink(title: "Startseite & Widgets", icon: "square.grid.2x2.fill", tint: .teal) {
                             TherapySettingsPage(title: "Startseite & Widgets") { HomeAndWidgetSettingsCard() }
@@ -1224,7 +1272,7 @@ struct SettingsView: View {
 
                     VStack(spacing: 4) {
                         TherapyLogoMark(size: 36, glow: false)
-                        Text("Therapie \(TherapyDesign.appVersion)").font(.caption.weight(.semibold))
+                        Text("\(TherapyDesign.appName) \(TherapyDesign.appVersion)").font(.caption.weight(.semibold))
                         Text("Mit Sorgfalt für dich gemacht.").font(.caption2)
                     }
                     .foregroundStyle(.secondary)

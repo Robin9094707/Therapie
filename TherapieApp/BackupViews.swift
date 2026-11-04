@@ -268,7 +268,7 @@ struct BackupCenterView: View {
     private var filesCard: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
-                SectionHeader(title: "Dein Ordner in Dateien", icon: "folder.fill", subtitle: "Auf meinem iPhone → Therapie → Therapiedaten")
+                SectionHeader(title: "Dein Ordner in Dateien", icon: "folder.fill", subtitle: "Auf meinem iPhone → Kompass → Therapiedaten")
                 Text("Hier liegen deine Datendatei, Anhänge und lesbaren Einträge. Du kannst den Ordner manuell kopieren, auch wenn die App nicht mehr startet.").font(.subheadline)
                 Text(store.readableFileStatus).font(.caption).foregroundStyle(.secondary)
                 Button("Lesbare Dateien jetzt aktualisieren", systemImage: "arrow.clockwise") { store.refreshReadableFiles() }.buttonStyle(.glass).disabled(busy != nil || store.loadError != nil)

@@ -18,7 +18,7 @@ final class TherapieUITests: XCTestCase {
                        "The SwiftUI viewport must fill the native iPhone window, including safe areas.")
         XCTAssertGreaterThan(screen.height, 700, "A modern iPhone must not use a legacy 480/568-point viewport.")
         capture("Dashboard portrait")
-        for tab in ["Therapie", "Alltag", "Verlauf"] {
+        for tab in ["Therapie", "BeWo", "Verlauf"] {
             let button = app.tabBars.buttons[tab]
             XCTAssertTrue(button.waitForExistence(timeout: 5))
             button.tap()

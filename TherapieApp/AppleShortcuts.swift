@@ -25,7 +25,7 @@ struct OpenTherapyPageIntent: AppIntent {
     init() {}
     init(page: TherapyShortcutPage) { self.page = page }
     func perform() async throws -> some IntentResult {
-        UserDefaults.standard.set("page|" + page.rawValue, forKey: "therapy.apple.shortcut")
+        UserDefaults.standard.set("page|" + page.rawValue, forKey: "therapy.apple.shortcut"); TherapyIntentSignal.post()
         return .result()
     }
 }
@@ -103,7 +103,7 @@ struct OpenEmergencyShortcutIntent: AppIntent {
     static var title: LocalizedStringResource = "Notfallplan öffnen"
     static var openAppWhenRun = true
     func perform() async throws -> some IntentResult {
-        UserDefaults.standard.set("page|emergency", forKey:"therapy.apple.shortcut")
+        UserDefaults.standard.set("page|emergency", forKey:"therapy.apple.shortcut"); TherapyIntentSignal.post()
         return .result()
     }
 }
@@ -112,7 +112,7 @@ struct OpenMedicalPassShortcutIntent: AppIntent {
     static var title: LocalizedStringResource = "Therapiepass öffnen"
     static var openAppWhenRun = true
     func perform() async throws -> some IntentResult {
-        UserDefaults.standard.set("page|medicalpass", forKey:"therapy.apple.shortcut")
+        UserDefaults.standard.set("page|medicalpass", forKey:"therapy.apple.shortcut"); TherapyIntentSignal.post()
         return .result()
     }
 }
@@ -121,7 +121,7 @@ struct OpenAlarmsShortcutIntent: AppIntent {
     static var title: LocalizedStringResource = "Wecker öffnen"
     static var openAppWhenRun = true
     func perform() async throws -> some IntentResult {
-        UserDefaults.standard.set("page|alarms", forKey:"therapy.apple.shortcut")
+        UserDefaults.standard.set("page|alarms", forKey:"therapy.apple.shortcut"); TherapyIntentSignal.post()
         return .result()
     }
 }
@@ -130,7 +130,7 @@ struct OpenMethodsShortcutIntent: AppIntent {
     static var title: LocalizedStringResource = "Methoden öffnen"
     static var openAppWhenRun = true
     func perform() async throws -> some IntentResult {
-        UserDefaults.standard.set("page|methods", forKey:"therapy.apple.shortcut")
+        UserDefaults.standard.set("page|methods", forKey:"therapy.apple.shortcut"); TherapyIntentSignal.post()
         return .result()
     }
 }
@@ -139,7 +139,7 @@ struct OpenGroundingShortcutIntent: AppIntent {
     static var title: LocalizedStringResource = "Sinnesübung starten"
     static var openAppWhenRun = true
     func perform() async throws -> some IntentResult {
-        UserDefaults.standard.set("page|grounding", forKey:"therapy.apple.shortcut")
+        UserDefaults.standard.set("page|grounding", forKey:"therapy.apple.shortcut"); TherapyIntentSignal.post()
         return .result()
     }
 }
@@ -148,7 +148,7 @@ struct OpenShowersShortcutIntent: AppIntent {
     static var title: LocalizedStringResource = "Duschtage öffnen"
     static var openAppWhenRun = true
     func perform() async throws -> some IntentResult {
-        UserDefaults.standard.set("page|showers", forKey:"therapy.apple.shortcut")
+        UserDefaults.standard.set("page|showers", forKey:"therapy.apple.shortcut"); TherapyIntentSignal.post()
         return .result()
     }
 }
@@ -157,7 +157,7 @@ struct OpenRoutinesShortcutIntent: AppIntent {
     static var title: LocalizedStringResource = "Routinen öffnen"
     static var openAppWhenRun = true
     func perform() async throws -> some IntentResult {
-        UserDefaults.standard.set("page|routines", forKey:"therapy.apple.shortcut")
+        UserDefaults.standard.set("page|routines", forKey:"therapy.apple.shortcut"); TherapyIntentSignal.post()
         return .result()
     }
 }
@@ -166,7 +166,7 @@ struct OpenTodayShortcutIntent: AppIntent {
     static var title: LocalizedStringResource = "Heute öffnen"
     static var openAppWhenRun = true
     func perform() async throws -> some IntentResult {
-        UserDefaults.standard.set("page|today", forKey:"therapy.apple.shortcut")
+        UserDefaults.standard.set("page|today", forKey:"therapy.apple.shortcut"); TherapyIntentSignal.post()
         return .result()
     }
 }
@@ -175,7 +175,7 @@ struct OpenTasksShortcutIntent: AppIntent {
     static var title: LocalizedStringResource = "Aufgaben öffnen"
     static var openAppWhenRun = true
     func perform() async throws -> some IntentResult {
-        UserDefaults.standard.set("page|reminders", forKey:"therapy.apple.shortcut")
+        UserDefaults.standard.set("page|reminders", forKey:"therapy.apple.shortcut"); TherapyIntentSignal.post()
         return .result()
     }
 }
@@ -184,7 +184,7 @@ struct OpenSessionShortcutIntent: AppIntent {
     static var title: LocalizedStringResource = "Therapie-Timer öffnen"
     static var openAppWhenRun = true
     func perform() async throws -> some IntentResult {
-        UserDefaults.standard.set("page|session", forKey:"therapy.apple.shortcut")
+        UserDefaults.standard.set("page|session", forKey:"therapy.apple.shortcut"); TherapyIntentSignal.post()
         return .result()
     }
 }

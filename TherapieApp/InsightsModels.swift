@@ -155,7 +155,12 @@ struct CompanionAlarmSlot: Equatable, Identifiable {
     var route: String
 }
 enum CompanionAlarmPlanner {
+    /// Alarms the app may hand to AlarmKit: every planned alarm that quiet mode does not silence.
     static func candidates(_ data: AppData, now: Date = Date(), calendar: Calendar = .current) -> [CompanionAlarmSlot] {
+        rawCandidates(data, now: now, calendar: calendar).filter { QuietPolicy.allows($0, settings: data.quietMode, calendar: calendar) }
+    }
+    /// Every planned alarm before quiet mode, used by the reminder overview to show what is silenced.
+    static func rawCandidates(_ data: AppData, now: Date = Date(), calendar: Calendar = .current) -> [CompanionAlarmSlot] {
         var slots = RoutinePlanner.slots(data: data, now: now.addingTimeInterval(-180 * 60), calendar: calendar).compactMap { slot -> CompanionAlarmSlot? in
             guard let routine = data.routines.first(where: { $0.id == slot.occurrence.routineID }), routine.urgentAlarm else { return nil }
             let detail = routine.times.first { $0.id == slot.occurrence.timeID }?.title ?? ""
@@ -218,6 +223,11 @@ enum CompanionAlarmPlanner {
             }
         }
         slots += WakePlanner.slots(data: data, now: now, calendar: calendar)
+        if data.assistedLivingSettings.alarmEnabled {
+            for slot in AssistedLivingPlanner.reminderSlots(data, now: now, calendar: calendar) {
+                slots.append(.init(id: slot.id.replacingOccurrences(of: "therapy.bewo.", with: "bewo."), group: "bewo", fireAt: slot.fireAt, title: slot.title, route: slot.route))
+            }
+        }
         return slots.sorted { $0.fireAt == $1.fireAt ? $0.id < $1.id : $0.fireAt < $1.fireAt }
     }
     static func admitted(_ all: [CompanionAlarmSlot], budget: Int = 24) -> [CompanionAlarmSlot] {

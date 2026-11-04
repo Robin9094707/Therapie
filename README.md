@@ -1,3 +1,12 @@
+## Update 6000.0.0 · Kompass 6
+
+- Therapie heißt jetzt **Kompass** (Bundle-ID und Datenordner unverändert). Tabs: Heute, Therapie, BeWo, Verlauf und Suche; Alltag liegt auf Heute.
+- **Mitteilungen & Wecker**: Ruhe (z. B. 24 Stunden) mit vorzeitigem Ende, Bereiche und einzelne Erinnerungen stummschalten, tägliche Ruhezeiten, Übersicht aller kommenden Mitteilungen und AlarmKit-Wecker.
+- **Betreutes Wohnen**: Termine (auch regelmäßig), Gesprächsthemen, Gesprächsbegleitung, Absprachen, Ziele, Erinnerungen.
+- **Sanftes Glas** als ruhiger Standard; Deckkraft, Tönung und Hintergrund einstellbar. „Schnell festhalten“ auf Heute.
+- Fixes: aktueller Stand sofort nach Wecker-Stopp; keine überlappenden Symbole in der Live-Aktivität.
+- Daten: Schema 19 mit additiven Defaults, einmalige Kopie `therapy-data.pre-6000.json`. Details in `UPDATE-6000.md`.
+
 ## Update 5000.0.0 · Therapie 5
 
 - Neue Struktur: Heute, Therapie, Alltag, Verlauf und der native Such-Tab mit einem Verzeichnis aller Funktionen; Profil über den Avatar oben rechts. Mehr Symbole, durchgehend Liquid Glass.

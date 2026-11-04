@@ -12,6 +12,7 @@ struct OpenRoutineIntent: LiveActivityIntent {
     init(routineID: UUID) { self.routineID = routineID.uuidString }
     func perform() async throws -> some IntentResult {
         UserDefaults.standard.set(routineID, forKey: "therapy.routine.open")
+        TherapyIntentSignal.post()
         return .result()
     }
 }
@@ -23,6 +24,7 @@ struct OpenCompanionReminderIntent: LiveActivityIntent {
     init(route: String) { self.route = route }
     func perform() async throws -> some IntentResult {
         UserDefaults.standard.set(route, forKey: "therapy.companion.open")
+        TherapyIntentSignal.post()
         return .result()
     }
 }

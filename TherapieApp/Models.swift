@@ -153,7 +153,7 @@ struct TherapySessionReflection: Identifiable, Codable, Equatable {
 }
 
 struct AppData: Codable, Equatable {
-    var schemaVersion = 18
+    var schemaVersion = 19
     var profile = UserProfile()
     var schedule = TherapySchedule()
     var preferences = AppPreferences()
@@ -207,10 +207,18 @@ struct AppData: Codable, Equatable {
     var buddySuggestions: [BuddySuggestion] = []
     var suggestionsEnabled: Bool?
     var lastSuggestionAttempt: Date?
+    // Kompass 6 (schema 19): quiet mode, surface preferences and Betreutes Wohnen.
+    var quietMode = QuietModeSettings()
+    var surface = SurfacePreferences()
+    var assistedLivingSettings = AssistedLivingSettings()
+    var assistedLivingAppointments: [AssistedLivingAppointment] = []
+    var assistedLivingTopics: [AssistedLivingTopic] = []
+    var assistedLivingGoals: [AssistedLivingGoal] = []
 
     init() {}
 
     enum CodingKeys: String, CodingKey {
+        case quietMode, surface, assistedLivingSettings, assistedLivingAppointments, assistedLivingTopics, assistedLivingGoals
         case medicalPass, appleIntegration, wakeAlarms, wakeRuns
         case copingMethods, emergencyPlan, groundingPractices, showerEntries, showerPreferences, routineDeferrals
         case entryLocations, captureEntryLocation, buddySuggestions, suggestionsEnabled, lastSuggestionAttempt
@@ -225,10 +233,16 @@ struct AppData: Codable, Equatable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let version = try c.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
-        guard (1...18).contains(version) else {
+        guard (1...19).contains(version) else {
             throw DecodingError.dataCorruptedError(forKey: .schemaVersion, in: c,
                                                    debugDescription: "Diese Daten benötigen eine neuere App-Version.")
         }
+        quietMode = try c.value(.quietMode, QuietModeSettings())
+        surface = try c.value(.surface, SurfacePreferences())
+        assistedLivingSettings = try c.value(.assistedLivingSettings, AssistedLivingSettings())
+        assistedLivingAppointments = try c.value(.assistedLivingAppointments, [])
+        assistedLivingTopics = try c.value(.assistedLivingTopics, [])
+        assistedLivingGoals = try c.value(.assistedLivingGoals, [])
         medicalPass = try c.decodeIfPresent(MedicalPass.self, forKey: .medicalPass) ?? MedicalPass()
         appleIntegration = try c.decodeIfPresent(AppleIntegrationPreferences.self, forKey: .appleIntegration) ?? AppleIntegrationPreferences()
         wakeAlarms = try c.decodeIfPresent([WakeAlarm].self, forKey: .wakeAlarms) ?? []
@@ -256,12 +270,16 @@ struct AppData: Codable, Equatable {
             let position = dashboard.cardOrder.firstIndex(of: HomeCard.appointment.rawValue).map { $0 + 1 } ?? 0
             dashboard.cardOrder.insert(HomeCard.discussion.rawValue, at: position)
         }
+        if version < 19, !dashboard.cardOrder.contains(HomeCard.assistedLiving.rawValue) {
+            let position = dashboard.cardOrder.firstIndex(of: HomeCard.appointment.rawValue).map { $0 + 1 } ?? 0
+            dashboard.cardOrder.insert(HomeCard.assistedLiving.rawValue, at: min(position, dashboard.cardOrder.count))
+        }
         therapyDiscussionAcknowledgedIDs = try c.decodeIfPresent([String].self, forKey: .therapyDiscussionAcknowledgedIDs) ?? []
         wellbeingPreferences = try c.decodeIfPresent(WellbeingPreferences.self, forKey: .wellbeingPreferences) ?? WellbeingPreferences()
         accentTheme = try c.decodeIfPresent(AppAccent.self, forKey: .accentTheme) ?? .indigo
         aiSettings = try c.decodeIfPresent(AIBuddySettings.self, forKey: .aiSettings) ?? AIBuddySettings()
         aiMessages = try c.decodeIfPresent([AIBuddyMessage].self, forKey: .aiMessages) ?? []
-        schemaVersion = 18
+        schemaVersion = 19
         profile = try c.decode(UserProfile.self, forKey: .profile)
         schedule = try c.decodeIfPresent(TherapySchedule.self, forKey: .schedule) ?? TherapySchedule()
         preferences = try c.decodeIfPresent(AppPreferences.self, forKey: .preferences) ?? AppPreferences()

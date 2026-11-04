@@ -28,6 +28,11 @@ struct ReminderCenterView: View {
     }
     var body: some View {
         Form {
+            Section {
+                NavigationLink { QuietCenterView() } label: {
+                    Label { VStack(alignment: .leading) { Text("Mitteilungen & Wecker"); Text("Ruhe einschalten, Bereiche stummschalten, alles Kommende sehen").font(.caption).foregroundStyle(.secondary) } } icon: { Image(systemName: "moon.zzz.fill").foregroundStyle(.indigo) }
+                }
+            }
             Section("Aufgaben ohne eigene Einstellung") {
                 Toggle("Regelmäßig an offene Aufgaben erinnern", isOn: $store.data.schedule.taskReminderEnabled)
                 if store.data.schedule.taskReminderEnabled {

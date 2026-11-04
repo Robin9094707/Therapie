@@ -28,30 +28,61 @@ struct AppearanceCard: View {
     @State private var showWhatsNew = false
 
     var body: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: 16) {
-                SectionHeader(title: "Deine Oberfläche", icon: "paintpalette.fill",
-                              subtitle: "So übersichtlich und ruhig, wie du es brauchst.")
-                Picker("Darstellung", selection: $appearance) {
-                    ForEach(TherapyAppearance.allCases) { option in
-                        Text(option.title).tag(option.rawValue)
+        VStack(spacing: 18) {
+            GlassCard(emphasized: true) {
+                VStack(alignment: .leading, spacing: 16) {
+                    SectionHeader(title: "Liquid Glass", icon: "circle.lefthalf.filled", subtitle: "Wie viel Glas du sehen möchtest – live ausprobieren.")
+                    SurfacePreviewTile()
+                    HStack(spacing: 10) {
+                        ForEach(SurfaceStyle.allCases) { style in styleButton(style) }
                     }
+                    ScrollView(.horizontal) {
+                        HStack(spacing: 8) {
+                            ForEach(SurfacePreferences.presets.indices, id: \.self) { index in
+                                let preset = SurfacePreferences.presets[index]
+                                Button(preset.title) { withAnimation(.snappy) { store.data.surface = preset.value } }
+                                    .buttonStyle(.glass)
+                                    .font(.subheadline.weight(.semibold))
+                            }
+                        }
+                    }
+                    .scrollIndicators(.hidden)
+                    if store.data.surface.style != .solid {
+                        slider("Deckkraft der Karten", value: $store.data.surface.coverage, low: "Durchsichtig", high: "Deckend", icon: "square.fill.on.square.fill")
+                    }
+                    slider("Farbtönung", value: $store.data.surface.tintStrength, low: "Zart", high: "Kräftig", icon: "paintbrush.fill")
+                    slider("Farbverlauf im Hintergrund", value: $store.data.surface.backgroundIntensity, low: "Fast weiß", high: "Lebendig", icon: "circle.hexagongrid.fill")
+                    Toggle("Glas reagiert auf Berührung", isOn: $store.data.surface.interactiveGlass)
+                    Toggle("Runde, weiche Karten", isOn: $store.data.surface.roundedCards)
+                    Text("„Sanftes Glas“ behält die Glas-Kanten, deckt den Hintergrund aber ruhig ab. Für vollständig deckende Flächen kannst du auch „Matt“ wählen oder in den iPhone-Bedienungshilfen „Transparenz reduzieren“ einschalten.")
+                        .font(.footnote).foregroundStyle(.secondary)
                 }
-                .pickerStyle(.menu)
-                Picker("Hauptfarbe", selection: $store.data.accentTheme) { ForEach(AppAccent.allCases) { Text($0.title).tag($0) } }
-                Text("Text und Hintergründe folgen weiterhin der gut lesbaren iPhone-Darstellung.").font(.caption).foregroundStyle(.secondary)
-                Toggle("Ruhige Oberfläche", isOn: $calmInterface)
-                Toggle("Feine Haptik", isOn: $haptics)
-                Toggle("Konfetti bei erledigten Aufgaben", isOn: $confetti)
-                Text("Bei reduzierter Bewegung erscheint eine ruhige Bestätigung statt Konfetti.").font(.caption).foregroundStyle(.secondary)
-                Text("Die ruhige Oberfläche dämpft Farbverlauf und Glastönung. Für vollständig deckende Flächen: iPhone-Einstellungen › Bedienungshilfen › Anzeige & Textgröße › Transparenz reduzieren. Die Schriftgröße folgt deinen iPhone-Einstellungen.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                LabeledContent("Version", value: TherapyDesign.appVersion)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                Button("Neu in dieser Version", systemImage: "sparkles") { showWhatsNew = true }
-                    .buttonStyle(.glass)
+            }
+            GlassCard {
+                VStack(alignment: .leading, spacing: 16) {
+                    SectionHeader(title: "Farbe & Helligkeit", icon: "paintpalette.fill", subtitle: "So übersichtlich und ruhig, wie du es brauchst.")
+                    Picker("Darstellung", selection: $appearance) {
+                        ForEach(TherapyAppearance.allCases) { option in Text(option.title).tag(option.rawValue) }
+                    }
+                    .pickerStyle(.segmented)
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 64), spacing: 10)], spacing: 10) {
+                        ForEach(AppAccent.allCases) { accent in accentButton(accent) }
+                    }
+                    Toggle("Ruhige Oberfläche", isOn: $calmInterface)
+                    Text("Die ruhige Oberfläche dämpft zusätzlich Farbverlauf und Glastönung. Die Schriftgröße folgt deinen iPhone-Einstellungen.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+            GlassCard {
+                VStack(alignment: .leading, spacing: 14) {
+                    SectionHeader(title: "Gefühl", icon: "hand.tap.fill", subtitle: "Haptik und kleine Feiern.")
+                    Toggle("Feine Haptik", isOn: $haptics)
+                    Toggle("Konfetti bei erledigten Aufgaben", isOn: $confetti)
+                    Text("Bei reduzierter Bewegung erscheint eine ruhige Bestätigung statt Konfetti.").font(.caption).foregroundStyle(.secondary)
+                    LabeledContent("Version", value: TherapyDesign.appVersion).font(.footnote).foregroundStyle(.secondary)
+                    Button("Neu in dieser Version", systemImage: "sparkles") { showWhatsNew = true }
+                        .buttonStyle(.glass)
+                }
             }
         }
         .sheet(isPresented: $showWhatsNew) { WhatsNewView() }
@@ -59,6 +90,86 @@ struct AppearanceCard: View {
         .onChange(of: calmInterface) { _, _ in store.refreshReadableFiles() }
         .onChange(of: haptics) { _, _ in store.refreshReadableFiles() }
         .onChange(of: confetti) { _, _ in store.refreshReadableFiles() }
+    }
+
+    private func styleButton(_ style: SurfaceStyle) -> some View {
+        let selected = store.data.surface.style == style
+        return Button {
+            TherapyEffects.shared.light()
+            withAnimation(.snappy) { store.data.surface.style = style }
+        } label: {
+            VStack(spacing: 6) {
+                Image(systemName: style.symbol).font(.title3.weight(.semibold))
+                Text(style.title).font(.caption.weight(.bold)).lineLimit(1).minimumScaleFactor(0.8)
+                Text(style.subtitle).font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity, minHeight: 92)
+            .padding(8)
+            .therapyInsetSurface(selected: selected)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(TherapyPressStyle())
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func accentButton(_ accent: AppAccent) -> some View {
+        let selected = store.data.accentTheme == accent
+        return Button {
+            TherapyEffects.shared.light()
+            store.data.accentTheme = accent
+        } label: {
+            VStack(spacing: 6) {
+                Circle().fill(accent.color.gradient)
+                    .frame(width: 34, height: 34)
+                    .overlay { if selected { Image(systemName: "checkmark").font(.caption.weight(.heavy)).foregroundStyle(.white) } }
+                    .overlay { Circle().strokeBorder(.white.opacity(0.5), lineWidth: selected ? 2 : 0) }
+                Text(accent.title).font(.caption2.weight(.semibold)).foregroundStyle(.primary).lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(TherapyPressStyle())
+        .accessibilityLabel(accent.title)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func slider(_ title: String, value: Binding<Double>, low: String, high: String, icon: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Label(title, systemImage: icon).font(.subheadline.weight(.semibold))
+                Spacer()
+                Text("\(Int((value.wrappedValue * 100).rounded())) %").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+            }
+            Slider(value: value, in: 0...1)
+            HStack { Text(low); Spacer(); Text(high) }.font(.caption2).foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// A small live sample of a card, chip and tile with the current surface settings.
+private struct SurfacePreviewTile: View {
+    var body: some View {
+        ZStack {
+            AppBackground().clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    TherapyIconTile(icon: "leaf.fill", size: 30, tint: .teal)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Nächste Therapie").font(.subheadline.weight(.bold))
+                        Text("Dienstag · 15:00").font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
+                HStack(spacing: 8) {
+                    TherapyChip(text: "2 Routinen", icon: "repeat", tint: .green)
+                    TherapyChip(text: "BeWo morgen", icon: "house.fill", tint: .orange)
+                }
+            }
+            .padding(14)
+            .therapyGlass(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .padding(14)
+        }
+        .frame(height: 150)
+        .accessibilityHidden(true)
     }
 }
 

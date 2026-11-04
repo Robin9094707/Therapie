@@ -26,7 +26,7 @@ struct ModelChecks {
         fixture["schemaVersion"] = 1
         for key in ["moodCheckIns", "batteryPoints", "weekReviews", "wellnessSettings", "therapyFolders", "therapyTopics", "therapyGoals", "sessionTemplates", "currentSession", "sessionHistory", "sessionPreferences", "weeklyEnergyReviews", "reminderPreferences"] { fixture.removeValue(forKey: key) }
         let migrated = try decoder.decode(AppData.self, from: JSONSerialization.data(withJSONObject: fixture))
-        try expect(migrated.schemaVersion == 18, "Schema migration")
+        try expect(migrated.schemaVersion == 19, "Schema migration")
         try expect(migrated.entryLocations.isEmpty && migrated.buddySuggestions.isEmpty && migrated.captureEntryLocation == nil && migrated.suggestionsEnabled == nil, "Legacy defaults never invent locations or suggestions")
         try expect(migrated.profile == old.profile && migrated.notes == old.notes, "Names and notes preserved")
         try expect(migrated.weeklyTasks == old.weeklyTasks && migrated.media == old.media, "Tasks and media paths preserved")

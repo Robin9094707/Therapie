@@ -153,6 +153,17 @@ struct BackupChecks {
         data.aiMessages[0].mediaIDs = data.media.map(\.id)
         data.aiConversations[0].draftMediaIDs = data.media.map(\.id)
         data.routines[0].repeatUntilDone = false
+        // Kompass 6 (schema 19): quiet mode, glass preferences and Betreutes Wohnen.
+        QuietPolicy.pause(&data.quietMode, categories: [.tasks, .routines], until: supportClock.addingTimeInterval(86400), now: supportClock, note: "Ruhetag")
+        QuietPolicy.silence(&data.quietMode, key: "routine." + routine.id.uuidString, wholeSource: true, title: "Frühstück", category: .routines, until: nil, now: supportClock)
+        data.quietMode.quietHours.enabled = true; data.quietMode.mutedCategories = [.wellbeing]
+        data.surface.style = .glass; data.surface.coverage = 0.3; data.surface.tintStrength = 0.8
+        data.assistedLivingSettings.caregiverName = "Frau Beispiel"; data.assistedLivingSettings.alarmEnabled = true
+        data.assistedLivingSettings.regularVisits = [AssistedLivingRegularVisit(weekday: 3, hour: 10, anchor: supportClock)]
+        let bewoTopic = AssistedLivingTopic(createdAt: supportClock, title: "Post vom Jobcenter", category: .authorities, priority: 3)
+        data.assistedLivingTopics = [bewoTopic]
+        data.assistedLivingAppointments = [AssistedLivingAppointment(date: supportClock, title: "Hausbesuch", summary: "Antrag besprochen", agreements: [AssistedLivingAgreement(title: "Kopien machen")], topicIDs: [bewoTopic.id], createdAt: supportClock)]
+        data.assistedLivingGoals = [AssistedLivingGoal(createdAt: supportClock, title: "Post wöchentlich öffnen", steps: [AssistedLivingStep(title: "Briefkasten leeren", done: true)])]
         let archive = try BackupArchive.export(data: data, root: root, preferences: prefs, options: BackupOptions(), password: password, version: "3002.0.0")
         defer { try? fm.removeItem(at: archive.deletingLastPathComponent()) }
         let original = try Data(contentsOf: archive)
@@ -166,6 +177,8 @@ struct BackupChecks {
         try expect(prepared.manifest.data.showerEntries[1].markedWrongAt != nil && prepared.manifest.data.routineCompletions[0].markedWrong == true, "Schema-18 wrong-entry marks round-trip")
         try expect(prepared.manifest.data.aiSettings.thinking == "deep", "Therapie 5 AI thinking depth round-trips in the encrypted backup")
         defer { prepared.discard() }
+        try expect(prepared.manifest.data.quietMode == data.quietMode && prepared.manifest.data.surface == data.surface, "Kompass quiet mode and glass preferences round-trip")
+        try expect(prepared.manifest.data.assistedLivingSettings == data.assistedLivingSettings && prepared.manifest.data.assistedLivingTopics.map(\.id) == [bewoTopic.id] && prepared.manifest.data.assistedLivingAppointments[0].agreements.count == 1 && prepared.manifest.data.assistedLivingGoals.count == 1, "Betreutes Wohnen round-trips in the encrypted backup")
         try expect(try json(prepared.manifest.data) == json(data.portableSnapshot), "All AppData fields round-trip")
         try expect(prepared.manifest.data.dashboard == data.dashboard && prepared.manifest.data.archivePreferences == data.archivePreferences, "Encrypted restore retains cards, pins and archive settings")
         try expect(prepared.manifest.data.aiConversations[0].id == data.aiConversations[0].id && prepared.manifest.data.aiConversations[0].contextDays == 14 && prepared.manifest.data.guidedCheckIns[0].tags == ["Familie"] && prepared.manifest.data.hashtagCatalog == data.hashtagCatalog, "Encrypted backup restores linked chats, context and hashtags")
@@ -256,10 +269,10 @@ struct BackupChecks {
         prefs.apply(defaults)
         try expect(PortablePreferences.capture(defaults) == prefs, "Appearance, calm, haptics and confetti restored")
         var oldJSON = try JSONSerialization.jsonObject(with: BackupArchive.encoder().encode(data)) as! [String: Any]
-        for version in 1...17 {
+        for version in 1...18 {
             oldJSON["schemaVersion"] = version
             let migrated = try BackupArchive.decoder().decode(AppData.self, from: JSONSerialization.data(withJSONObject: oldJSON))
-            try expect(migrated.schemaVersion == 18 && migrated.notes.count == 1 && migrated.media[0].attachmentOmitted == nil, "Schema \(version) migrates for backups")
+            try expect(migrated.schemaVersion == 19 && migrated.notes.count == 1 && migrated.media[0].attachmentOmitted == nil, "Schema \(version) migrates for backups")
         }
         oldJSON["schemaVersion"] = 12; oldJSON.removeValue(forKey: "accentTheme"); oldJSON.removeValue(forKey: "wellbeingPreferences")
         for key in ["copingMethods", "emergencyPlan", "groundingPractices", "showerEntries"] { oldJSON.removeValue(forKey: key) }

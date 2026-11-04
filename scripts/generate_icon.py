@@ -39,16 +39,23 @@ d.rounded_rectangle((270, 270, 1778, 1778), radius=390,
 base = Image.alpha_composite(base, plate)
 mark_layer = Image.new("RGBA", (S, S), (0, 0, 0, 0))
 d = ImageDraw.Draw(mark_layer)
-points = []
-for i in range(1200):
-    t = i / 1199 * 2 * math.pi
-    denom = 1 + math.sin(t) ** 2
-    points.append((S / 2 + math.cos(t) / denom * 580,
-                   S / 2 + math.sin(t) * math.cos(t) / denom * 750))
-# Overlapping opaque discs give the continuous path smooth round joints.
-for x, y in points:
-    radius = 57
-    d.ellipse((x-radius, y-radius, x+radius, y+radius), fill=(255, 255, 255, 255))
+# Kompass: a calm ring and an upright needle whose north half is a leaf (growth), the south half glass.
+C = S / 2
+ring = 600
+d.ellipse((C - ring, C - ring, C + ring, C + ring), outline=(255, 255, 255, 255), width=56)
+d.ellipse((C - 26, C - ring - 26 + 28, C + 26, C - ring + 26 + 28), fill=(255, 255, 255, 255))
+def leaf(tip, base, width, steps=160):
+    left, right = [], []
+    for i in range(steps + 1):
+        t = i / steps
+        y = tip + (base - tip) * t
+        w = width * (math.sin(math.pi * t) ** 0.85) * (1 - 0.35 * t)
+        left.append((C - w, y)); right.append((C + w, y))
+    return left + right[::-1]
+d.polygon(leaf(C + 430, C - 10, 120), fill=(255, 255, 255, 115))
+d.polygon(leaf(C - 470, C + 10, 175), fill=(255, 255, 255, 255))
+d.line((C, C - 380, C, C - 40), fill=(120, 160, 230, 180), width=14)
+d.ellipse((C - 64, C - 64, C + 64, C + 64), fill=(70, 72, 160, 255), outline=(255, 255, 255, 255), width=20)
 base = Image.alpha_composite(base, mark_layer)
 
 # App Store icons must be opaque. Downsample for high-quality antialiasing.

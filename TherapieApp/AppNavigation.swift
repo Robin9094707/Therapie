@@ -1,19 +1,21 @@
 import SwiftUI
 
-// MARK: - Therapie 5 navigation
+// MARK: - Kompass 6 navigation
 //
-// Four calm tabs (Heute, Therapie, Alltag, Verlauf) plus the system search tab. Every feature of the app is
-// listed once in `TherapyFeature.catalog`, so the search tab, the hub grids and the AI share one directory and
-// nothing is buried in settings. Profile & settings open from the avatar button on every tab.
+// Four calm tabs (Heute, Therapie, BeWo, Verlauf) plus the system search tab. "Alltag" lives on Heute now, so
+// everything of the day is in one place. Every feature is listed once in `TherapyFeature.catalog`, so the search
+// tab, the hub grids and the AI share one directory. Profile & settings open from the avatar on every tab.
 
 /// Tab identities. 0–4 keep the meaning they had before Therapie 5, because deep links, widgets and
-/// notification routes still select them.
+/// notification routes still select them. 6 (Alltag) now shows Heute.
 enum TherapyTab {
     static let today = 0
     static let therapy = 2
     static let history = 3
-    static let everyday = 6
+    static let everyday = 0
     static let search = 7
+    static let assistedLiving = 8
+    static let all = [today, therapy, assistedLiving, history, search]
 }
 
 struct MainTabView: View {
@@ -29,10 +31,11 @@ struct MainTabView: View {
                 NavigationStack { TherapyHubView().therapyRootToolbar() }
                     .safeAreaInset(edge: .bottom) { UndoChangesButton() }
             }
-            Tab("Alltag", systemImage: "figure.mind.and.body", value: TherapyTab.everyday) {
-                NavigationStack { EverydayHubView().therapyRootToolbar() }
+            Tab("BeWo", systemImage: "house.fill", value: TherapyTab.assistedLiving) {
+                NavigationStack { AssistedLivingHubView().therapyRootToolbar() }
                     .safeAreaInset(edge: .bottom) { UndoChangesButton() }
             }
+            .badge(assistedLivingBadge)
             Tab("Verlauf", systemImage: "clock.arrow.circlepath", value: TherapyTab.history) {
                 NavigationStack { HistoryHubView().therapyRootToolbar() }
                     .safeAreaInset(edge: .bottom) { UndoChangesButton() }
@@ -44,7 +47,18 @@ struct MainTabView: View {
         }
         .tabBarMinimizeBehavior(TherapyDesign.isUITesting ? .never : .onScrollDown)
         .tabViewBottomAccessory(isEnabled: store.data.currentSession != nil) { SessionMiniPlayer() }
-        .onAppear { if ![TherapyTab.today, TherapyTab.therapy, TherapyTab.history, TherapyTab.everyday, TherapyTab.search].contains(store.selectedTab) { store.selectedTab = TherapyTab.today } }
+        .onAppear { normalizeTab() }
+        .onChange(of: store.selectedTab) { _, _ in normalizeTab() }
+    }
+
+    /// A BeWo visit today shows a small badge on the tab.
+    private var assistedLivingBadge: Int {
+        guard let next = AssistedLivingPlanner.next(store.data) else { return 0 }
+        return Calendar.current.isDateInToday(next.date) ? 1 : 0
+    }
+
+    private func normalizeTab() {
+        if !TherapyTab.all.contains(store.selectedTab) { store.selectedTab = TherapyTab.today }
     }
 }
 
@@ -157,11 +171,12 @@ struct SessionMiniPlayer: View {
 /// their own stack (editors, wizards and settings that already had one).
 struct TherapyFeature: Identifiable {
     enum Area: String, CaseIterable, Identifiable {
-        case therapy, everyday, support, capture, history, settings
+        case therapy, assistedLiving, everyday, support, capture, history, settings
         var id: String { rawValue }
         var title: String {
             switch self {
             case .therapy: "Therapie"
+            case .assistedLiving: "Betreutes Wohnen"
             case .everyday: "Alltag planen"
             case .support: "Wenn es schwer wird"
             case .capture: "Festhalten"
@@ -172,6 +187,7 @@ struct TherapyFeature: Identifiable {
         var icon: String {
             switch self {
             case .therapy: "leaf.fill"
+            case .assistedLiving: "house.fill"
             case .everyday: "calendar.day.timeline.left"
             case .support: "lifepreserver.fill"
             case .capture: "square.and.pencil"
@@ -182,6 +198,7 @@ struct TherapyFeature: Identifiable {
         var tint: Color {
             switch self {
             case .therapy: .green
+            case .assistedLiving: .brown
             case .everyday: .orange
             case .support: .red
             case .capture: .blue
@@ -225,7 +242,14 @@ struct TherapyFeature: Identifiable {
         TherapyFeature(id: "medicalpass", title: "Therapiepass", subtitle: "Medikamente, Kontakte", icon: "person.text.rectangle.fill", tint: .teal, area: .therapy, keywords: "pass medikament kontakt arzt körper"),
         TherapyFeature(id: "weeklyReport", title: "Wochenbericht", subtitle: "PDF für die Stunde", icon: "printer.fill", tint: .gray, area: .therapy, keywords: "pdf drucken bericht teilen", opensAsSheet: true),
         TherapyFeature(id: "sessionSettings", title: "Timer & Live-Aktivität", subtitle: "Dynamic Island, Hinweise", icon: "timer.circle.fill", tint: .mint, area: .therapy, keywords: "dynamic island sperrbildschirm live aktivität mitteilung timer"),
+        // Betreutes Wohnen
+        TherapyFeature(id: "bewo", title: "BeWo-Überblick", subtitle: "Nächster Termin & Themen", icon: "house.fill", tint: .brown, area: .assistedLiving, keywords: "betreutes wohnen bewo ambulant betreuung betreuer hausbesuch termin"),
+        TherapyFeature(id: "bewoTopics", title: "Gesprächsthemen", subtitle: "Sammeln & besprechen", icon: "text.bubble.fill", tint: .orange, area: .assistedLiving, keywords: "thema themen gespräch bewo betreuung besprechen"),
+        TherapyFeature(id: "bewoHistory", title: "BeWo-Verlauf", subtitle: "Vergangene Termine", icon: "clock.arrow.circlepath", tint: .purple, area: .assistedLiving, keywords: "verlauf protokoll bewo termine vergangen"),
+        TherapyFeature(id: "bewoSettings", title: "BeWo-Einstellungen", subtitle: "Betreuung & Rhythmus", icon: "gearshape.fill", tint: .gray, area: .assistedLiving, keywords: "bewo betreuer telefon regelmäßig rhythmus erinnerung"),
         // Alltag
+        TherapyFeature(id: "quiet", title: "Mitteilungen & Wecker", subtitle: "Ruhe, Übersicht, Stumm", icon: "moon.zzz.fill", tint: .indigo, area: .everyday, keywords: "ruhe ruhemodus pause stumm wecker mitteilungen benachrichtigung nicht stören 24 stunden"),
+        TherapyFeature(id: "everyday", title: "Alltag", subtitle: "Routinen, Status & Hilfen", icon: "figure.mind.and.body", tint: .orange, area: .everyday, keywords: "alltag tag status routinen"),
         TherapyFeature(id: "routines", title: "Routinen", subtitle: "Abläufe & Erinnerungen", icon: "repeat", tint: .green, area: .everyday, keywords: "routine gewohnheit tablette medikament erinnerung"),
         TherapyFeature(id: "showers", title: "Duschtage", subtitle: "Ziel & Woche", icon: "shower.fill", tint: .cyan, area: .everyday, keywords: "duschen hygiene"),
         TherapyFeature(id: "alarms", title: "Wecker", subtitle: "Aufstehen & Aufgaben", icon: "alarm.fill", tint: .orange, area: .everyday, keywords: "wecker alarm aufstehen schlummern alarmkit"),
@@ -257,7 +281,7 @@ struct TherapyFeature: Identifiable {
         // Profil & Daten
         TherapyFeature(id: "settings", title: "Profil & Einstellungen", subtitle: "Alles an einem Ort", icon: "person.crop.circle.fill", tint: .indigo, area: .settings, keywords: "profil einstellungen name therapeut", opensAsSheet: true),
         TherapyFeature(id: "profile", title: "Akku & Befinden", subtitle: "Mein Befinden", icon: "heart.text.clipboard.fill", tint: .pink, area: .settings, keywords: "befinden akku profil"),
-        TherapyFeature(id: "appearance", title: "Darstellung", subtitle: "Farbe, Hell/Dunkel", icon: "paintpalette.fill", tint: .purple, area: .settings, keywords: "design farbe dunkel hell haptik konfetti"),
+        TherapyFeature(id: "appearance", title: "Darstellung & Glas", subtitle: "Liquid Glass, Farbe, Hell/Dunkel", icon: "paintpalette.fill", tint: .purple, area: .settings, keywords: "design farbe dunkel hell haptik konfetti glas liquid transparenz durchsichtig deckkraft"),
         TherapyFeature(id: "dashboard", title: "Heute gestalten", subtitle: "Karten & Reihenfolge", icon: "slider.horizontal.3", tint: .teal, area: .settings, keywords: "startseite karten anpassen", opensAsSheet: true),
         TherapyFeature(id: "widgets", title: "Widgets", subtitle: "Einrichten & Diagnose", icon: "square.grid.2x2.fill", tint: .blue, area: .settings, keywords: "widget home bildschirm", opensAsSheet: true),
         TherapyFeature(id: "wellness", title: "Stimmungsziele", subtitle: "Ziele & Freigaben", icon: "target", tint: .yellow, area: .settings, keywords: "ziel stimmung freigabe"),
@@ -283,6 +307,12 @@ struct TherapyFeatureDestination: View {
         case "medicalpass": MedicalPassView()
         case "weeklyReport": WeeklyPDFReportView()
         case "sessionSettings": SessionPreferencesView(controller: store.sessionController)
+        case "bewo": AssistedLivingHubView()
+        case "bewoTopics": AssistedLivingTopicsView()
+        case "bewoHistory": AssistedLivingHistoryView()
+        case "bewoSettings": AssistedLivingSettingsView()
+        case "quiet": QuietCenterView()
+        case "everyday": EverydayHubView()
         case "routines": RoutineHubView()
         case "showers": ShowerDaysView()
         case "alarms": WakeAlarmHubView()
@@ -310,7 +340,7 @@ struct TherapyFeatureDestination: View {
         case "drafts": EditorDraftListView()
         case "settings": SettingsView(showsCloseButton: true)
         case "profile": BuddyWellbeingProfileView()
-        case "appearance": TherapySettingsPage(title: "Darstellung") { AppearanceCard() }
+        case "appearance": TherapySettingsPage(title: "Darstellung & Glas") { AppearanceCard() }
         case "dashboard": DashboardCustomizationView(preferences: store.data.dashboard)
         case "widgets": WidgetSetupHelpView()
         case "wellness": WellnessSettingsView()
@@ -466,7 +496,34 @@ struct TherapySearchView: View {
                         .therapyGlass(in: RoundedRectangle(cornerRadius: TherapyDesign.tileRadius + 4, style: .continuous))
                     }
                 }
-                if !trimmed.isEmpty && visibleFeatures.isEmpty && foundRecords.isEmpty {
+                let bewo = bewoMatches
+                if !bewo.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label("Betreutes Wohnen", systemImage: "house.fill")
+                            .font(.system(.headline, design: .rounded))
+                            .padding(.horizontal, 4)
+                        VStack(spacing: 0) {
+                            ForEach(bewo, id: \.id) { match in
+                                Button { store.selectedTab = TherapyTab.assistedLiving } label: {
+                                    HStack(spacing: 12) {
+                                        TherapyIconTile(icon: match.icon, size: 32, tint: .brown)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(match.title).font(.subheadline.weight(.semibold)).foregroundStyle(.primary).lineLimit(1)
+                                            Text(match.subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                                        }
+                                        Spacer(minLength: 4)
+                                        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                                    }
+                                    .padding(.horizontal, 14).padding(.vertical, 10).contentShape(Rectangle())
+                                }
+                                .buttonStyle(TherapyRowPressStyle())
+                                if match.id != bewo.last?.id { Divider().padding(.leading, 58) }
+                            }
+                        }
+                        .therapyGlass(in: RoundedRectangle(cornerRadius: TherapyDesign.tileRadius + 4, style: .continuous))
+                    }
+                }
+                if !trimmed.isEmpty && visibleFeatures.isEmpty && foundRecords.isEmpty && bewo.isEmpty {
                     ContentUnavailableView.search(text: trimmed)
                 }
             }
@@ -475,6 +532,25 @@ struct TherapySearchView: View {
         .searchable(text: $query, prompt: "Funktionen und Einträge")
         .sheet(item: $sheet) { feature in TherapyFeatureDestination(id: feature.id) }
         .sheet(item: $editing) { ArchiveRecordEditor(record: $0) }
+    }
+
+    private struct BeWoMatch { let id: String; let title: String; let subtitle: String; let icon: String }
+
+    private var bewoMatches: [BeWoMatch] {
+        guard trimmed.count >= 2 else { return [] }
+        let words = trimmed.split(separator: " ").map(String.init)
+        func hit(_ text: String) -> Bool { words.allSatisfy { text.localizedStandardContains($0) } }
+        var result: [BeWoMatch] = []
+        for topic in store.data.assistedLivingTopics where hit(topic.title + " " + topic.details + " " + topic.outcome) {
+            result.append(BeWoMatch(id: "topic." + topic.id.uuidString, title: topic.title, subtitle: "Thema · " + topic.status.title, icon: "text.bubble.fill"))
+        }
+        for appointment in store.data.assistedLivingAppointments where hit(appointment.title + " " + appointment.summary + " " + appointment.preparation + " " + appointment.agreements.map(\.title).joined(separator: " ")) {
+            result.append(BeWoMatch(id: "appointment." + appointment.id.uuidString, title: appointment.date.formatted(date: .abbreviated, time: .shortened), subtitle: appointment.summary.isEmpty ? appointment.kind.title : appointment.summary, icon: appointment.kind.symbol))
+        }
+        for goal in store.data.assistedLivingGoals where hit(goal.title + " " + goal.details) {
+            result.append(BeWoMatch(id: "goal." + goal.id.uuidString, title: goal.title, subtitle: "Ziel · \(Int(goal.progress * 100)) %", icon: "flag.fill"))
+        }
+        return Array(result.prefix(20))
     }
 
     private func recordRow(_ record: ArchiveRecord) -> some View {
@@ -508,7 +584,7 @@ struct EverydayHubView: View {
                 EverydayStatusCard()
                 TodayRoutinesCard { occurrence in routineToComplete = occurrence; confirmRoutineCompletion = true }
                 FeatureGridSection(title: "Planen & erinnern", icon: "calendar.day.timeline.left", tint: .orange,
-                                   features: TherapyFeature.features(["routines", "tasks", "reminders", "alarms", "showers", "timeline", "checkins", "routineHistory"], data: store.data),
+                                   features: TherapyFeature.features(["quiet", "routines", "tasks", "reminders", "alarms", "showers", "timeline", "checkins", "routineHistory"], data: store.data),
                                    compact: true) { sheet = $0 }
                 FeatureGridSection(title: "Wenn es schwer wird", icon: "lifepreserver.fill", tint: .red,
                                    features: TherapyFeature.features(["emergency", "grounding", "methods", "ai", "groundingHistory"], data: store.data),
