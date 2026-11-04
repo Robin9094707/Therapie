@@ -271,6 +271,11 @@ struct TherapyHubView: View {
         TherapyScreen {
             VStack(spacing: 20) {
                 TherapySessionHeroCard()
+                AIShortcutStrip(title: "Mit KI vorbereiten", prompts: [
+                    ("Stunde vorbereiten", "list.bullet.clipboard", "Hilf mir, meine nächste Therapiestunde vorzubereiten: Was waren seit der letzten Stunde die wichtigsten Einträge, welche Gesprächspunkte sind offen, und was möchte ich ansprechen? Schlage neue Themen als topic-Aktionen vor."),
+                    ("Nach der Stunde", "text.bubble", "Ich komme gerade aus der Therapie. Frag mich kurz, was wichtig war, und hilf mir mit einem Rückblick und passenden Aufgaben."),
+                    ("Muster erkennen", "chart.line.uptrend.xyaxis", "Schau dir meine letzten 30 Tage an: Welche Muster bei Stimmung, Energie und Themen fallen dir vorsichtig auf, mit Datumsbelegen?")
+                ])
                 FeatureGridSection(title: "Rund um deine Therapie", icon: "leaf.fill", tint: .green,
                                    features: TherapyFeature.features(["appointments", "calendar", "tasks", "timeline", "medicalpass", "weeklyReport", "sessionSettings"], data: store.data),
                                    compact: true) { sheet = $0 }

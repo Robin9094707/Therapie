@@ -39,6 +39,12 @@ struct AssistedLivingHubView: View {
                 VStack(spacing: 20) {
                     nextCard(upcoming.first, now: context.date)
                     quickActions(next: upcoming.first)
+                    AIShortcutStrip(title: "Mit KI begleiten", prompts: [
+                        ("Termin vorbereiten", "list.bullet.clipboard", "Hilf mir, meinen nächsten BeWo-Termin vorzubereiten: Sortiere meine offenen BeWo-Themen nach Wichtigkeit, formuliere zu jedem eine konkrete Frage und sag mir, welche Unterlagen ich bereitlegen sollte. Schlage passende bewoTopic-Aktionen nur für neue Themen vor."),
+                        ("Nach dem Termin", "doc.text", "Ich hatte gerade meinen BeWo-Termin. Frag mich kurz, was besprochen wurde, und hilf mir danach mit einer Zusammenfassung, besprochenen Themen und Absprachen als Aktionen."),
+                        ("Termin eintragen", "calendar.badge.plus", "Ich möchte einen BeWo-Termin eintragen. Frag mich nach Tag, Uhrzeit und Art und schlage ihn dann als bewoAppointment vor."),
+                        ("Absprachen prüfen", "checklist", "Welche BeWo-Absprachen sind noch offen? Hilf mir mit einem kleinen nächsten Schritt für die wichtigste.")
+                    ])
                     topicsCard
                     agreementsCard
                     if upcoming.count > 1 { upcomingCard(Array(upcoming.dropFirst().prefix(5)), now: context.date) }
@@ -547,6 +553,7 @@ struct AssistedLivingConversationView: View {
                                 moodPicker(appointment.moodAfter) { level in update { $0.moodAfter = level } }
                             }
                         }
+                        AIAskButton(title: "Mit KI zusammenfassen", question: summaryQuestion(appointment), icon: "sparkles", prominent: false)
                         PrimaryActionButton(title: "Termin abschließen", icon: "checkmark.seal.fill") { finish() }
                             .accessibilityIdentifier("bewo.finish")
                     }
@@ -617,6 +624,12 @@ struct AssistedLivingConversationView: View {
                 .accessibilityAddTraits(value == level ? .isSelected : [])
             }
         }
+    }
+
+    private func summaryQuestion(_ appointment: AssistedLivingAppointment) -> String {
+        let topics = store.data.assistedLivingTopics.filter { appointment.topicIDs.contains($0.id) || $0.status == .next }
+        let topicLines = topics.map { "- " + $0.title + " (Thema-ID " + $0.id.uuidString + ", " + $0.status.title + ")" + ((outcomes[$0.id] ?? "").isEmpty ? "" : ": " + (outcomes[$0.id] ?? "")) }.joined(separator: "\n")
+        return "Fasse meinen BeWo-Termin (Termin-ID " + appointment.id.uuidString + ", " + appointment.date.formatted(date: .abbreviated, time: .shortened) + ") zusammen.\nMeine Notizen: " + (notes.isEmpty ? "(keine)" : notes) + "\nThemen:\n" + (topicLines.isEmpty ? "(keine)" : topicLines) + "\nSchlage eine bewoSummary für diesen Termin, discussBewoTopic für besprochene Themen und bewoAgreement für erkennbare Absprachen vor."
     }
 
     private func update(_ change: (inout AssistedLivingAppointment) -> Void) {

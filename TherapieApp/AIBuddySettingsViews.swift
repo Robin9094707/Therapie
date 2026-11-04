@@ -10,6 +10,17 @@ struct AIBuddySettingsCard: View {
                 Button("KI & OpenAI-Schlüssel einrichten", systemImage: "key") { show = true }.buttonStyle(.glass)
                 if store.data.aiSettings.enabled || !store.data.aiConversations.isEmpty { NavigationLink { AIBuddyView() } label: { Label("Meine KI-Gespräche", systemImage: "bubble.left.and.bubble.right") } }
                 NavigationLink { TherapyJournalView() } label: { Label("Mein Therapietagebuch", systemImage: "book.closed") }
+                if store.data.aiSettings.enabled {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Das kann dein Begleiter").font(.subheadline.weight(.semibold))
+                        ForEach(["Therapie: Themen, Ziele, Aufgaben, Routinen, Rückblicke, Stunden starten", "Betreutes Wohnen: Termine, Themen, Absprachen, Ziele, Zusammenfassungen", "Termine aus deinem Text erkennen und vorschlagen", "Ruhe einschalten oder beenden, Bereiche ruhen lassen", "Stimmung, Akku, Check-ins, Notizen, Methoden, Notfallplan, Einstellungen"], id: \.self) { line in
+                            Label(line, systemImage: "checkmark.circle.fill").font(.caption).foregroundStyle(.secondary)
+                        }
+                        Text("Sparsam: Die KI bekommt nur die Bereiche, die zu deiner Frage passen. Gleichbleibende Anweisungen werden zwischengespeichert. Vorschläge erscheinen als Karten; gespeichert wird erst nach deinem Tipp.").font(.caption2).foregroundStyle(.secondary)
+                    }
+                    .padding(12)
+                    .therapyInsetSurface()
+                }
                 Text("Der Rückgängig-Knopf bleibt nach einer Änderung zehn Sekunden sichtbar, solange die App geöffnet bleibt.").font(.caption).foregroundStyle(.secondary)
             }
         }.sheet(isPresented: $show) { AIBuddySettingsView() }

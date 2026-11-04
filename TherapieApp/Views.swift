@@ -374,6 +374,7 @@ struct DashboardView: View {
                     if store.data.dashboard.welcomeFirst && store.data.dashboard.visibleCards.contains(.welcome) { PersonalWelcomeCard() }
                     QuietStatusBanner()
                     QuickCaptureCard()
+                    TodayAIStrip()
                     if store.data.dashboard.showAIImpulse && store.data.aiSettings.enabled && store.data.suggestionsEnabled != false { BuddySuggestionsCard(controller: store.aiController) }
                     ForEach(store.data.dashboard.visibleCards.filter { !(store.data.dashboard.welcomeFirst && $0 == .welcome) }) { card in
                         dashboardCard(card)

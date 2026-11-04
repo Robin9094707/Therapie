@@ -176,7 +176,69 @@ struct KompassChecks {
         let surfaceFile = try String(contentsOf: root.appendingPathComponent("Eintraege/Einstellungen/surface.txt"), encoding: .utf8)
         try expect(surfaceFile.contains("Deckkraft der Karten"), "Glass preferences appear in the readable mirror")
 
-        print("Passed \(count) Kompass checks: schema 19 migration, quiet mode (rest, early end, areas, single reminders, quiet hours across DST/New Year), task and alarm planning, BeWo rhythms, topics, agreements and readable backup.")
+        // MARK: AI: Kompass actions, context and local date detection
+        var ai = AppData()
+        ai.assistedLivingSettings.caregiverName = "Frau Beispiel"
+        let reply = AIBuddyMessage(role: "assistant", text: "Vorschlag")
+        ai.aiMessages = [reply]
+        let visitISO = "2026-11-10T09:00:00Z"
+        let bewoVisit = AIBuddyAction(kind: .bewoAppointment, title: "Hausbesuch", text: "Post mitbringen", dateISO: visitISO, minutes: 90, weekdays: [], options: AIBuddyActionOptions(valueString: "homeVisit"))
+        try expect(bewoVisit.valid, "BeWo appointment proposal is valid")
+        try expect(!AIBuddyAction(kind: .bewoAppointment, title: "Ohne Zeit", text: "", weekdays: []).valid, "BeWo appointment needs a date")
+        try expect(!AIBuddyAction(kind: .bewoTopic, title: "Thema", text: "", weekdays: [], options: AIBuddyActionOptions(categories: ["tasks"])).valid, "Quiet areas are rejected outside quietStart")
+        try expect(!AIBuddyAction(kind: .method, title: "Methode", text: "", weekdays: [], options: AIBuddyActionOptions(categories: ["tasks"])).valid, "Methods keep battery categories only")
+        try AIBuddyMutation.apply(bewoVisit, originalID: bewoVisit.id, messageID: reply.id, to: &ai, now: now)
+        try expect(ai.assistedLivingAppointments.count == 1 && ai.assistedLivingAppointments[0].durationMinutes == 90 && ai.assistedLivingAppointments[0].caregiver == "Frau Beispiel" && ai.assistedLivingAppointments[0].preparation == "Post mitbringen", "AI creates a BeWo visit with defaults")
+        do { try AIBuddyMutation.apply(bewoVisit, originalID: bewoVisit.id, messageID: reply.id, to: &ai, now: now); throw Failure.assertion("Applied twice") } catch is AIBuddyAPIError { count += 1 }
+        let topicAction = AIBuddyAction(kind: .bewoTopic, title: "Brief vom Jobcenter", text: "Frist 20.11.", weekdays: [], options: AIBuddyActionOptions(valueString: "authorities", priority: "high"))
+        try AIBuddyMutation.apply(topicAction, originalID: topicAction.id, messageID: reply.id, to: &ai, now: now)
+        try expect(ai.assistedLivingTopics.first?.priority == 3 && ai.assistedLivingTopics.first?.category == .authorities && ai.assistedLivingTopics.first?.status == .next, "AI BeWo topic keeps category and priority")
+        let duplicate = AIBuddyAction(kind: .bewoTopic, title: "brief vom jobcenter", text: "", weekdays: [])
+        do { try AIBuddyMutation.apply(duplicate, originalID: duplicate.id, messageID: reply.id, to: &ai, now: now); throw Failure.assertion("Duplicate topic") } catch is AIBuddyAPIError { count += 1 }
+        let agreement = AIBuddyAction(kind: .bewoAgreement, title: "Kopien machen", text: "", weekdays: [], options: AIBuddyActionOptions(valueString: "me"))
+        try AIBuddyMutation.apply(agreement, originalID: agreement.id, messageID: reply.id, to: &ai, now: now)
+        try expect(ai.assistedLivingAppointments[0].agreements.map(\.title) == ["Kopien machen"], "Agreement lands on the next visit when none is named")
+        let discuss = AIBuddyAction(kind: .discussBewoTopic, title: "", text: "Antrag gestellt", targetID: ai.assistedLivingTopics[0].id.uuidString, weekdays: [])
+        try AIBuddyMutation.apply(discuss, originalID: discuss.id, messageID: reply.id, to: &ai, now: now)
+        try expect(ai.assistedLivingTopics[0].status == .discussed && ai.assistedLivingTopics[0].outcome == "Antrag gestellt", "AI marks a BeWo topic as discussed")
+        let rest = AIBuddyAction(kind: .quietStart, title: "", text: "Krank", minutes: 1440, weekdays: [], options: AIBuddyActionOptions(categories: ["tasks", "routines"]))
+        try expect(rest.valid, "Quiet proposal with areas is valid")
+        try AIBuddyMutation.apply(rest, originalID: rest.id, messageID: reply.id, to: &ai, now: now)
+        try expect(QuietPolicy.activePauses(ai.quietMode, at: now.addingTimeInterval(60)).first?.until == now.addingTimeInterval(86400) && QuietPolicy.isQuiet(.tasks, settings: ai.quietMode, at: now.addingTimeInterval(60)), "AI starts a 24 h rest for chosen areas")
+        let wake = AIBuddyAction(kind: .quietEnd, title: "", text: "", weekdays: [])
+        try AIBuddyMutation.apply(wake, originalID: wake.id, messageID: reply.id, to: &ai, now: now.addingTimeInterval(120))
+        try expect(QuietPolicy.activePauses(ai.quietMode, at: now.addingTimeInterval(180)).isEmpty, "AI ends the rest early")
+        let goalAction = AIBuddyAction(kind: .bewoGoal, title: "Post öffnen", text: "", weekdays: [], options: AIBuddyActionOptions(steps: ["Briefkasten leeren", "Sortieren"]))
+        try AIBuddyMutation.apply(goalAction, originalID: goalAction.id, messageID: reply.id, to: &ai, now: now)
+        try expect(ai.assistedLivingGoals.first?.steps.count == 2, "AI BeWo goal keeps its steps")
+        try expect(ai.aiMessages[0].appliedActionIDs.count == 7, "Every applied proposal is recorded once")
+        let schemaKinds = ((((AIBuddyAPI.schema["properties"] as! [String: Any])["actions"] as! [String: Any])["items"] as! [String: Any])["properties"] as! [String: Any])["kind"] as! [String: Any]
+        try expect((schemaKinds["enum"] as! [String]).contains("bewoAppointment") && (schemaKinds["enum"] as! [String]).contains("quietStart"), "The response schema offers the new actions")
+        try expect(AIBuddyAPI.fullInstructions.contains("TERMINERKENNUNG") && !AIBuddyAPI.fullInstructions.contains("Aktuelle Zeit:"), "Static, cacheable instructions include appointment detection")
+        let bewoContext = AIBuddyContext.make(data: ai, days: 7, end: now, calendar: calendar, question: "Was steht beim BeWo an?", clock: now)
+        try expect(bewoContext.text.contains("BETREUTES WOHNEN") && bewoContext.text.contains("Thema-ID " + ai.assistedLivingTopics[0].id.uuidString) == false && bewoContext.text.contains("Absprache offen"), "BeWo context lists open items with IDs")
+        let plainContext = AIBuddyContext.make(data: ai, days: 7, end: now, calendar: calendar, question: "Ich habe Kopfschmerzen", clock: now)
+        try expect(!plainContext.text.contains("BETREUTES WOHNEN") && plainContext.text.contains("nächster BeWo-Termin"), "Unrelated questions only get the one-line BeWo situation")
+        QuietPolicy.pause(&ai.quietMode, categories: [], until: now.addingTimeInterval(3600), now: now)
+        let quietContext = AIBuddyContext.make(data: ai, days: 1, end: now, calendar: calendar, question: "Die Wecker nerven", clock: now)
+        try expect(quietContext.text.contains("RUHEMODUS") && quietContext.text.contains("Ruhe-ID"), "Quiet questions get quiet context")
+
+        let wednesday = date("2026-11-04T10:00:00Z") // Wednesday 11:00 Berlin
+        func detected(_ text: String) -> DetectedDate? { GermanDateDetector.detect(text, now: wednesday, calendar: calendar) }
+        func local(_ y: Int, _ m: Int, _ d: Int, _ h: Int, _ min: Int = 0) -> Date { calendar.date(from: DateComponents(timeZone: calendar.timeZone, year: y, month: m, day: d, hour: h, minute: min))! }
+        try expect(detected("Dienstag um 10 kommt meine Betreuerin") == DetectedDate(date: local(2026, 11, 10, 10), hasTime: true, hint: .assistedLiving), "Weekday with time and BeWo hint")
+        try expect(detected("morgen um 9:30 Jobcenter")?.date == local(2026, 11, 5, 9, 30), "Tomorrow with minutes")
+        try expect(detected("Am 12.11. um 14 Uhr Therapie") == DetectedDate(date: local(2026, 11, 12, 14), hasTime: true, hint: .therapy), "Explicit date with therapy hint")
+        try expect(detected("Arzttermin am 3. Januar 8 Uhr")?.date == local(2027, 1, 3, 8), "Month names roll into next year")
+        try expect(detected("Mittwoch um 9 Termin")?.date == local(2026, 11, 11, 9), "A passed time today moves to next week")
+        try expect(detected("Mittwoch um 18 Termin")?.date == local(2026, 11, 4, 18), "A later time today stays today")
+        try expect(detected("nächste Woche Montag Termin beim Amt")?.date == local(2026, 11, 9, 9) && detected("nächste Woche Montag Termin beim Amt")?.hasTime == false, "Next week without time defaults to 9:00 and asks for the time")
+        try expect(detected("Guten Morgen, heute war schön") == nil && detected("Ich bin müde") == nil, "Plain sentences are not appointments")
+        try expect(detected("Freitag um 3 nachmittags Termin")?.date == local(2026, 11, 6, 15), "Afternoon hint shifts to 15:00")
+        let springBoundary = GermanDateDetector.detect("Sonntag um 2:30 Termin", now: date("2026-03-27T12:00:00Z"), calendar: calendar)
+        try expect(springBoundary != nil && calendar.component(.day, from: springBoundary!.date) == 29, "Detection survives the DST gap")
+
+        print("Passed \(count) Kompass checks: schema 19 migration, quiet mode (rest, early end, areas, single reminders, quiet hours across DST/New Year), task and alarm planning, BeWo rhythms, topics, agreements, readable backup, AI actions, context and German date detection.")
     }
 }
 

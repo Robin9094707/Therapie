@@ -1,3 +1,9 @@
+## Update 6100.0.0 · Das große KI-Update
+
+- Neue KI-Aktionen für Betreutes Wohnen (Termine, Themen, Absprachen, Ziele, Zusammenfassungen) und Ruhe; automatische Terminerkennung.
+- Interaktive Aktionskarten mit „Übernehmen“ und „Alle übernehmen“; KI-Kurzwege auf Heute, in Therapie, BeWo, Mitteilungen & Wecker und Suche.
+- Lokale Terminerkennung in „Schnell festhalten“ auch ohne KI; sparsamer Kontext und Prompt-Caching. Details in `UPDATE-6100.md`.
+
 ## Update 6000.0.0 · Kompass 6
 
 - Therapie heißt jetzt **Kompass** (Bundle-ID und Datenordner unverändert). Tabs: Heute, Therapie, BeWo, Verlauf und Suche; Alltag liegt auf Heute.

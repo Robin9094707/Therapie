@@ -46,6 +46,7 @@ struct QuickCaptureCard: View {
     @State private var text = ""
     @State private var confirmation: String?
     @State private var mood: MoodCheckIn?
+    @State private var askAI = false
     @FocusState private var focused: Bool
 
     private var kind: QuickCaptureKind { QuickCaptureKind(rawValue: kindRaw) ?? .note }
@@ -94,6 +95,20 @@ struct QuickCaptureCard: View {
                     .accessibilityLabel(kind.title + " sichern")
                     .accessibilityIdentifier("capture.save")
                 }
+                if let detected = GermanDateDetector.detect(trimmed) {
+                    DetectedDateSuggestions(text: trimmed, detected: detected) { message in
+                        text = ""
+                        TherapyEffects.shared.light()
+                        withAnimation { confirmation = message }
+                        Task { @MainActor in try? await Task.sleep(for: .seconds(2.5)); withAnimation { confirmation = nil } }
+                    }
+                    .transition(.opacity)
+                }
+                if store.data.aiSettings.enabled && !trimmed.isEmpty {
+                    Button { focused = false; askAI = true } label: { Label("Mit KI besprechen & einordnen", systemImage: "sparkles") }
+                        .font(.caption.weight(.semibold)).tint(.indigo)
+                        .accessibilityIdentifier("capture.ai")
+                }
                 if let confirmation {
                     Label(confirmation, systemImage: "checkmark.circle.fill").font(.footnote.weight(.semibold)).foregroundStyle(.green)
                         .transition(.opacity.combined(with: .move(edge: .top)))
@@ -113,6 +128,9 @@ struct QuickCaptureCard: View {
             }
         }
         .sheet(item: $mood) { MoodEditorView(entry: $0).presentationDetents([.large]) }
+        .sheet(isPresented: $askAI, onDismiss: { text = "" }) {
+            AIBuddyEntryView(initialQuestion: trimmed + "\n\n(Ordne das bitte ein und schlage passende Einträge als Aktionen vor – bei einem Termin den passenden Termin.)")
+        }
     }
 
     private func save() {
@@ -144,6 +162,18 @@ struct QuickCaptureCard: View {
             try? await Task.sleep(for: .seconds(2.5))
             withAnimation { confirmation = nil }
         }
+    }
+}
+
+/// AI shortcuts on Heute (only when the companion is set up).
+struct TodayAIStrip: View {
+    var body: some View {
+        AIShortcutStrip(title: "Frag Kompass", prompts: [
+            ("Mein Tag", "sun.max", "Was steht heute an (Therapie, BeWo, Routinen, Aufgaben)? Hilf mir mit einer realistischen Reihenfolge und einem kleinen ersten Schritt."),
+            ("Wie geht's mir?", "heart.text.square", "Wie ging es mir in den letzten 7 Tagen laut meinen Einträgen? Kurz, mit Datumsbelegen und einem freundlichen nächsten Schritt."),
+            ("Woche planen", "calendar", "Hilf mir, die nächsten 7 Tage zu planen: Termine (Therapie und BeWo), Aufgaben und Pausen. Schlage nur ausdrücklich gewünschte Einträge als Aktionen vor."),
+            ("Ruhe planen", "moon.zzz", "Ich brauche weniger Erinnerungen. Was kommt heute noch, und welche Ruhe-Variante passt?")
+        ])
     }
 }
 

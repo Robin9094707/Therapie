@@ -592,18 +592,18 @@ struct WhatsNewView: View {
     }
 
     private let items: [Item] = [
-        Item(icon: "location.north.circle.fill", title: "Therapie heißt jetzt Kompass",
-             text: "Ein neuer Name für Therapie und Betreutes Wohnen. Alle Einträge, Fotos, Aufnahmen, Sicherungen und Einstellungen sind unverändert da – beim ersten Start legt die App zusätzlich eine Kopie deiner Daten an."),
-        Item(icon: "house.fill", title: "Neu: Betreutes Wohnen",
-             text: "Ein eigener Tab für dein ambulant betreutes Wohnen: nächste Termine (auch regelmäßige), Gesprächsthemen sammeln, Gesprächsbegleitung mit Stimmung vorher/nachher, Absprachen und kleine Ziele."),
-        Item(icon: "moon.zzz.fill", title: "Ruhe – auch 24 Stunden",
-             text: "Mitteilungen & Wecker an einem Ort: Ruhe für eine Stunde, bis morgen früh oder 24 Stunden – und jederzeit vorzeitig beenden. Einzelne Bereiche ruhen lassen, tägliche Ruhezeiten und eine Übersicht aller kommenden Erinnerungen."),
-        Item(icon: "circle.lefthalf.filled", title: "Liquid Glass nach deinem Geschmack",
-             text: "Neu „Sanftes Glas“: ruhiger und weniger durchsichtig. Deckkraft, Farbtönung und Hintergrund stellst du unter Darstellung & Glas ein – oder wählst Klar oder Matt."),
-        Item(icon: "bolt.fill", title: "Schneller eintragen",
-             text: "„Schnell festhalten“ auf Heute: ein Feld für Notiz, Aufgabe, Therapie- oder BeWo-Thema, dazu die Stimmung mit einem Tipp. Alltag, Routinen und Hilfen sind jetzt direkt auf Heute."),
-        Item(icon: "alarm.fill", title: "Zuverlässiger nach dem Wecker",
-             text: "Wenn du einen Wecker beendest, zeigt die App sofort den aktuellen Stand – ohne sie erst schließen zu müssen. Die Live-Aktivität der Therapiestunde zeigt keine überlappenden Symbole mehr.")
+        Item(icon: "sparkles", title: "Die KI kann jetzt fast alles",
+             text: "Sprich mit deinem Begleiter über Therapie, Betreutes Wohnen, Termine und Ruhe. Er schlägt BeWo-Termine, Themen, Absprachen, Ziele und Ruhephasen direkt als Aktionen vor."),
+        Item(icon: "rectangle.stack.badge.plus", title: "Interaktive Karten",
+             text: "Vorschläge erscheinen als Karten mit Datum, Details und „Übernehmen“ – mehrere auf einmal mit „Alle übernehmen“. Löschen und Abhaken bleiben bewusst mit Prüfung."),
+        Item(icon: "calendar.badge.plus", title: "Termine automatisch erkennen",
+             text: "Schreib „Dienstag um 10 kommt meine Betreuerin“ – die KI schlägt den Termin vor. Auch ohne KI erkennt „Schnell festhalten“ Datum und Uhrzeit und trägt mit einem Tipp ein."),
+        Item(icon: "wand.and.stars", title: "KI überall",
+             text: "Kurzwege auf Heute, in Therapie, im BeWo-Tab, in der Gesprächsbegleitung, in Mitteilungen & Wecker und in der Suche. Ohne eingerichtete KI bleibt alles wie gewohnt nutzbar."),
+        Item(icon: "leaf.arrow.triangle.circlepath", title: "Sparsamer Kontext",
+             text: "Die KI bekommt nur die Bereiche, die zu deiner Frage passen, und gleichbleibende Anweisungen werden von OpenAI zwischengespeichert. Das spart Tokens und Zeit."),
+        Item(icon: "lock.shield.fill", title: "Deine Einstellungen bleiben",
+             text: "Dein KI-Schlüssel, Modell, Denktiefe und alle Daten bleiben unverändert erhalten.")
     ]
 
     var body: some View {

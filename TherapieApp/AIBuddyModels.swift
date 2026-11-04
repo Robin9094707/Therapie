@@ -68,8 +68,11 @@ enum AIBuddyThinking: String, CaseIterable, Identifiable {
 enum AIBuddyActionKind: String, Codable, CaseIterable {
     case note, mood, topic, task, appointment, routine, goal, checkIn, reflection, completeTask, completeRoutine, openScreen, guidedCheckIn, energy, updateTask, updateRoutine, deleteTask, deleteRoutine, setting, battery, startSession
     case shower, skipRoutine, postponeRoutine, reopenTask, postponeTask, method, thoughtStop, updateMethod, deleteMethod, emergencyPlan, updateNote, deleteNote, updateTopic, deleteTopic, updateGoal, deleteGoal, goalProgress, discussTopic, editEntry
+    // Kompass 6: Betreutes Wohnen and quiet mode.
+    case bewoAppointment, bewoTopic, bewoAgreement, bewoGoal, bewoSummary, discussBewoTopic, quietStart, quietEnd
     var label: String {
         switch self {
+        case .bewoAppointment: "BeWo-Termin"; case .bewoTopic: "BeWo-Thema"; case .bewoAgreement: "Absprache"; case .bewoGoal: "BeWo-Ziel"; case .bewoSummary: "Termin zusammenfassen"; case .discussBewoTopic: "BeWo-Thema besprochen"; case .quietStart: "Ruhe einschalten"; case .quietEnd: "Ruhe beenden"
         case .shower: "Duschen eintragen"; case .skipRoutine: "Heute auslassen"; case .postponeRoutine: "Einzelnen Routinentermin verschieben"; case .reopenTask: "Aufgabe wieder öffnen"; case .postponeTask: "Aufgabe verschieben"
         case .method: "Methode anlegen"; case .thoughtStop: "Gedankenstopp anlegen"; case .updateMethod: "Methode bearbeiten"; case .deleteMethod: "Methode entfernen"; case .emergencyPlan: "Notfallplan ergänzen"
         case .updateNote: "Notiz bearbeiten"; case .deleteNote: "Notiz entfernen"; case .updateTopic: "Thema bearbeiten"; case .deleteTopic: "Thema entfernen"; case .updateGoal: "Ziel bearbeiten"; case .deleteGoal: "Ziel entfernen"; case .goalProgress: "Zielfortschritt eintragen"; case .discussTopic: "Als besprochen markieren"; case .editEntry: "Eintrag im Editor öffnen"
@@ -80,6 +83,7 @@ enum AIBuddyActionKind: String, Codable, CaseIterable {
     }
     var symbol: String {
         switch self {
+        case .bewoAppointment: "house.fill"; case .bewoTopic: "text.bubble.fill"; case .bewoAgreement: "checklist"; case .bewoGoal: "flag.fill"; case .bewoSummary: "doc.text.fill"; case .discussBewoTopic: "checkmark.bubble.fill"; case .quietStart: "moon.zzz.fill"; case .quietEnd: "bell.fill"
         case .shower: "shower.fill"; case .skipRoutine: "minus.circle"; case .postponeRoutine, .postponeTask: "calendar.badge.clock"; case .reopenTask: "arrow.uturn.backward"
         case .method, .thoughtStop: "sparkles"; case .updateMethod, .updateNote, .updateTopic, .updateGoal, .editEntry: "pencil"; case .deleteMethod, .deleteNote, .deleteTopic, .deleteGoal: "trash"; case .emergencyPlan: "lifepreserver.fill"; case .goalProgress: "scope"; case .discussTopic: "checkmark.bubble"
         case .battery: "battery.100percent"; case .startSession: "timer"
@@ -105,6 +109,13 @@ struct AIBuddyAction: Codable, Equatable, Identifiable {
     var valid: Bool {
         guard (options?.valid ?? true), (tags ?? []).count <= 15, (tags ?? []).allSatisfy({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.count <= 60 }), title.count <= 160, text.count <= 6000, (dateISO == nil || date != nil), (moodPercent == nil || (0...100).contains(moodPercent!)), weekdays.allSatisfy({ (1...7).contains($0) }) else { return false }
         if ![AIBuddyActionKind.note, .checkIn].contains(kind), !(tags ?? []).isEmpty { return false }
+        if let kompass = KompassAI.validity(self) {
+            // Kompass actions use priority only for topics and categories only as quiet areas.
+            if options?.priority != nil && kind != .bewoTopic { return false }
+            if options?.categories != nil && kind != .quietStart { return false }
+            return kompass
+        }
+        if !(options?.categories ?? []).allSatisfy({ BatteryCategory(rawValue: $0) != nil }) { return false }
         if options?.times != nil && ![AIBuddyActionKind.routine, .updateRoutine].contains(kind) { return false }
         if options?.once == true && (options?.times != nil || options?.repeatCount != nil || options?.repeatEveryWeeks != nil) { return false }
         if (options?.repeatUntilDone != nil || options?.once != nil) && ![AIBuddyActionKind.routine, .updateRoutine].contains(kind) { return false }
@@ -313,6 +324,8 @@ struct AIBuddyContext {
         if data.aiSettings.includeJournal && ["methode", "asmr", "gedankenstopp", "beruhig", "überforder", "notfall"].contains(where: intent.contains) {
             text += "\nMEINE METHODEN (persönliche Zuordnungen, keine Wirksamkeitsgarantie):\n" + data.copingMethods.prefix(10).map(methodLine).joined(separator: "\n")
         }
+        let kompass = KompassAI.context(data, question: question, now: requestTime, broad: question.isEmpty, calendar: calendar)
+        if !kompass.isEmpty { text += "\n" + kompass }
         text += "\nAKTIONSKONTEXT (heutige Planung unabhängig vom Rückblickzeitraum):\n" + BuddyCapabilities.context(data, question: question, now: requestTime)
         text += "\nNative Bereiche: " + BuddyDestinations.catalogue + "\nEINTRÄGE:\n"
         var sent = 0
@@ -376,6 +389,7 @@ enum AIBuddySituation {
         if let battery = today?.battery { parts.append(String(format: "Akku heute %.1f/5", battery)) }
         let topics: [String] = data.therapyTopics.filter(\.isCurrent).prefix(4).map { String($0.title.prefix(60)) }
         if !topics.isEmpty { parts.append("aktuelle Themen: " + topics.joined(separator: ", ")) }
+        parts += KompassAI.situationParts(data, now: now, calendar: calendar)
         return "LAGEBILD (nur selbst eingetragene App-Daten): " + parts.joined(separator: " · ")
     }
 }
@@ -761,7 +775,7 @@ struct AIBuddyActionOptions: Codable, Equatable {
     }
     var valid: Bool {
         (stages == nil || (stages!.count <= 3 && stages!.allSatisfy { MethodStage(rawValue: $0) != nil })) &&
-        (categories == nil || (categories!.count <= BatteryCategory.allCases.count && categories!.allSatisfy { BatteryCategory(rawValue: $0) != nil })) &&
+        (categories == nil || (categories!.count <= max(BatteryCategory.allCases.count, ReminderCategory.allCases.count) && categories!.allSatisfy { BatteryCategory(rawValue: $0) != nil || ReminderCategory(rawValue: $0) != nil })) &&
         (steps == nil || (steps!.count <= 20 && steps!.allSatisfy { $0.count <= 500 })) &&
         (situation == nil || situation!.count <= 1000) &&
         (repeatEveryDays == nil || (1...30).contains(repeatEveryDays!)) &&

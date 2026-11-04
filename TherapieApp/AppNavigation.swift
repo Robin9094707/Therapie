@@ -475,6 +475,9 @@ struct TherapySearchView: View {
                         SectionHeader(title: "Alles an einem Ort", icon: "square.grid.3x3.fill", subtitle: "Jede Funktion der App – und Suche über Notizen, Aufgaben, Check-ins, Themen und mehr.")
                     }
                 }
+                if trimmed.count >= 3 {
+                    AIAskButton(title: "Kompass-KI fragen: „" + String(trimmed.prefix(40)) + "“", question: trimmed, icon: "sparkles", prominent: true)
+                }
                 ForEach(TherapyFeature.Area.allCases) { area in
                     let items = visibleFeatures.filter { $0.area == area }
                     if !items.isEmpty {
