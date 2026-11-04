@@ -84,25 +84,25 @@ jobs:
       - name: Test guided check-ins and routine scheduling
         if: github.event_name == 'workflow_dispatch' && inputs.extended_checks
         run: |
-          swiftc TherapieApp/Models.swift TherapieApp/KompassModels.swift TherapieApp/AssistedLivingModels.swift TherapieApp/FeatureModels.swift TherapieApp/AIBuddyModels.swift TherapieApp/TherapyDiscussionModels.swift TherapieApp/DashboardModels.swift TherapieApp/ArchiveModels.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift TherapieApp/CompanionModels.swift TherapieApp/InsightsModels.swift Tests/CompanionChecks.swift -o /tmp/therapie-companion-checks
+          swiftc TherapieApp/Models.swift TherapieApp/KompassModels.swift TherapieApp/AssistedLivingModels.swift TherapieApp/KompassAI.swift TherapieApp/FeatureModels.swift TherapieApp/AIBuddyModels.swift TherapieApp/TherapyDiscussionModels.swift TherapieApp/DashboardModels.swift TherapieApp/ArchiveModels.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift TherapieApp/CompanionModels.swift TherapieApp/InsightsModels.swift Tests/CompanionChecks.swift -o /tmp/therapie-companion-checks
           /tmp/therapie-companion-checks
 
       - name: Test Insights, timed check-ins and alarm inventory
         if: github.event_name == 'workflow_dispatch' && inputs.extended_checks
         run: |
-          swiftc TherapieApp/Models.swift TherapieApp/KompassModels.swift TherapieApp/AssistedLivingModels.swift TherapieApp/FeatureModels.swift TherapieApp/AIBuddyModels.swift TherapieApp/TherapyDiscussionModels.swift TherapieApp/DashboardModels.swift TherapieApp/ArchiveModels.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift TherapieApp/CompanionModels.swift TherapieApp/InsightsModels.swift TherapieApp/WeeklyPrintModels.swift Tests/InsightsChecks.swift -o /tmp/therapie-insights-checks
+          swiftc TherapieApp/Models.swift TherapieApp/KompassModels.swift TherapieApp/AssistedLivingModels.swift TherapieApp/KompassAI.swift TherapieApp/FeatureModels.swift TherapieApp/AIBuddyModels.swift TherapieApp/TherapyDiscussionModels.swift TherapieApp/DashboardModels.swift TherapieApp/ArchiveModels.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift TherapieApp/CompanionModels.swift TherapieApp/InsightsModels.swift TherapieApp/WeeklyPrintModels.swift Tests/InsightsChecks.swift -o /tmp/therapie-insights-checks
           /tmp/therapie-insights-checks
 
       - name: Test cancellations, vacations and section alarms
         if: github.event_name == 'workflow_dispatch' && inputs.extended_checks
         run: |
-          swiftc TherapieApp/Models.swift TherapieApp/KompassModels.swift TherapieApp/AssistedLivingModels.swift TherapieApp/FeatureModels.swift TherapieApp/AIBuddyModels.swift TherapieApp/TherapyDiscussionModels.swift TherapieApp/DashboardModels.swift TherapieApp/ArchiveModels.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift TherapieApp/CompanionModels.swift TherapieApp/InsightsModels.swift Tests/AppointmentChecks.swift -o /tmp/therapie-appointment-checks
+          swiftc TherapieApp/Models.swift TherapieApp/KompassModels.swift TherapieApp/AssistedLivingModels.swift TherapieApp/KompassAI.swift TherapieApp/FeatureModels.swift TherapieApp/AIBuddyModels.swift TherapieApp/TherapyDiscussionModels.swift TherapieApp/DashboardModels.swift TherapieApp/ArchiveModels.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift TherapieApp/CompanionModels.swift TherapieApp/InsightsModels.swift Tests/AppointmentChecks.swift -o /tmp/therapie-appointment-checks
           /tmp/therapie-appointment-checks
 
       - name: Render and verify actual weekly PDF layouts
         if: github.event_name == 'workflow_dispatch' && inputs.extended_checks
         run: |
-          swiftc TherapieApp/Models.swift TherapieApp/KompassModels.swift TherapieApp/AssistedLivingModels.swift TherapieApp/FeatureModels.swift TherapieApp/AIBuddyModels.swift TherapieApp/TherapyDiscussionModels.swift TherapieApp/DashboardModels.swift TherapieApp/ArchiveModels.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift TherapieApp/CompanionModels.swift TherapieApp/InsightsModels.swift TherapieApp/WeeklyPrintModels.swift TherapieApp/WeeklyPDFRenderer.swift Tests/WeeklyPDFChecks.swift -o /tmp/therapie-pdf-checks
+          swiftc TherapieApp/Models.swift TherapieApp/KompassModels.swift TherapieApp/AssistedLivingModels.swift TherapieApp/KompassAI.swift TherapieApp/FeatureModels.swift TherapieApp/AIBuddyModels.swift TherapieApp/TherapyDiscussionModels.swift TherapieApp/DashboardModels.swift TherapieApp/ArchiveModels.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift TherapieApp/CompanionModels.swift TherapieApp/InsightsModels.swift TherapieApp/WeeklyPrintModels.swift TherapieApp/WeeklyPDFRenderer.swift Tests/WeeklyPDFChecks.swift -o /tmp/therapie-pdf-checks
           /tmp/therapie-pdf-checks build/pdf-verification
 
       - name: Upload printable PDF fixtures and previews
@@ -116,13 +116,13 @@ jobs:
 
       - name: Test real Live Activity phase names, boundaries and redraw states
         run: |
-          swiftc TherapieApp/Models.swift TherapieApp/KompassModels.swift TherapieApp/AssistedLivingModels.swift TherapieApp/FeatureModels.swift TherapieApp/AIBuddyModels.swift TherapieApp/TherapyDiscussionModels.swift TherapieApp/DashboardModels.swift TherapieApp/ArchiveModels.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift TherapieApp/CompanionModels.swift TherapieApp/InsightsModels.swift Shared/TherapyPhaseTimeline.swift Shared/TherapyActivityAttributes.swift Tests/LivePhaseChecks.swift -o /tmp/therapie-live-phase-checks
+          swiftc TherapieApp/Models.swift TherapieApp/KompassModels.swift TherapieApp/AssistedLivingModels.swift TherapieApp/KompassAI.swift TherapieApp/FeatureModels.swift TherapieApp/AIBuddyModels.swift TherapieApp/TherapyDiscussionModels.swift TherapieApp/DashboardModels.swift TherapieApp/ArchiveModels.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift TherapieApp/CompanionModels.swift TherapieApp/InsightsModels.swift Shared/TherapyPhaseTimeline.swift Shared/TherapyActivityAttributes.swift Tests/LivePhaseChecks.swift -o /tmp/therapie-live-phase-checks
           /tmp/therapie-live-phase-checks
 
       - name: Test dashboard, archive, widget privacy and time boundaries
         if: github.event_name == 'workflow_dispatch' && inputs.extended_checks
         run: |
-          swiftc TherapieApp/Models.swift TherapieApp/KompassModels.swift TherapieApp/AssistedLivingModels.swift TherapieApp/FeatureModels.swift TherapieApp/AIBuddyModels.swift TherapieApp/TherapyDiscussionModels.swift TherapieApp/DashboardModels.swift TherapieApp/ArchiveModels.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift TherapieApp/CompanionModels.swift TherapieApp/InsightsModels.swift Shared/WidgetSnapshot.swift TherapieApp/WidgetSnapshotBuilder.swift Tests/PersonalizationChecks.swift -o /tmp/therapie-personalization-checks
+          swiftc TherapieApp/Models.swift TherapieApp/KompassModels.swift TherapieApp/AssistedLivingModels.swift TherapieApp/KompassAI.swift TherapieApp/FeatureModels.swift TherapieApp/AIBuddyModels.swift TherapieApp/TherapyDiscussionModels.swift TherapieApp/DashboardModels.swift TherapieApp/ArchiveModels.swift TherapieApp/WellnessModels.swift TherapieApp/TherapyModels.swift TherapieApp/ReminderModels.swift TherapieApp/CompanionModels.swift TherapieApp/InsightsModels.swift Shared/WidgetSnapshot.swift TherapieApp/WidgetSnapshotBuilder.swift Tests/PersonalizationChecks.swift -o /tmp/therapie-personalization-checks
           /tmp/therapie-personalization-checks
 
       - name: Verify notes, attachments, appointments and check-in regressions
@@ -210,30 +210,30 @@ jobs:
 
       - name: Package recoverable source snapshots
         run: |
-          git archive --format=zip --output=Kompass-v6000.0.0-source.zip HEAD
+          git archive --format=zip --output=Kompass-v6100.0.0-source.zip HEAD
 
       - name: Upload source snapshot
         uses: actions/upload-artifact@v4
         with:
-          name: Kompass-v6000.0.0-source
-          path: Kompass-v6000.0.0-source.zip
+          name: Kompass-v6100.0.0-source
+          path: Kompass-v6100.0.0-source.zip
           if-no-files-found: error
           retention-days: 90
 
       - name: Package IPA
         run: |
           APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" -print -quit)
-          rm -rf Payload Kompass-v6000.0.0.ipa
+          rm -rf Payload Kompass-v6100.0.0.ipa
           mkdir Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Kompass-v6000.0.0.ipa Payload
-          ls -lh Kompass-v6000.0.0.ipa
+          /usr/bin/zip -qry Kompass-v6100.0.0.ipa Payload
+          ls -lh Kompass-v6100.0.0.ipa
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Kompass-v6000.0.0-IPA
-          path: Kompass-v6000.0.0.ipa
+          name: Kompass-v6100.0.0-IPA
+          path: Kompass-v6100.0.0.ipa
           if-no-files-found: error
           retention-days: 30
 

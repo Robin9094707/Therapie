@@ -9,6 +9,8 @@ enum AIBuddyMutation {
         switch action.kind {
         case .shower, .skipRoutine, .postponeRoutine, .reopenTask, .postponeTask, .method, .thoughtStop, .updateMethod, .deleteMethod, .emergencyPlan, .updateNote, .deleteNote, .updateTopic, .deleteTopic, .updateGoal, .deleteGoal, .goalProgress, .discussTopic, .editEntry:
             try applyExtended(action, to: &snapshot, now: now)
+        case .bewoAppointment, .bewoTopic, .bewoAgreement, .bewoGoal, .bewoSummary, .discussBewoTopic, .quietStart, .quietEnd:
+            do { try KompassAI.apply(action, to: &snapshot, now: now) } catch let error as KompassAIError { throw AIBuddyAPIError(message: error.message) }
         case .battery:
             guard let percent = action.moodPercent else { throw AIBuddyAPIError(message: "Bitte wähle deinen Akkuwert.") }
             snapshot.energyEntries.insert(EnergyEntry(createdAt: min(date, now), level: MoodBarometer.score(percent), percent: percent, givesEnergy: "", takesEnergy: "", note: text), at: 0)
@@ -156,6 +158,7 @@ enum AIBuddyMutation {
         case .shower, .skipRoutine, .postponeRoutine, .completeRoutine: return try? encoder.encode(data.routines) + encoder.encode(data.routineCompletions) + encoder.encode(data.routineDeferrals)
         case .discussTopic: return try? encoder.encode(data.therapyDiscussionAcknowledgedIDs)
         case .setting: return Data(AIBuddySettingsChange.value(action.targetID ?? "", data: data).utf8)
+        case .bewoSummary, .bewoAgreement, .discussBewoTopic, .quietEnd: return KompassAI.targetSnapshot(action, in: data)
         default: return nil
         }
     }
