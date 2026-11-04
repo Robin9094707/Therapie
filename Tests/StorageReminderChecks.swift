@@ -134,6 +134,14 @@ struct StorageReminderChecks {
         data.aiMessages[0].mediaIDs = data.media.map(\.id)
         data.aiConversations[0].draftMediaIDs = data.media.map(\.id)
         data.routines[0].repeatUntilDone = false
+        // Kompass 6: quiet mode, glass preferences and Betreutes Wohnen must appear in the readable ZIP.
+        QuietPolicy.pause(&data.quietMode, categories: [.routines], until: now.addingTimeInterval(86400), now: now, note: "Ruhetag")
+        data.surface.style = .solid
+        data.assistedLivingSettings.caregiverName = "Frau Beispiel"
+        let bewoTopic = AssistedLivingTopic(createdAt: now, title: "Brief vom Amt", category: .authorities)
+        data.assistedLivingTopics = [bewoTopic]
+        data.assistedLivingAppointments = [AssistedLivingAppointment(date: now, title: "Hausbesuch", summary: "Antrag besprochen", agreements: [AssistedLivingAgreement(title: "Kopien machen")], topicIDs: [bewoTopic.id], createdAt: now)]
+        data.assistedLivingGoals = [AssistedLivingGoal(createdAt: now, title: "Post öffnen", steps: [AssistedLivingStep(title: "Briefkasten")])]
         let zip = try ReadableBackup.export(data: data, root: root, preferences: preferences, options: BackupOptions(), version: "3003.0.0")
         defer { try? fm.removeItem(at: zip.deletingLastPathComponent()) }
         let prepared = try ReadableBackup.prepareImport(url: zip); defer { prepared.discard() }
@@ -142,6 +150,7 @@ struct StorageReminderChecks {
         try expect(prepared.manifest.data.groundingPractices == data.groundingPractices && prepared.manifest.data.showerEntries == data.showerEntries, "Grounding answers and flexible shower dates round-trip")
         try expect(prepared.manifest.data.showerEntries[1].markedWrongAt != nil && prepared.manifest.data.routineCompletions[0].markedWrong == true, "Schema-18 wrong-entry marks round-trip")
         try expect(try BackupArchive.encoder().encode(prepared.manifest.data) == BackupArchive.encoder().encode(data.portableSnapshot), "Plain ZIP preserves all AppData fields")
+        try expect(prepared.manifest.data.quietMode == data.quietMode && prepared.manifest.data.assistedLivingTopics.map(\.id) == [bewoTopic.id] && prepared.manifest.data.surface.style == .solid, "Readable ZIP restores quiet mode, glass and BeWo")
         try expect(prepared.manifest.preferences == preferences, "Plain ZIP preserves portable settings")
         try expect(try Data(contentsOf: prepared.directory.appendingPathComponent("Media/p.jpg")) == photo, "ZIP streams multiple attachment blocks")
         try expect(try Data(contentsOf: prepared.directory.appendingPathComponent("Recordings/empty.m4a")).isEmpty, "ZIP supports empty attachments")

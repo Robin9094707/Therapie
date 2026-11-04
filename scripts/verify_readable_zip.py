@@ -15,7 +15,16 @@ with zipfile.ZipFile(sys.argv[1]) as archive:
     assert data["appleIntegration"]["remindersEnabled"] is True
     assert data["wakeAlarms"][0]["title"] == "Testwecker"
     assert data["wakeRuns"][0]["outcome"] == "emergencyStopped"
-    assert data["schemaVersion"] == 18
+    assert data["schemaVersion"] == 19
+    assert data["quietMode"]["pauses"][0]["areas"] == ["routines"]
+    assert data["surface"]["style"] == "solid"
+    assert data["assistedLivingSettings"]["caregiverName"] == "Frau Beispiel"
+    assert data["assistedLivingAppointments"][0]["agreements"][0]["title"] == "Kopien machen"
+    for key in ("assistedLivingTopics", "assistedLivingAppointments", "assistedLivingGoals"):
+        record = data[key][0]
+        assert f"Eintraege/{key}/{record['id'].upper()}.txt" in names
+    assert "Ruhephasen" in archive.read("Eintraege/Einstellungen/quietMode.txt").decode()
+    assert "Absprachen" in archive.read(f"Eintraege/assistedLivingAppointments/{data['assistedLivingAppointments'][0]['id'].upper()}.txt").decode()
     assert len(data["copingMethods"]) == 2
     assert data["copingMethods"][1]["kind"] == "thoughtStop"
     assert data["emergencyPlan"]["firstStep"] == "Reize reduzieren"
