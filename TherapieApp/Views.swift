@@ -3,6 +3,29 @@ import PhotosUI
 import UniformTypeIdentifiers
 import UIKit
 
+/// Redraws and re-plans when an alarm or intent opens the app (kept separate to keep RootView's body type-checkable).
+private struct IntentRefreshModifier: ViewModifier {
+    @EnvironmentObject private var store: AppStore
+    @Environment(\.scenePhase) private var scenePhase
+    @Binding var appearedInBackground: Bool
+    let present: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .therapyIntentRoute)) { _ in
+                store.resumeProtectedStorage()
+                if store.storageReady { store.consumeRoutineAlarmRoute(); present() }
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active && appearedInBackground {
+                    // Launched by an alarm or intent while not visible: the first visible frame must be rebuilt.
+                    appearedInBackground = false
+                    store.refreshAfterIntent()
+                }
+            }
+    }
+}
+
 private enum RootModal: Identifiable {
     case apple(String), ai, permissions, session, checkIn(GuidedCheckIn), task(WeeklyTask), routine(UUID), showers, widgetSetup, routines, reminders, therapy, mood, energy, whatsNew, quiet, tasks
     var id: String {
@@ -30,8 +53,7 @@ struct RootView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @EnvironmentObject private var store: AppStore
 
-    var body: some View {
-        Group {
+    @ViewBuilder private var rootContent: some View {
             if store.waitingForProtectedData {
                 VStack(spacing: 16) {
                     TherapyLogoMark(size: 72)
@@ -53,7 +75,10 @@ struct RootView: View {
             } else {
                 OnboardingView()
             }
-        }
+    }
+
+    var body: some View {
+        rootContent
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background { AppBackground() }
         .tint(Color.accentColor)
@@ -79,17 +104,7 @@ struct RootView: View {
             default: break
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .therapyIntentRoute)) { _ in
-            store.resumeProtectedStorage()
-            if store.storageReady { store.consumeRoutineAlarmRoute(); presentRequested() }
-        }
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active && appearedInBackground {
-                // Launched by an alarm or intent while not visible: the first visible frame must be rebuilt.
-                appearedInBackground = false
-                store.refreshAfterIntent()
-            }
-        }
+        .modifier(IntentRefreshModifier(appearedInBackground: $appearedInBackground, present: presentRequested))
         .onChange(of: scenePhase) { _, phase in if phase != .active && store.storageReady { store.sessionController.prepareForBackground() }; if phase == .active { store.resumeProtectedStorage(); if store.storageReady { store.sessionController.synchronize(); store.consumeRoutineAlarmRoute(); store.refreshTherapyCalendar(force: false); TaskNotificationCoordinator.shared.refresh(store); AppleRemindersService.shared.refresh(store); TherapyWidgetBridge.refresh(store, force: true); presentRequested() } } }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in store.resumeProtectedStorage(); presentRequested() }
         .onChange(of: store.waitingForProtectedData) { _, waiting in if !waiting { presentRequested() } }
