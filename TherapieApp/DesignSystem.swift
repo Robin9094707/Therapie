@@ -15,7 +15,7 @@ enum TherapyDesign {
     static let isUITesting = ProcessInfo.processInfo.arguments.contains("--ui-testing")
     static let appName = "Kompass"
     static let appTagline = "Therapie & Betreutes Wohnen"
-    static var appVersion: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "7000.0.0" }
+    static var appVersion: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "7100.0.0" }
 }
 
 private struct TherapyAccentKey: EnvironmentKey {
@@ -577,18 +577,18 @@ struct WhatsNewView: View {
     }
 
     private let items: [Item] = [
-        Item(icon: "sun.max", title: "Heute ist ruhiger",
-             text: "Eine kurze Seite: was als Nächstes kommt (Therapie und BeWo), deine Wochenaufgaben zum Abhaken und Hinzufügen, fällige Routinen und „Schnell festhalten“. Weitere Karten ergänzt du unter „Heute anpassen“."),
-        Item(icon: "square.on.square", title: "Neues, klares Design",
-             text: "Weiterhin Liquid Glass – aber mit ruhigen, fast deckenden Flächen, flachen Symbolen und einem sanften Hintergrund. Alles ist leichter zu lesen und läuft flüssiger."),
+        Item(icon: "leaf", title: "Therapie, ganz ruhig",
+             text: "Der Therapie-Tab zeigt jetzt nur noch: deine Stunde, was du ansprechen möchtest, deinen Therapieraum (Themen, Ziele, Wichtiges, Materialien, Therapeut:in) und alles rund um die Therapie als klare Liste."),
+        Item(icon: "sun.max", title: "Heute auf einen Blick",
+             text: "Als Nächstes (Therapie und BeWo), Wochenaufgaben zum Abhaken und direkt Hinzufügen, fällige Routinen und Schnell festhalten. Weitere Karten unter „Heute anpassen“."),
         Item(icon: "forward.end.fill", title: "Schritte überspringen",
-             text: "Kaffee schon fertig? In der Therapiestunde kannst du einzelne Schritte überspringen oder direkt zu einem späteren springen – immer mit Rückfrage. Oder du lässt sie schon beim Start weg."),
-        Item(icon: "alarm", title: "Wecker zuverlässig",
-             text: "Wenn du über einen Wecker in die App gehst, erscheint der passende Bildschirm sofort. Eine Pause stoppt alle Wecker der Stunde direkt, und gleichzeitige Wecker klingeln nur noch einmal."),
-        Item(icon: "mappin.and.ellipse", title: "Wo du es festgehalten hast",
-             text: "Einträge mit Standort zeigen im Verlauf ein kleines „Ort“-Zeichen. Ein Tipp öffnet die Karte mit Ortsnamen."),
+             text: "In der Therapiestunde einzelne Schritte überspringen oder direkt springen – immer mit Rückfrage. Oder sie schon beim Start weglassen. Frühere Stunden haben jetzt eine eigene Seite."),
+        Item(icon: "alarm", title: "Wecker & Pausen zuverlässig",
+             text: "Über einen Wecker geöffnet, ist die App sofort bereit. Eine Pause stoppt alle Wecker der Stunde, gleichzeitige Wecker klingeln einmal, und nach einer Ruhe laufen Erinnerungen sofort wieder regelmäßig."),
+        Item(icon: "map", title: "Karte im Verlauf",
+             text: "Oben im Verlauf öffnet die Karte alle Orte deiner Einträge, und jeder Eintrag mit Standort zeigt sein „Ort“-Zeichen."),
         Item(icon: "lock.shield.fill", title: "Alle Daten bleiben",
-             text: "Deine Einträge, Sicherungen, KI-Einstellungen und Erinnerungen bleiben unverändert erhalten.")
+             text: "Einträge, Sicherungen, KI-Einstellungen und Erinnerungen bleiben unverändert erhalten.")
     ]
 
     var body: some View {
@@ -601,7 +601,7 @@ struct WhatsNewView: View {
                         Text("Neu in Kompass")
                             .font(.system(.largeTitle, design: .rounded, weight: .bold))
                             .multilineTextAlignment(.center)
-                        Text("Version \(TherapyDesign.appVersion) · Kompass 7 – ruhiger, einfacher, verlässlicher.")
+                        Text("Version \(TherapyDesign.appVersion) · Kompass 7 – ruhig, einfach, verlässlich.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)

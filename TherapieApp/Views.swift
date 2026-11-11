@@ -130,10 +130,18 @@ struct RootView: View {
         .task {
             activate()
             if store.storageReady && modal == nil { await store.aiController.refreshWeeklyReview(); await store.aiController.refreshSuggestion() }
+            var watchedQuietEnd = QuietPolicy.resumeDate(store.data.quietMode)
             while !Task.isCancelled {
                 store.resumeProtectedStorage()
                 let visible = UIApplication.shared.applicationState == .active
                 if store.storageReady && visible { store.sessionController.reconcile(); store.consumeRoutineAlarmRoute(); presentRequested() }
+                // A timed pause ran out while the app is open: bring repeating reminders and alarms back at once
+                // instead of after the next five-minute refresh.
+                if let end = watchedQuietEnd, Date() >= end, store.storageReady {
+                    TaskNotificationCoordinator.shared.refresh(store)
+                    store.sessionController.synchronize()
+                }
+                watchedQuietEnd = store.storageReady ? QuietPolicy.resumeDate(store.data.quietMode) : watchedQuietEnd
                 if visible && Date().timeIntervalSince(lastReminderRefresh) >= 300 && store.storageReady && store.lastSaveError == nil {
                     lastReminderRefresh = Date()
                     AppleRemindersService.shared.refresh(store)
@@ -1044,7 +1052,7 @@ struct LibraryView: View {
                     }
                 }
             }
-            .navigationTitle("Therapie-Archiv")
+            .navigationTitle("Verlauf")
             .alert("Eintrag endgültig löschen?", isPresented: $confirmDelete) {
                 Button("Abbrechen", role: .cancel) { mediaToDelete = nil; noteToDelete = nil; energyToDelete = nil }
                 Button("Löschen", role: .destructive) {
@@ -1056,6 +1064,10 @@ struct LibraryView: View {
             } message: { Text("Der Eintrag und gegebenenfalls seine lokale Datei werden gelöscht. Das kann nicht rückgängig gemacht werden.") }
             .searchable(text: $searchText, prompt: "Notizen, Medien und Rückblicke suchen")
             .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink { EntryMapView() } label: { Label("Karte", systemImage: "map") }
+                        .accessibilityIdentifier("history.map")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button("Foto hinzufügen", systemImage: "photo.badge.plus") {

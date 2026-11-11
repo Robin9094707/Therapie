@@ -415,6 +415,33 @@ struct FeatureTile: View {
     }
 }
 
+/// Kompass 7: the same features as calm settings-style rows (one glass group instead of a tile grid).
+struct FeatureListSection: View {
+    let title: String
+    let features: [TherapyFeature]
+    let presentSheet: (TherapyFeature) -> Void
+
+    var body: some View {
+        TherapySettingsSection(title: title) {
+            ForEach(features) { feature in
+                if feature.opensAsSheet {
+                    Button { TherapyEffects.shared.light(); presentSheet(feature) } label: {
+                        TherapySettingsRow(title: feature.title, icon: feature.icon, subtitle: feature.subtitle, tint: feature.tint)
+                    }
+                    .buttonStyle(TherapyRowPressStyle())
+                    .accessibilityIdentifier("feature." + feature.id)
+                } else {
+                    NavigationLink { TherapyFeatureDestination(id: feature.id) } label: {
+                        TherapySettingsRow(title: feature.title, icon: feature.icon, subtitle: feature.subtitle, tint: feature.tint)
+                    }
+                    .buttonStyle(TherapyRowPressStyle())
+                    .accessibilityIdentifier("feature." + feature.id)
+                }
+            }
+        }
+    }
+}
+
 /// A titled grid of feature tiles.
 struct FeatureGridSection: View {
     let title: String

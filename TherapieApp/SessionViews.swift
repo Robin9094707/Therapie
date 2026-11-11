@@ -54,8 +54,10 @@ struct SessionConductorContent: View {
                         }
                     }
                 }
-                if store.data.currentSession == nil { TherapyDiscussionCard(alwaysVisible: true) }
-                templates
+                if store.data.currentSession == nil {
+                    TherapyDiscussionCard(alwaysVisible: true)
+                    templates
+                }
                 history
             }
         }
@@ -220,10 +222,19 @@ struct SessionConductorContent: View {
             }
         }
     }
-    private var history: some View {
+    @ViewBuilder private var history: some View {
+        let all = store.data.sessionHistory.sorted { $0.startedAt > $1.startedAt }
+        if !all.isEmpty {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Bisherige Stunden").font(.headline)
-            ForEach(store.data.sessionHistory.sorted { $0.startedAt > $1.startedAt }) { session in
+            HStack {
+                Text("Bisherige Stunden").font(.headline)
+                Spacer()
+                if all.count > 3 {
+                    NavigationLink { SessionHistoryListView() } label: { Text("Alle \(all.count)").font(.subheadline.weight(.semibold)) }
+                }
+            }
+            // Kompass 7: only the latest three here; the full list has its own page so this screen stays light.
+            ForEach(all.prefix(3)) { session in
                 GlassCard {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
@@ -245,6 +256,45 @@ struct SessionConductorContent: View {
                 }
             }
         }
+        }
+    }
+}
+
+/// Every finished round, newest first, with editing and deleting (moved off the session screen).
+struct SessionHistoryListView: View {
+    @EnvironmentObject private var store: AppStore
+    @State private var editing: RunningTherapySession?
+    @State private var deleting: RunningTherapySession?
+
+    var body: some View {
+        List {
+            ForEach(store.data.sessionHistory.sorted { $0.startedAt > $1.startedAt }) { session in
+                Button { editing = session } label: {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(session.title).font(.headline).foregroundStyle(.primary)
+                        Text(session.startedAt.formatted(date: .abbreviated, time: .shortened) + " · \(Int(session.elapsed() / 60)) Min." + (session.endedEarly ? " · vorzeitig beendet" : ""))
+                            .font(.caption).foregroundStyle(.secondary)
+                        if !session.summary.isEmpty { Text(session.summary).font(.subheadline).foregroundStyle(.secondary).lineLimit(2) }
+                    }
+                }
+                .swipeActions {
+                    Button("Löschen", systemImage: "trash", role: .destructive) { deleting = session }
+                }
+            }
+        }
+        .therapyFormStyle()
+        .navigationTitle("Bisherige Stunden")
+        .sheet(item: $editing) { SessionHistoryEditorView(session: $0) }
+        .alert("Stunde löschen?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), presenting: deleting) { item in
+            Button("Abbrechen", role: .cancel) { deleting = nil }
+            Button("Löschen", role: .destructive) {
+                var snapshot = store.data
+                snapshot.sessionHistory.removeAll { $0.id == item.id }
+                for i in snapshot.notes.indices where snapshot.notes[i].sessionID == item.id { snapshot.notes[i].sessionID = nil }
+                store.data = snapshot
+                deleting = nil
+            }
+        } message: { _ in Text("Die Sitzung wird aus dem Verlauf gelöscht. Ihre Notizen bleiben ohne Sitzungszuordnung erhalten.") }
     }
 }
 

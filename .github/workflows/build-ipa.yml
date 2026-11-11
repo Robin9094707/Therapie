@@ -210,30 +210,30 @@ jobs:
 
       - name: Package recoverable source snapshots
         run: |
-          git archive --format=zip --output=Kompass-v7000.0.0-source.zip HEAD
+          git archive --format=zip --output=Kompass-v7100.0.0-source.zip HEAD
 
       - name: Upload source snapshot
         uses: actions/upload-artifact@v4
         with:
-          name: Kompass-v7000.0.0-source
-          path: Kompass-v7000.0.0-source.zip
+          name: Kompass-v7100.0.0-source
+          path: Kompass-v7100.0.0-source.zip
           if-no-files-found: error
           retention-days: 90
 
       - name: Package IPA
         run: |
           APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" -print -quit)
-          rm -rf Payload Kompass-v7000.0.0.ipa
+          rm -rf Payload Kompass-v7100.0.0.ipa
           mkdir Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Kompass-v7000.0.0.ipa Payload
-          ls -lh Kompass-v7000.0.0.ipa
+          /usr/bin/zip -qry Kompass-v7100.0.0.ipa Payload
+          ls -lh Kompass-v7100.0.0.ipa
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Kompass-v7000.0.0-IPA
-          path: Kompass-v7000.0.0.ipa
+          name: Kompass-v7100.0.0-IPA
+          path: Kompass-v7100.0.0.ipa
           if-no-files-found: error
           retention-days: 30
 

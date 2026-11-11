@@ -1,3 +1,8 @@
+## Update 7100.0.0 · Kompass 7, vollendet
+
+- Therapie-Tab als ruhige Listen (Stunde, Gesprächsliste, Therapieraum, Rund um die Therapie); laufende Stunde ohne Vorlagen-Ballast, frühere Stunden auf eigener Seite.
+- Ablaufende Ruhe plant Erinnerungen und Wecker sofort neu; weniger Neuzeichnen im Leerlauf; Karte direkt im Verlauf. Details in `UPDATE-7100.md`.
+
 ## Update 7000.0.0 · Kompass 7
 
 - Ruhigere Heute-Seite (Als Nächstes, Wochenaufgaben mit direktem Hinzufügen, Routinen, Schnell festhalten), klareres Liquid Glass mit deckenden Flächen, kompaktes BeWo, Ort-Anzeige im Verlauf.
