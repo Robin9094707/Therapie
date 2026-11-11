@@ -16,12 +16,26 @@ struct DashboardCustomizationView: View {
         NavigationStack {
             List {
                 Section {
+                    Toggle("Ruhige Startseite", isOn: $draft.simpleHome.animation())
+                    Picker("Hauptfarbe", selection: $accent) { ForEach(AppAccent.allCases) { Text($0.title).tag($0) } }
+                    TextField("Eigener Begrüßungssatz · optional", text: $draft.welcomeMessage, axis: .vertical).lineLimit(1...3)
+                } footer: {
+                    Text(draft.simpleHome ? "Heute zeigt: Als Nächstes (Therapie & BeWo), Wochenaufgaben, fällige Routinen und Schnell festhalten. Weitere Karten kannst du darunter ergänzen." : "Klassische Startseite mit allen Karten in deiner Reihenfolge.")
+                }
+                if draft.simpleHome {
+                    Section("Zusätzliche Karten") {
+                        ForEach(draft.orderedCards.filter { !DashboardPreferences.simpleCoreCards.contains($0) }) { card in
+                            Toggle(isOn: Binding(get: { draft.extraCards.contains(card.rawValue) }, set: { on in
+                                draft.extraCards.removeAll { $0 == card.rawValue }; if on { draft.extraCards.append(card.rawValue) }
+                            })) { Label(card.title, systemImage: card.symbol) }
+                        }
+                    }
+                } else {
+                Section {
                     Text("Ziehe die Karten in deine Reihenfolge. Blende Karten aus oder pinne sie ganz oben an. Deine Auswahl wird mit allen Backups gesichert.").font(.subheadline).foregroundStyle(.secondary)
                     Toggle("Begrüßung immer ganz oben", isOn: $draft.welcomeFirst)
-                    TextField("Eigener Begrüßungssatz · optional", text: $draft.welcomeMessage, axis: .vertical).lineLimit(2...4)
                     Toggle("Timeline & Karte anzeigen", isOn: $draft.showFeatureLinks)
                     Toggle("KI-Impuls anzeigen", isOn: $draft.showAIImpulse)
-                    Picker("Einheitliche Hauptfarbe", selection: $accent) { ForEach(AppAccent.allCases) { Text($0.title).tag($0) } }
                     Toggle("Kompakte Kartenabstände", isOn: $draft.compactCards)
                 }
                 Section("Schnelle Layouts") {
@@ -44,6 +58,7 @@ struct DashboardCustomizationView: View {
                         var order = draft.orderedCards.map(\.rawValue); order.move(fromOffsets: from, toOffset: to); draft.cardOrder = order
                     }
                 }
+                }
                 Section("Widgets") {
                     Toggle("Titel in Widgets anzeigen", isOn: $draft.showWidgetTitles)
                     Text("Standardmäßig zeigen Widgets nur neutrale Bezeichnungen, Uhrzeiten und Anzahlen. Notiztexte und Check-in-Antworten werden niemals geteilt.").font(.caption).foregroundStyle(.secondary)
@@ -52,8 +67,8 @@ struct DashboardCustomizationView: View {
                     Button("Standardlayout wiederherstellen", role: .destructive) { reset = true }
                 }
             }.therapyFormStyle()
-            .navigationTitle("Heute gestalten").navigationBarTitleDisplayMode(.inline)
-            .environment(\.editMode, .constant(.active))
+            .navigationTitle("Heute anpassen").navigationBarTitleDisplayMode(.inline)
+            .environment(\.editMode, .constant(draft.simpleHome ? .inactive : .active))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { if changed { confirmExit = true } else { dismiss() } } }
                 ToolbarItem(placement: .confirmationAction) { Button("Speichern") {

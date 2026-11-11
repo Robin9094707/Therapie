@@ -113,6 +113,7 @@ struct QuietCenterView: View {
             TherapyScreen {
                 VStack(spacing: 20) {
                     QuietHeroCard(now: context.date) { composer = true }
+                    AIAskButton(title: "Mit KI klären, was ruhen soll", question: "Mich nerven gerade Wecker oder Erinnerungen. Schau dir an, was heute noch kommt, frag mich kurz, was mich stört, und schlage passende Ruhe-Varianten als Aktionen vor.", icon: "sparkles", prominent: false)
                     categoryCard(now: context.date)
                     upcomingCard(items, now: context.date)
                     if !store.data.quietMode.silenced.isEmpty { silencedCard(now: context.date) }

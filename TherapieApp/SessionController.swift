@@ -24,9 +24,15 @@ final class TherapySessionController: ObservableObject {
     private var backgroundAssertion: UIBackgroundTaskIdentifier = .invalid
     init(store: AppStore) { self.store = store }
 
-    func start(_ template: TherapySessionTemplate) {
-        guard template.isValid, let store, store.storageReady, store.data.currentSession == nil else { return }
-        store.data.currentSession = .start(template)
+    /// Starts a round. `skipping` leaves out steps that are already done (e.g. coffee before a later start).
+    func start(_ template: TherapySessionTemplate, skipping skipped: Set<UUID> = []) {
+        var plan = template
+        plan.phases = template.phases.filter { !skipped.contains($0.id) }
+        guard plan.isValid, let store, store.storageReady, store.data.currentSession == nil else { return }
+        var session = RunningTherapySession.start(plan)
+        let titles = template.phases.filter { skipped.contains($0.id) }.map(\.title)
+        if !titles.isEmpty { session.skippedPhaseTitles = titles }
+        store.data.currentSession = session
         guard store.lastSaveError == nil else { TherapyEffects.shared.failed(); return }
         TherapyEffects.shared.light()
         synchronize()
@@ -36,8 +42,28 @@ final class TherapySessionController: ObservableObject {
         if session.pausedAt == nil { session.pause() } else { session.resume() }
         store.data.currentSession = session
         TherapyEffects.shared.light()
+        // Remove every pending phase reminder right away instead of after the queued notification work, and
+        // re-plan AlarmKit at once: a pause must silence the session alarms before the next boundary, and
+        // resuming must never leave the old boundaries next to the shifted ones.
+        Self.cancelNotifications(session.id)
         synchronize()
+        Task { await RoutineAlarmCoordinator.shared.refresh(store) }
     }
+    /// Skips one step of the running round (confirmed in the UI first).
+    func skip(_ phaseID: UUID) { changeSession { $0.skipPhase(phaseID) } }
+    /// Jumps straight to a later step; every step in between counts as skipped.
+    func jump(to phaseID: UUID) { changeSession { $0.jump(to: phaseID) } }
+
+    private func changeSession(_ change: (inout RunningTherapySession) -> Bool) {
+        guard let store, store.storageReady, var session = store.data.currentSession, change(&session) else { return }
+        store.data.currentSession = session
+        guard store.lastSaveError == nil else { TherapyEffects.shared.failed(); return }
+        TherapyEffects.shared.light()
+        Self.cancelNotifications(session.id)
+        synchronize()
+        Task { await RoutineAlarmCoordinator.shared.refresh(store) }
+    }
+
     func finish(early: Bool) {
         guard let store, store.storageReady, var session = store.data.currentSession else { return }
         guard early || store.activeBuddyVoiceIDs.isEmpty else { return }
@@ -316,7 +342,8 @@ final class TherapySessionController: ObservableObject {
         }
     }
     static func cancelNotifications(_ id: UUID) {
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: (0..<12).map { "therapy.session.\(id).\($0)" })
+        // Templates can hold more than twelve phases; cover every index a session can have.
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: (0..<64).map { "therapy.session.\(id).\($0)" })
     }
     static func endAll() {
         BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: refreshTaskIdentifier)

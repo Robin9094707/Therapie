@@ -69,11 +69,13 @@ struct AIBuddyEntryView: View {
     var checkIn: GuidedCheckIn? = nil
     var note: TherapyNote? = nil
     var onNoteProposal: ((TherapyNote) -> Void)? = nil
+    /// Sent automatically once when the chat opens (AI shortcuts across the app).
+    var initialQuestion: String? = nil
     @State private var conversationID: UUID?
     var body: some View {
         NavigationStack {
             Group {
-                if let conversationID { AIBuddyChatContent(controller: store.aiController, inSession: store.data.currentSession != nil, conversationID: conversationID, onNoteProposal: onNoteProposal, close: { dismiss() }) }
+                if let conversationID { AIBuddyChatContent(controller: store.aiController, inSession: store.data.currentSession != nil, conversationID: conversationID, onNoteProposal: onNoteProposal, close: { dismiss() }, initialQuestion: initialQuestion) }
                 else { ProgressView("Gespräch vorbereiten …") }
             }
         }.onAppear {
@@ -103,7 +105,9 @@ struct AIBuddyChatContent: View {
     var conversationID: UUID
     var onNoteProposal: ((TherapyNote) -> Void)? = nil
     var close: (() -> Void)? = nil
+    var initialQuestion: String? = nil
     @State private var route: BuddySheet?
+    @State private var sentInitialQuestion = false
     @State private var confirmExit = false
     @State private var sending = false
     @State private var retryImage: Data?
@@ -204,7 +208,7 @@ struct AIBuddyChatContent: View {
             .alert("Chatverlauf leeren?", isPresented: $clearChat) { Button("Abbrechen", role: .cancel) {}; Button("Leeren", role: .destructive) { controller.cancel(); var snapshot = store.data; AIConversationMutation.delete(conversationID, in: &snapshot); store.data = snapshot } } message: { Text("Gespeicherte Tagebucheinträge bleiben erhalten. Rückgängig ist zehn Sekunden lang in der geöffneten App möglich.") }
     }
     var body: some View {
-        presentedChat.onAppear { store.visibleAIComposerIDs.insert(visibilityID); if !initialized { text = chat?.draftText ?? ""; attachmentIDs = chat?.draftMediaIDs ?? []; initialized = true; controller.error = nil }; updateContext() }
+        presentedChat.onAppear { store.visibleAIComposerIDs.insert(visibilityID); if !initialized { text = chat?.draftText ?? ""; attachmentIDs = chat?.draftMediaIDs ?? []; initialized = true; controller.error = nil }; updateContext(); sendInitialQuestionIfNeeded() }
             .onChange(of: text) { _, _ in updateContext(onlyIfRangeChanged: true) }
             .onDisappear { speech.stop(); store.visibleAIComposerIDs.remove(visibilityID); if route == nil { inputHandle.finishEditing(); controller.cancel(); cleanupEmptyChat() } }
             .onChange(of: store.data.aiSettings.enabled) { _, enabled in if !enabled { controller.cancel(); image = nil; photo = nil } }
@@ -288,15 +292,8 @@ struct AIBuddyChatContent: View {
                     if !reply.title.isEmpty { Text(AIBuddyText.plain(reply.title)).font(.headline) }
                     formatted(message.id == messages.last?.id && draft != nil ? BuddyInteraction.withoutPinnedQuestion(reply.message, step: draft?.step ?? 0) : reply.message)
                     ForEach(Array(reply.sections.enumerated()), id: \.offset) { _, section in VStack(alignment: .leading, spacing: 5) { Text(AIBuddyText.plain(section.heading)).font(.subheadline.bold()); formatted(section.text) } }
-                    if reply.actions.count > 1 { Text("\(reply.actions.count - reply.actions.filter { message.appliedActionIDs.contains($0.id) }.count) Vorschläge noch zu prüfen · jeden einzeln anpassen und bestätigen").font(.caption).foregroundStyle(.secondary) }
-                    ForEach(reply.actions) { action in
-                        let applied = message.appliedActionIDs.contains(action.id)
-                        Button {
-                            if action.kind == .openScreen { open(action.targetID ?? "") }
-                            else if action.kind == .guidedCheckIn { startCheckIn(target: action.targetID) }
-                            else if action.kind == .editEntry { if let record = ArchiveRecord.all(in: store.data).first(where: { $0.id == action.targetID }) { inputHandle.finishEditing(); route = .record(record) } else { controller.error = "Dieser Eintrag ist nicht mehr vorhanden." } }
-                            else { inputHandle.finishEditing(); route = .review(.init(messageID: message.id, action: action)) }
-                        } label: { Label(applied ? "Gespeichert · " + action.kind.label : action.kind.label + (action.title.isEmpty ? "" : ": " + AIBuddyText.plain(action.title)), systemImage: applied ? "checkmark.circle.fill" : action.kind.symbol).frame(maxWidth: .infinity, alignment: .leading) }.buttonStyle(.glass).disabled(applied).accessibilityIdentifier("ai.action." + action.kind.rawValue)
+                    if !reply.actions.isEmpty {
+                        AIActionDeck(message: message, actions: reply.actions, open: { handle($0, message: message) }, apply: { quickApply([$0], message: message) }, applyAll: { quickApply($0, message: message) })
                     }
                     if reply.actions.contains(where: { $0.kind == .startSession && message.appliedActionIDs.contains($0.id) }) { Button("Laufende Therapierunde öffnen", systemImage: "timer") { open("session") }.buttonStyle(.glassProminent) }
                     if let days = reply.suggestedDays { Button("Mehr Kontext? \(days) Tage für die nächste Nachricht") { setDays(days); persistDays(); updateContext() }.font(.caption) }
@@ -321,6 +318,31 @@ struct AIBuddyChatContent: View {
             }.padding(16).background(message.role == "user" ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 22))
             if message.role != "user" { Spacer(minLength: 16) }
         }
+    }
+    private func handle(_ action: AIBuddyAction, message: AIBuddyMessage) {
+        if action.kind == .openScreen { open(action.targetID ?? "") }
+        else if action.kind == .guidedCheckIn { startCheckIn(target: action.targetID) }
+        else if action.kind == .editEntry { if let record = ArchiveRecord.all(in: store.data).first(where: { $0.id == action.targetID }) { inputHandle.finishEditing(); route = .record(record) } else { controller.error = "Dieser Eintrag ist nicht mehr vorhanden." } }
+        else { inputHandle.finishEditing(); route = .review(.init(messageID: message.id, action: action)) }
+    }
+    /// One tap saves additive proposals shown on their card; anything else still goes through the review sheet.
+    private func quickApply(_ actions: [AIBuddyAction], message: AIBuddyMessage) {
+        var snapshot = store.data, failures: [String] = [], saved = 0
+        for action in actions where KompassAI.quickApply.contains(action.kind) {
+            do { try AIBuddyMutation.apply(action, originalID: action.id, messageID: message.id, to: &snapshot); saved += 1 }
+            catch { failures.append(AIBuddyText.plain(action.title.isEmpty ? action.kind.label : action.title) + ": " + error.localizedDescription) }
+        }
+        if saved > 0 {
+            store.data = snapshot
+            TherapyEffects.shared.light()
+        }
+        controller.error = failures.isEmpty ? nil : failures.joined(separator: "\n")
+    }
+    private func sendInitialQuestionIfNeeded() {
+        guard !sentInitialQuestion, let question = initialQuestion?.trimmingCharacters(in: .whitespacesAndNewlines), !question.isEmpty else { return }
+        sentInitialQuestion = true
+        guard messages.isEmpty else { return }
+        send(questionOverride: question)
     }
     private func formatted(_ value: String) -> some View {
         let text = (try? AttributedString(markdown: value.replacingOccurrences(of: "(?m)^#{1,6}\\s+", with: "", options: .regularExpression), options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(AIBuddyText.plain(value))
@@ -560,11 +582,11 @@ struct AIBuddyActionReviewView: View {
     init(action: AIBuddyAction, messageID: UUID) { original = action; self.messageID = messageID; var proposed = action; if [.routine, .task].contains(action.kind), action.date != nil { var opts = proposed.options ?? AIBuddyActionOptions(); opts.alarmEnabled = opts.alarmEnabled ?? true; opts.remindersEnabled = opts.remindersEnabled ?? true; if action.kind == .routine { opts.repeatUntilDone = opts.repeatUntilDone ?? false }; proposed.options = opts }; _action = State(initialValue: proposed); _date = State(initialValue: action.date ?? Date()); _percent = State(initialValue: action.moodPercent ?? 50); _hasDate = State(initialValue: action.date != nil) }
     private var completion: Bool { [.completeTask, .completeRoutine, .shower].contains(action.kind) }
     private var removing: Bool { [.deleteTask, .deleteRoutine, .deleteNote, .deleteTopic, .deleteGoal, .deleteMethod].contains(action.kind) }
-    private var modifying: Bool { [.updateTask, .updateRoutine, .setting, .updateNote, .updateTopic, .updateGoal, .updateMethod, .goalProgress, .emergencyPlan, .postponeTask, .postponeRoutine, .skipRoutine, .reopenTask, .discussTopic].contains(action.kind) }
+    private var modifying: Bool { [.updateTask, .updateRoutine, .setting, .updateNote, .updateTopic, .updateGoal, .updateMethod, .goalProgress, .emergencyPlan, .postponeTask, .postponeRoutine, .skipRoutine, .reopenTask, .discussTopic, .bewoSummary, .discussBewoTopic, .quietEnd].contains(action.kind) }
     private var settingsAction: Bool { action.kind == .setting }
     private var recurring: Bool { [.task, .routine, .updateRoutine, .updateTask].contains(action.kind) }
     private var options: Binding<AIBuddyActionOptions> { Binding(get: { action.options ?? AIBuddyActionOptions() }, set: { action.options = $0 }) }
-    private var canSave: Bool { action.valid && (completion || removing || settingsAction || !action.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
+    private var canSave: Bool { action.valid && (completion || removing || settingsAction || KompassAI.kinds.contains(action.kind) || !action.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
     var body: some View {
         NavigationStack {
             Form {
@@ -602,8 +624,11 @@ struct AIBuddyActionReviewView: View {
                 if action.kind == .shower && action.targetID == nil { Section("Wann habe ich geduscht?") { DatePicker("Duschtag", selection: $date, in: ...Date()) } }
                 if !completion && !removing && !settingsAction {
                     Section("Datum & Einordnung") {
-                        if [.task, .updateTask, .updateRoutine, .goal, .updateGoal].contains(action.kind) { Toggle("Zeitpunkt ändern / festlegen", isOn: $hasDate) }
-                        if hasDate || [.routine, .appointment, .postponeRoutine, .postponeTask].contains(action.kind) { DatePicker("Zeitpunkt", selection: $date) }
+                        if [.task, .updateTask, .updateRoutine, .goal, .updateGoal, .bewoAgreement].contains(action.kind) { Toggle(action.kind == .bewoAgreement ? "Frist festlegen" : "Zeitpunkt ändern / festlegen", isOn: $hasDate) }
+                        if action.kind == .quietStart { Toggle("Festes Ende wählen", isOn: $hasDate) }
+                        if hasDate || [.routine, .appointment, .postponeRoutine, .postponeTask, .bewoAppointment].contains(action.kind) { DatePicker(action.kind == .quietStart ? "Ruhe bis" : "Zeitpunkt", selection: $date) }
+                        if action.kind == .bewoAppointment { Stepper("Dauer: \(action.minutes ?? store.data.assistedLivingSettings.defaultDurationMinutes) Min.", value: Binding(get: { action.minutes ?? store.data.assistedLivingSettings.defaultDurationMinutes }, set: { action.minutes = $0 }), in: 15...480, step: 15) }
+                        if action.kind == .quietStart && !hasDate { Text(KompassAI.detail(action, data: store.data)).font(.caption).foregroundStyle(.secondary) }
                         if [.mood, .checkIn, .battery].contains(action.kind) {
                             if action.kind == .battery { EnergyBatteryControl(percent: $percent) } else { MoodBarometerControl(percent: $percent) }
                             Text(original.moodPercent == nil ? "Die KI hat keine Stimmung festgelegt. Wähle deinen eigenen Wert." : "Die KI hat diesen Wert vorgeschlagen. Du kannst ihn frei ändern.").font(.caption).foregroundStyle(.secondary)
@@ -684,7 +709,8 @@ struct AIBuddyActionReviewView: View {
             if modifying || removing || completion {
                 guard baseline == AIBuddyMutation.targetSnapshot(original, in: store.data) else { error = "Dieser Eintrag hat sich seit dem Öffnen geändert. Bitte schließe die Vorschau und prüfe sie erneut."; return }
             }
-            clean.dateISO = hasDate || [.routine, .appointment, .mood, .checkIn, .note, .energy, .reflection, .shower, .postponeRoutine, .postponeTask].contains(clean.kind) ? ISO8601DateFormatter().string(from: date) : nil
+            clean.dateISO = hasDate || [.routine, .appointment, .mood, .checkIn, .note, .energy, .reflection, .shower, .postponeRoutine, .postponeTask, .bewoAppointment].contains(clean.kind) ? ISO8601DateFormatter().string(from: date) : nil
+            if clean.kind == .quietStart && hasDate { clean.minutes = nil }
             if [.mood, .checkIn, .battery].contains(clean.kind) { clean.moodPercent = percent }
             var snapshot = store.data
             try AIBuddyMutation.apply(clean, originalID: original.id, messageID: messageID, to: &snapshot)

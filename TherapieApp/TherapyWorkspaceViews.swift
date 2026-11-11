@@ -259,71 +259,46 @@ struct TherapyMediaEditorView: View {
 
 struct TherapyHubView: View {
     @EnvironmentObject private var store: AppStore
-    @SceneStorage("therapy.hub.section") private var section = 0
     @State private var sheet: TherapyFeature?
-
-    private let sections: [(title: String, icon: String)] = [
-        ("Themen", "folder.fill"), ("Ziele", "scope"), ("Materialien", "doc.on.doc.fill"), ("Therapeut:in", "person.text.rectangle.fill"), ("Wichtig", "pin.fill")
-    ]
 
     var body: some View {
         // Hosted by the tab's or presenter's NavigationStack; a nested stack doubled the bars and broke Back.
+        // Kompass 7: one calm column – the round, what to talk about, then the therapy room as simple rows.
         TherapyScreen {
-            VStack(spacing: 20) {
+            VStack(spacing: 18) {
                 TherapySessionHeroCard()
-                FeatureGridSection(title: "Rund um deine Therapie", icon: "leaf.fill", tint: .green,
-                                   features: TherapyFeature.features(["appointments", "calendar", "tasks", "timeline", "medicalpass", "weeklyReport", "sessionSettings"], data: store.data),
-                                   compact: true) { sheet = $0 }
                 TherapyDiscussionCard()
-                VStack(alignment: .leading, spacing: 12) {
-                    Label {
-                        Text("Dein Therapieraum").font(.system(.headline, design: .rounded))
-                    } icon: {
-                        Image(systemName: "books.vertical.fill").foregroundStyle(Color.accentColor)
+                TherapySettingsSection(title: "Dein Therapieraum") {
+                    TherapySettingsLink(title: "Themen & Ordner", icon: "folder.fill", subtitle: "Was dich gerade beschäftigt", tint: .green, value: count(store.data.therapyTopics.filter(\.isCurrent).count)) {
+                        TherapySettingsPage(title: "Themen & Ordner") { TherapyFolderContentView(folderID: nil) }
                     }
-                    .accessibilityAddTraits(.isHeader)
-                    .padding(.horizontal, 4)
-                    ScrollView(.horizontal) {
-                        GlassEffectContainer(spacing: 8) {
-                            HStack(spacing: 8) {
-                                ForEach(Array(sections.enumerated()), id: \.offset) { index, item in sectionButton(item.title, item.icon, index) }
-                            }
-                            .padding(.vertical, 4)
-                        }
+                    TherapySettingsLink(title: "Ziele", icon: "scope", subtitle: "Woran du arbeitest", tint: .orange, value: count(store.data.therapyGoals.count)) {
+                        TherapySettingsPage(title: "Ziele") { TherapyGoalsView() }
                     }
-                    .scrollIndicators(.hidden)
-                    .scrollClipDisabled()
-                    switch section {
-                    case 0: TherapyFolderContentView(folderID: nil)
-                    case 1: TherapyGoalsView()
-                    case 2: TherapyMaterialsView()
-                    case 3: TherapistAreaView()
-                    default: TherapyNotesCollectionView(importantOnly: true)
+                    TherapySettingsLink(title: "Wichtige Notizen", icon: "pin.fill", subtitle: "Angepinnt für die Stunde", tint: .red) {
+                        TherapySettingsPage(title: "Wichtig") { TherapyNotesCollectionView(importantOnly: true) }
+                    }
+                    TherapySettingsLink(title: "Materialien", icon: "doc.on.doc.fill", subtitle: "Arbeitsblätter, Fotos, Dokumente", tint: .blue) {
+                        TherapySettingsPage(title: "Materialien") { TherapyMaterialsView() }
+                    }
+                    TherapySettingsLink(title: "Therapeut:in", icon: "person.text.rectangle.fill", subtitle: store.data.profile.therapistName.isEmpty ? "Kontakt & Notizen" : store.data.profile.therapistName, tint: .teal) {
+                        TherapySettingsPage(title: "Therapeut:in") { TherapistAreaView() }
                     }
                 }
+                FeatureListSection(title: "Rund um die Therapie",
+                                   features: TherapyFeature.features(["appointments", "tasks", "weeklyReport", "medicalpass", "calendar", "timeline", "sessionSettings"], data: store.data)) { sheet = $0 }
+                AIShortcutStrip(title: "Mit KI vorbereiten", prompts: [
+                    ("Stunde vorbereiten", "list.bullet.clipboard", "Hilf mir, meine nächste Therapiestunde vorzubereiten: Was waren seit der letzten Stunde die wichtigsten Einträge, welche Gesprächspunkte sind offen, und was möchte ich ansprechen? Schlage neue Themen als topic-Aktionen vor."),
+                    ("Nach der Stunde", "text.bubble", "Ich komme gerade aus der Therapie. Frag mich kurz, was wichtig war, und hilf mir mit einem Rückblick und passenden Aufgaben."),
+                    ("Muster erkennen", "chart.line.uptrend.xyaxis", "Schau dir meine letzten 30 Tage an: Welche Muster bei Stimmung, Energie und Themen fallen dir vorsichtig auf, mit Datumsbelegen?")
+                ])
             }
         }
         .navigationTitle("Therapie")
         .sheet(item: $sheet) { feature in TherapyFeatureDestination(id: feature.id) }
     }
 
-    private func sectionButton(_ title: String, _ symbol: String, _ value: Int) -> some View {
-        let selected = section == value
-        return Button {
-            TherapyEffects.shared.light()
-            withAnimation(.snappy(duration: 0.22)) { section = value }
-        } label: {
-            Label(title, systemImage: symbol)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(selected ? Color.white : Color.primary)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .therapyGlass(in: Capsule(), tint: selected ? Color.accentColor.opacity(0.85) : nil, interactive: true)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-    }
+    private func count(_ value: Int) -> String? { value > 0 ? "\(value)" : nil }
 }
 
 /// The therapy session at a glance: live progress while it runs, otherwise the next appointment and quick starts.
@@ -331,7 +306,8 @@ struct TherapySessionHeroCard: View {
     @EnvironmentObject private var store: AppStore
 
     var body: some View {
-        SwiftUI.TimelineView(.periodic(from: .now, by: 1)) { context in
+        // Ticks every second only while a round runs; idle it redraws once a minute (smoother scrolling).
+        SwiftUI.TimelineView(.periodic(from: .now, by: store.data.currentSession == nil ? 60 : 1)) { context in
             GlassCard(emphasized: true) {
                 if let session = store.data.currentSession {
                     running(session, now: context.date)

@@ -71,7 +71,7 @@ final class RoutineAlarmCoordinator {
             } catch { store.routineAlarmStatus = "Alte Therapie-Wecker konnten noch nicht entfernt werden: " + error.localizedDescription; return }
         }
         let candidates = CompanionAlarmPlanner.candidates(store.data)
-        let desired = CompanionAlarmPlanner.admitted(candidates)
+        let desired = CompanionAlarmPlanner.admitted(CompanionAlarmPlanner.coalesced(candidates))
         var owned = UserDefaults.standard.dictionary(forKey: storageKey) as? [String: String] ?? [:]
         func buttonTitle(_ slot: CompanionAlarmSlot) -> String {
             let parts = slot.route.split(separator: "|")

@@ -61,8 +61,13 @@ struct DashboardPreferences: Codable, Equatable {
     var showFeatureLinks = true
     var showAIImpulse = true
     var welcomeMessage = ""
+    /// Kompass 7: the calm Today page (next appointments, weekly tasks, routines, quick capture) is the default.
+    /// The full card list stays one switch away. Missing in older data, which therefore also gets the calm page.
+    var simpleHome = true
+    /// Cards the person adds below the calm Today page.
+    var extraCards: [String] = []
     init() {}
-    enum CodingKeys: String, CodingKey { case welcomeFirst, showFeatureLinks, showAIImpulse, welcomeMessage, cardOrder, hiddenCards, pinnedCards, pinnedRecordIDs, compactCards, showWidgetTitles }
+    enum CodingKeys: String, CodingKey { case welcomeFirst, showFeatureLinks, showAIImpulse, welcomeMessage, cardOrder, hiddenCards, pinnedCards, pinnedRecordIDs, compactCards, showWidgetTitles, simpleHome, extraCards }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         welcomeFirst = try c.decodeIfPresent(Bool.self, forKey: .welcomeFirst) ?? true
@@ -75,7 +80,13 @@ struct DashboardPreferences: Codable, Equatable {
         pinnedRecordIDs = try c.decodeIfPresent([String].self, forKey: .pinnedRecordIDs) ?? []
         compactCards = try c.decodeIfPresent(Bool.self, forKey: .compactCards) ?? false
         showWidgetTitles = try c.decodeIfPresent(Bool.self, forKey: .showWidgetTitles) ?? false
+        simpleHome = try c.decodeIfPresent(Bool.self, forKey: .simpleHome) ?? true
+        extraCards = try c.decodeIfPresent([String].self, forKey: .extraCards) ?? []
     }
+    /// Cards the calm Today page already covers with its own sections.
+    static let simpleCoreCards: Set<HomeCard> = [.welcome, .appointment, .assistedLiving, .task, .routines, .quickActions, .session]
+    /// Optional cards for the calm page, in the person's order.
+    var simpleExtras: [HomeCard] { orderedCards.filter { extraCards.contains($0.rawValue) && !Self.simpleCoreCards.contains($0) } }
     var orderedCards: [HomeCard] {
         var seen = Set<String>()
         return (cardOrder + HomeCard.allCases.map(\.rawValue)).compactMap { raw in

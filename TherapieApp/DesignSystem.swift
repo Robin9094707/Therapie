@@ -9,13 +9,13 @@ import UIKit
 
 enum TherapyDesign {
     static let contentMaxWidth: CGFloat = 720
-    static let cardRadius: CGFloat = 26
+    static let cardRadius: CGFloat = 24
     static let tileRadius: CGFloat = 20
     static let insetRadius: CGFloat = 14
     static let isUITesting = ProcessInfo.processInfo.arguments.contains("--ui-testing")
     static let appName = "Kompass"
     static let appTagline = "Therapie & Betreutes Wohnen"
-    static var appVersion: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "6000.0.0" }
+    static var appVersion: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "7100.0.0" }
 }
 
 private struct TherapyAccentKey: EnvironmentKey {
@@ -71,17 +71,23 @@ struct TherapyGlassModifier<S: Shape>: ViewModifier {
                 .overlay { shape.stroke(Color.primary.opacity(colorScheme == .dark ? 0.12 : 0.07), lineWidth: 1).allowsHitTesting(false) }
                 .shadow(color: .black.opacity(colorScheme == .dark ? 0 : 0.06), radius: 10, y: 4)
         } else if surface.style == .soft {
-            // Sanftes Glas: Liquid Glass edges and highlights over a calm body that hides most of the background.
+            // Kompass 7 "Sanftes Glas": real Liquid Glass edges and light, over a calm, mostly opaque body. The
+            // background only shimmers through at the rim, so text always sits on a quiet surface.
             content
                 .background { shape.fill(tint ?? Color.clear) }
                 .background(Color(uiColor: .secondarySystemGroupedBackground).opacity(bodyOpacity), in: shape)
                 .glassEffect(glass, in: shape)
+                .overlay { shape.stroke(Color.white.opacity(colorScheme == .dark ? 0.07 : 0.5), lineWidth: 0.6).allowsHitTesting(false) }
         } else {
             content.glassEffect(glass, in: shape)
         }
     }
 
-    private var bodyOpacity: Double { max(0, min(0.96, surface.coverage * (colorScheme == .dark ? 0.82 : 0.92))) }
+    /// Coverage 0…1 maps to a calm 55–95 % body (Kompass 7); the clear style ignores it entirely.
+    private var bodyOpacity: Double {
+        let coverage = max(0, min(1, surface.coverage))
+        return (0.55 + coverage * 0.4) * (colorScheme == .dark ? 0.9 : 1)
+    }
 
     private var glass: Glass {
         var glass = Glass.regular
@@ -117,36 +123,23 @@ struct AppBackground: View {
     @Environment(\.therapyAccent) private var accent
 
     var body: some View {
+        // Kompass 7: one soft wash of the accent at the top that fades into the system background. Two plain
+        // gradients instead of a mesh: calmer to look at and cheaper to draw behind every scrolling screen.
         ZStack {
             Color(uiColor: .systemGroupedBackground)
             if !reduceTransparency {
-                MeshGradient(width: 3, height: 3, points: [
-                    SIMD2<Float>(0, 0), SIMD2<Float>(0.5, 0), SIMD2<Float>(1, 0),
-                    SIMD2<Float>(0, 0.42), SIMD2<Float>(0.6, 0.36), SIMD2<Float>(1, 0.48),
-                    SIMD2<Float>(0, 1), SIMD2<Float>(0.5, 1), SIMD2<Float>(1, 1)
-                ], colors: meshColors)
-                .mask {
-                    LinearGradient(stops: [
-                        .init(color: .black, location: 0),
-                        .init(color: .black.opacity(0.6), location: 0.5),
-                        .init(color: .black.opacity(0.3), location: 1)
-                    ], startPoint: .top, endPoint: .bottom)
-                }
+                LinearGradient(colors: [accent.color.opacity(0.22 * strength), accent.companion.opacity(0.08 * strength), .clear],
+                               startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.55))
+                RadialGradient(colors: [accent.companion.opacity(0.12 * strength), .clear], center: .topTrailing, startRadius: 0, endRadius: 420)
             }
         }
         .ignoresSafeArea()
         .accessibilityHidden(true)
+        .allowsHitTesting(false)
     }
 
-    private var meshColors: [Color] {
-        let strength = (calmInterface ? 0.75 : 1.0) * (colorScheme == .dark ? 1.3 : 1.0) * (0.2 + surface.backgroundIntensity * 1.3)
-        let main = accent.color, second = accent.companion
-        func tone(_ color: Color, _ opacity: Double) -> Color { color.opacity(min(1, opacity * strength)) }
-        return [
-            tone(main, 0.34), tone(second, 0.18), tone(main, 0.24),
-            tone(second, 0.16), tone(main, 0.05), tone(second, 0.14),
-            tone(main, 0.12), tone(second, 0.06), tone(main, 0.14)
-        ]
+    private var strength: Double {
+        (calmInterface ? 0.8 : 1.0) * (colorScheme == .dark ? 1.35 : 1.0) * (0.25 + surface.backgroundIntensity * 1.2)
     }
 }
 
@@ -182,16 +175,9 @@ struct GlassCard<Content: View>: View {
 
     var body: some View {
         content
-            .padding(20)
+            .padding(18)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .therapyGlass(in: shape, tint: emphasized ? Color.accentColor.opacity((calmInterface ? 0.06 : 0.1) + surface.tintStrength * 0.12) : nil)
-            .overlay {
-                if emphasized {
-                    shape.strokeBorder(LinearGradient(colors: [Color.accentColor.opacity(0.2 + surface.tintStrength * 0.4), Color.accentColor.opacity(0.04)],
-                                                      startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
-                        .allowsHitTesting(false)
-                }
-            }
+            .therapyGlass(in: shape, tint: emphasized ? Color.accentColor.opacity((calmInterface ? 0.05 : 0.08) + surface.tintStrength * 0.08) : nil)
     }
 
     private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: surface.roundedCards ? TherapyDesign.cardRadius : 16, style: .continuous) }
@@ -203,14 +189,13 @@ struct TherapyIconTile: View {
     var tint: Color = .accentColor
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: size * 0.31, style: .continuous)
+        // Kompass 7: flat, softly tinted tiles instead of glossy gradients with shadows.
+        let shape = RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
         Image(systemName: icon)
             .font(.system(size: size * 0.46, weight: .semibold))
-            .foregroundStyle(.white)
+            .foregroundStyle(tint)
             .frame(width: size, height: size)
-            .background(tint.gradient, in: shape)
-            .overlay { shape.strokeBorder(.white.opacity(0.28), lineWidth: 0.6) }
-            .shadow(color: tint.opacity(0.3), radius: size * 0.18, y: size * 0.08)
+            .background(tint.opacity(0.14), in: shape)
             .accessibilityHidden(true)
     }
 }
@@ -592,18 +577,18 @@ struct WhatsNewView: View {
     }
 
     private let items: [Item] = [
-        Item(icon: "location.north.circle.fill", title: "Therapie heißt jetzt Kompass",
-             text: "Ein neuer Name für Therapie und Betreutes Wohnen. Alle Einträge, Fotos, Aufnahmen, Sicherungen und Einstellungen sind unverändert da – beim ersten Start legt die App zusätzlich eine Kopie deiner Daten an."),
-        Item(icon: "house.fill", title: "Neu: Betreutes Wohnen",
-             text: "Ein eigener Tab für dein ambulant betreutes Wohnen: nächste Termine (auch regelmäßige), Gesprächsthemen sammeln, Gesprächsbegleitung mit Stimmung vorher/nachher, Absprachen und kleine Ziele."),
-        Item(icon: "moon.zzz.fill", title: "Ruhe – auch 24 Stunden",
-             text: "Mitteilungen & Wecker an einem Ort: Ruhe für eine Stunde, bis morgen früh oder 24 Stunden – und jederzeit vorzeitig beenden. Einzelne Bereiche ruhen lassen, tägliche Ruhezeiten und eine Übersicht aller kommenden Erinnerungen."),
-        Item(icon: "circle.lefthalf.filled", title: "Liquid Glass nach deinem Geschmack",
-             text: "Neu „Sanftes Glas“: ruhiger und weniger durchsichtig. Deckkraft, Farbtönung und Hintergrund stellst du unter Darstellung & Glas ein – oder wählst Klar oder Matt."),
-        Item(icon: "bolt.fill", title: "Schneller eintragen",
-             text: "„Schnell festhalten“ auf Heute: ein Feld für Notiz, Aufgabe, Therapie- oder BeWo-Thema, dazu die Stimmung mit einem Tipp. Alltag, Routinen und Hilfen sind jetzt direkt auf Heute."),
-        Item(icon: "alarm.fill", title: "Zuverlässiger nach dem Wecker",
-             text: "Wenn du einen Wecker beendest, zeigt die App sofort den aktuellen Stand – ohne sie erst schließen zu müssen. Die Live-Aktivität der Therapiestunde zeigt keine überlappenden Symbole mehr.")
+        Item(icon: "leaf", title: "Therapie, ganz ruhig",
+             text: "Der Therapie-Tab zeigt jetzt nur noch: deine Stunde, was du ansprechen möchtest, deinen Therapieraum (Themen, Ziele, Wichtiges, Materialien, Therapeut:in) und alles rund um die Therapie als klare Liste."),
+        Item(icon: "sun.max", title: "Heute auf einen Blick",
+             text: "Als Nächstes (Therapie und BeWo), Wochenaufgaben zum Abhaken und direkt Hinzufügen, fällige Routinen und Schnell festhalten. Weitere Karten unter „Heute anpassen“."),
+        Item(icon: "forward.end.fill", title: "Schritte überspringen",
+             text: "In der Therapiestunde einzelne Schritte überspringen oder direkt springen – immer mit Rückfrage. Oder sie schon beim Start weglassen. Frühere Stunden haben jetzt eine eigene Seite."),
+        Item(icon: "alarm", title: "Wecker & Pausen zuverlässig",
+             text: "Über einen Wecker geöffnet, ist die App sofort bereit. Eine Pause stoppt alle Wecker der Stunde, gleichzeitige Wecker klingeln einmal, und nach einer Ruhe laufen Erinnerungen sofort wieder regelmäßig."),
+        Item(icon: "map", title: "Karte im Verlauf",
+             text: "Oben im Verlauf öffnet die Karte alle Orte deiner Einträge, und jeder Eintrag mit Standort zeigt sein „Ort“-Zeichen."),
+        Item(icon: "lock.shield.fill", title: "Alle Daten bleiben",
+             text: "Einträge, Sicherungen, KI-Einstellungen und Erinnerungen bleiben unverändert erhalten.")
     ]
 
     var body: some View {
@@ -616,7 +601,7 @@ struct WhatsNewView: View {
                         Text("Neu in Kompass")
                             .font(.system(.largeTitle, design: .rounded, weight: .bold))
                             .multilineTextAlignment(.center)
-                        Text("Version \(TherapyDesign.appVersion) · Kompass 6 – dein Zuhause, neu gedacht.")
+                        Text("Version \(TherapyDesign.appVersion) · Kompass 7 – ruhig, einfach, verlässlich.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)

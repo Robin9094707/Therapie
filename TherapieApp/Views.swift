@@ -4,24 +4,37 @@ import UniformTypeIdentifiers
 import UIKit
 
 /// Redraws and re-plans when an alarm or intent opens the app (kept separate to keep RootView's body type-checkable).
+///
+/// Kompass 7: every way the app can become usable (scene active, UIKit did-become-active, unlock, an intent
+/// posting its route) funnels into one `activate` closure. A long-running task must never read `scenePhase`:
+/// it captures the value of the first body evaluation, which is `.background` after an alarm launched the app,
+/// so routes and popups stayed pending until the app was closed and reopened.
 private struct IntentRefreshModifier: ViewModifier {
     @EnvironmentObject private var store: AppStore
     @Environment(\.scenePhase) private var scenePhase
     @Binding var appearedInBackground: Bool
-    let present: () -> Void
+    let activate: () -> Void
 
     func body(content: Content) -> some View {
         content
             .onReceive(NotificationCenter.default.publisher(for: .therapyIntentRoute)) { _ in
                 store.resumeProtectedStorage()
-                if store.storageReady { store.consumeRoutineAlarmRoute(); present() }
+                if store.storageReady { store.consumeRoutineAlarmRoute() }
+                activate()
             }
-            .onChange(of: scenePhase) { _, phase in
-                if phase == .active && appearedInBackground {
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                if appearedInBackground {
                     // Launched by an alarm or intent while not visible: the first visible frame must be rebuilt.
                     appearedInBackground = false
-                    store.refreshAfterIntent()
+                    store.refreshAfterIntent(force: true)
                 }
+                activate()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in activate() }
+            .onChange(of: store.waitingForProtectedData) { _, waiting in if !waiting { activate() } }
+            .onChange(of: scenePhase) { _, phase in
+                if phase != .active && store.storageReady { store.sessionController.prepareForBackground() }
+                if phase == .active { activate() }
             }
     }
 }
@@ -104,20 +117,32 @@ struct RootView: View {
             default: break
             }
         }
-        .modifier(IntentRefreshModifier(appearedInBackground: $appearedInBackground, present: presentRequested))
-        .onChange(of: scenePhase) { _, phase in if phase != .active && store.storageReady { store.sessionController.prepareForBackground() }; if phase == .active { store.resumeProtectedStorage(); if store.storageReady { store.sessionController.synchronize(); store.consumeRoutineAlarmRoute(); store.refreshTherapyCalendar(force: false); TaskNotificationCoordinator.shared.refresh(store); AppleRemindersService.shared.refresh(store); TherapyWidgetBridge.refresh(store, force: true); presentRequested() } } }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in store.resumeProtectedStorage(); presentRequested() }
-        .onChange(of: store.waitingForProtectedData) { _, waiting in if !waiting { presentRequested() } }
+        .modifier(IntentRefreshModifier(appearedInBackground: $appearedInBackground, activate: activate))
         .onChange(of: presentationRequestKey) { _, _ in presentRequested() }
-        .onAppear { if scenePhase != .active { appearedInBackground = true }; presentRequested() }
+        .onAppear {
+            if UIApplication.shared.applicationState == .background {
+                // An alarm or intent launched the app invisibly: no splash, rebuild on the first visible frame.
+                appearedInBackground = true; showSplash = false
+            }
+            if Self.hasPendingRoute { showSplash = false }
+            presentRequested()
+        }
         .task {
-            store.resumeProtectedStorage()
-            if store.storageReady { store.sessionController.synchronize(); store.refreshTherapyCalendar(force: false); AppleRemindersService.shared.refresh(store); store.consumeRoutineAlarmRoute() }
+            activate()
             if store.storageReady && modal == nil { await store.aiController.refreshWeeklyReview(); await store.aiController.refreshSuggestion() }
+            var watchedQuietEnd = QuietPolicy.resumeDate(store.data.quietMode)
             while !Task.isCancelled {
                 store.resumeProtectedStorage()
-                if store.storageReady && scenePhase == .active { store.sessionController.reconcile(); store.consumeRoutineAlarmRoute(); presentRequested() }
-                if scenePhase == .active && Date().timeIntervalSince(lastReminderRefresh) >= 300 && store.storageReady && store.lastSaveError == nil {
+                let visible = UIApplication.shared.applicationState == .active
+                if store.storageReady && visible { store.sessionController.reconcile(); store.consumeRoutineAlarmRoute(); presentRequested() }
+                // A timed pause ran out while the app is open: bring repeating reminders and alarms back at once
+                // instead of after the next five-minute refresh.
+                if let end = watchedQuietEnd, Date() >= end, store.storageReady {
+                    TaskNotificationCoordinator.shared.refresh(store)
+                    store.sessionController.synchronize()
+                }
+                watchedQuietEnd = store.storageReady ? QuietPolicy.resumeDate(store.data.quietMode) : watchedQuietEnd
+                if visible && Date().timeIntervalSince(lastReminderRefresh) >= 300 && store.storageReady && store.lastSaveError == nil {
                     lastReminderRefresh = Date()
                     AppleRemindersService.shared.refresh(store)
                     store.pruneUndo()
@@ -203,9 +228,34 @@ struct RootView: View {
         return (store.notificationApplePage ?? "") + flags.map { $0 ? "1" : "0" }.joined() + (store.pendingGuidedCheckIn?.id.uuidString ?? "") + (store.notificationTaskID?.uuidString ?? "") + (store.notificationRoutineID?.uuidString ?? "")
     }
 
+    /// Routes an intent stored before the UI existed (alarm stop, alarm button, shortcut).
+    private static var hasPendingRoute: Bool {
+        ["therapy.apple.shortcut", "therapy.companion.open", "therapy.routine.open"].contains { UserDefaults.standard.string(forKey: $0) != nil }
+    }
+
+    /// Single entry for "the app is (again) usable": unlock storage, consume stored intent routes, re-plan and
+    /// present whatever is waiting. Safe to call often; every step is idempotent.
+    private func activate() {
+        store.resumeProtectedStorage()
+        guard store.storageReady else { return }
+        if UIApplication.shared.applicationState != .background {
+            store.sessionController.synchronize()
+            store.consumeRoutineAlarmRoute()
+            store.refreshTherapyCalendar(force: false)
+            TaskNotificationCoordinator.shared.refresh(store)
+            AppleRemindersService.shared.refresh(store)
+            TherapyWidgetBridge.refresh(store, force: true)
+            lastReminderRefresh = Date()
+        } else {
+            store.consumeRoutineAlarmRoute()
+        }
+        presentRequested()
+    }
+
     private func presentRequested() {
-        // One stable presentation owner. Other requests wait for this sheet to close.
-        guard modal == nil, !showSplash, store.storageReady, scenePhase == .active else { return }
+        // One stable presentation owner. Other requests wait for this sheet to close. UIKit's state is read
+        // directly because a captured `scenePhase` can be stale inside long-running tasks.
+        guard modal == nil, !showSplash, store.storageReady, UIApplication.shared.applicationState != .background else { return }
         if let page = store.notificationApplePage { store.notificationApplePage = nil; modal = .apple(page) }
         else if showPermissions { showPermissions = false; modal = .permissions }
         else if store.notificationSession { store.notificationSession = false; modal = .session }
@@ -358,6 +408,7 @@ struct DashboardView: View {
     @State private var showPhoto = false
     @State private var showAudio = false
     @State private var showTasks = false
+    @State private var showAIPage = false
 
     private var currentTask: WeeklyTask? {
         let week = Date().therapyWeek
@@ -370,36 +421,8 @@ struct DashboardView: View {
     var body: some View {
         NavigationStack {
             TherapyScreen {
-                LazyVStack(spacing: store.data.dashboard.compactCards ? 10 : 18) {
-                    if store.data.dashboard.welcomeFirst && store.data.dashboard.visibleCards.contains(.welcome) { PersonalWelcomeCard() }
-                    QuietStatusBanner()
-                    QuickCaptureCard()
-                    if store.data.dashboard.showAIImpulse && store.data.aiSettings.enabled && store.data.suggestionsEnabled != false { BuddySuggestionsCard(controller: store.aiController) }
-                    ForEach(store.data.dashboard.visibleCards.filter { !(store.data.dashboard.welcomeFirst && $0 == .welcome) }) { card in
-                        dashboardCard(card)
-                            .contextMenu {
-                                Button(store.data.dashboard.pinnedCards.contains(card.rawValue) ? "Karte lösen" : "Karte oben anpinnen", systemImage: "pin") {
-                                    var preferences = store.data.dashboard
-                                    if preferences.pinnedCards.contains(card.rawValue) { preferences.pinnedCards.removeAll { $0 == card.rawValue } }
-                                    else { preferences.pinnedCards.append(card.rawValue) }
-                                    store.data.dashboard = preferences
-                                }
-                                Button("Karte ausblenden", systemImage: "eye.slash") { store.data.dashboard.hiddenCards.append(card.rawValue) }
-                                Button("Heute gestalten", systemImage: "slider.horizontal.3") { customize = true }
-                            }
-                    }
-                    if store.data.dashboard.visibleCards.isEmpty {
-                        ContentUnavailableView("Deine Heute-Seite", systemImage: "slider.horizontal.3", description: Text("Wähle deine Karten über „Heute gestalten“."))
-                    }
-                    if store.data.dashboard.showFeatureLinks { EverydayToolsSection().padding(.top, 6) }
-                    HStack(spacing: 10) {
-                        Button("Heute gestalten", systemImage: "slider.horizontal.3") { customize = true }
-                            .accessibilityIdentifier("today.customize")
-                        Button("Alle Funktionen", systemImage: "square.grid.3x3.fill") { store.selectedTab = TherapyTab.search }
-                    }
-                    .buttonStyle(.glass)
-                    .font(.subheadline.weight(.semibold))
-                    .padding(.top, 4)
+                LazyVStack(spacing: store.data.dashboard.compactCards ? 10 : 16) {
+                    if store.data.dashboard.simpleHome { simpleHome } else { classicHome }
                 }
             }
             .navigationTitle("Heute")
@@ -407,21 +430,22 @@ struct DashboardView: View {
             .sheet(isPresented: $customize) { DashboardCustomizationView(preferences: store.data.dashboard) }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { NavigationLink { EmergencyPlanView() } label: { Label("Notfallplan", systemImage: "lifepreserver.fill") }.tint(.red) }
-                ToolbarItem(placement: .topBarLeading) { QuietToolbarButton() }
+                ToolbarItem(placement: .topBarTrailing) { QuietToolbarButton() }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Button("Heute gestalten", systemImage: "slider.horizontal.3") { customize = true }
+                        if store.data.aiSettings.enabled { Button("KI-Begleiter", systemImage: "sparkles") { showAIPage = true } }
                         Button("Wochenaufgaben", systemImage: "checklist") { showTasks = true }
-                        Button("Mitteilungen & Wecker", systemImage: "moon.zzz") { store.notificationQuietCenter = true }
+                        Button("Mitteilungen & Wecker", systemImage: "bell.badge") { store.notificationQuietCenter = true }
+                        Button("Routinen", systemImage: "repeat") { store.notificationRoutines = true }
                         Button("Betreutes Wohnen", systemImage: "house") { store.selectedTab = TherapyTab.assistedLiving }
-                        Button("Alle Funktionen", systemImage: "square.grid.3x3.fill") { store.selectedTab = TherapyTab.search }
+                        Divider()
+                        Button("Heute anpassen", systemImage: "slider.horizontal.3") { customize = true }
+                        Button("Alle Funktionen", systemImage: "square.grid.2x2") { store.selectedTab = TherapyTab.search }
                     } label: { Label("Mehr", systemImage: "ellipsis") }
                     .accessibilityIdentifier("today.menu")
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    if store.data.aiSettings.enabled { NavigationLink { AIBuddyView() } label: { Label("KI-Begleiter", systemImage: "sparkles") }.accessibilityIdentifier("today.ai") }
-                }
             }
+            .navigationDestination(isPresented: $showAIPage) { AIBuddyView() }
             .therapyRootToolbar()
             .navigationDestination(isPresented: $showTasks) { TasksView() }
             .onAppear { if !openedNoteFixture && ProcessInfo.processInfo.arguments.contains("--show-note") { openedNoteFixture = true; showNote = true } }
@@ -447,6 +471,62 @@ struct DashboardView: View {
                 Text("Bestätige nur, wenn du „\(store.data.routines.first { $0.id == occurrence.routineID }?.title ?? "diese Routine")“ wirklich abgeschlossen hast.")
             }
         }
+    }
+
+    /// Kompass 7: the calm default page.
+    @ViewBuilder private var simpleHome: some View {
+        TodayGreetingHeader()
+        QuietStatusBanner()
+        TodayNextUpCard()
+        WeeklyTasksQuickCard()
+        if store.data.routines.contains(where: \.enabled) {
+            TodayRoutinesCard { occurrence in routineToComplete = occurrence; confirmRoutineCompletion = true }
+        }
+        QuickCaptureCard()
+        TodayAIStrip()
+        ForEach(store.data.dashboard.simpleExtras) { card in
+            dashboardCard(card)
+                .contextMenu { Button("Von Heute entfernen", systemImage: "minus.circle") { store.data.dashboard.extraCards.removeAll { $0 == card.rawValue } } }
+        }
+        Button { customize = true } label: { Label("Heute anpassen", systemImage: "slider.horizontal.3") }
+            .buttonStyle(.glass)
+            .font(.subheadline.weight(.semibold))
+            .padding(.top, 4)
+            .accessibilityIdentifier("today.customize")
+    }
+
+    /// The full, freely arranged card list from Kompass 6 (one switch in "Heute anpassen").
+    @ViewBuilder private var classicHome: some View {
+        if store.data.dashboard.welcomeFirst && store.data.dashboard.visibleCards.contains(.welcome) { PersonalWelcomeCard() }
+        QuietStatusBanner()
+        QuickCaptureCard()
+        TodayAIStrip()
+        if store.data.dashboard.showAIImpulse && store.data.aiSettings.enabled && store.data.suggestionsEnabled != false { BuddySuggestionsCard(controller: store.aiController) }
+        ForEach(store.data.dashboard.visibleCards.filter { !(store.data.dashboard.welcomeFirst && $0 == .welcome) }) { card in
+            dashboardCard(card)
+                .contextMenu {
+                    Button(store.data.dashboard.pinnedCards.contains(card.rawValue) ? "Karte lösen" : "Karte oben anpinnen", systemImage: "pin") {
+                        var preferences = store.data.dashboard
+                        if preferences.pinnedCards.contains(card.rawValue) { preferences.pinnedCards.removeAll { $0 == card.rawValue } }
+                        else { preferences.pinnedCards.append(card.rawValue) }
+                        store.data.dashboard = preferences
+                    }
+                    Button("Karte ausblenden", systemImage: "eye.slash") { store.data.dashboard.hiddenCards.append(card.rawValue) }
+                    Button("Heute gestalten", systemImage: "slider.horizontal.3") { customize = true }
+                }
+        }
+        if store.data.dashboard.visibleCards.isEmpty {
+            ContentUnavailableView("Deine Heute-Seite", systemImage: "slider.horizontal.3", description: Text("Wähle deine Karten über „Heute gestalten“."))
+        }
+        if store.data.dashboard.showFeatureLinks { EverydayToolsSection().padding(.top, 6) }
+        HStack(spacing: 10) {
+            Button("Heute gestalten", systemImage: "slider.horizontal.3") { customize = true }
+                .accessibilityIdentifier("today.customize")
+            Button("Alle Funktionen", systemImage: "square.grid.3x3.fill") { store.selectedTab = TherapyTab.search }
+        }
+        .buttonStyle(.glass)
+        .font(.subheadline.weight(.semibold))
+        .padding(.top, 4)
     }
 
     @ViewBuilder private func dashboardCard(_ card: HomeCard) -> some View {
@@ -972,7 +1052,7 @@ struct LibraryView: View {
                     }
                 }
             }
-            .navigationTitle("Therapie-Archiv")
+            .navigationTitle("Verlauf")
             .alert("Eintrag endgültig löschen?", isPresented: $confirmDelete) {
                 Button("Abbrechen", role: .cancel) { mediaToDelete = nil; noteToDelete = nil; energyToDelete = nil }
                 Button("Löschen", role: .destructive) {
@@ -984,6 +1064,10 @@ struct LibraryView: View {
             } message: { Text("Der Eintrag und gegebenenfalls seine lokale Datei werden gelöscht. Das kann nicht rückgängig gemacht werden.") }
             .searchable(text: $searchText, prompt: "Notizen, Medien und Rückblicke suchen")
             .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink { EntryMapView() } label: { Label("Karte", systemImage: "map") }
+                        .accessibilityIdentifier("history.map")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button("Foto hinzufügen", systemImage: "photo.badge.plus") {

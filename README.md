@@ -1,3 +1,20 @@
+## Update 7100.0.0 · Kompass 7, vollendet
+
+- Therapie-Tab als ruhige Listen (Stunde, Gesprächsliste, Therapieraum, Rund um die Therapie); laufende Stunde ohne Vorlagen-Ballast, frühere Stunden auf eigener Seite.
+- Ablaufende Ruhe plant Erinnerungen und Wecker sofort neu; weniger Neuzeichnen im Leerlauf; Karte direkt im Verlauf. Details in `UPDATE-7100.md`.
+
+## Update 7000.0.0 · Kompass 7
+
+- Ruhigere Heute-Seite (Als Nächstes, Wochenaufgaben mit direktem Hinzufügen, Routinen, Schnell festhalten), klareres Liquid Glass mit deckenden Flächen, kompaktes BeWo, Ort-Anzeige im Verlauf.
+- Therapiestunde: Schritte mit Bestätigung überspringen, direkt springen oder schon beim Start auslassen.
+- Fixes: App nach einem Wecker sofort bereit; Pause stoppt alle Wecker der Stunde; gleichzeitige Wecker klingeln nur einmal. Details in `UPDATE-7000.md`.
+
+## Update 6100.0.0 · Das große KI-Update
+
+- Neue KI-Aktionen für Betreutes Wohnen (Termine, Themen, Absprachen, Ziele, Zusammenfassungen) und Ruhe; automatische Terminerkennung.
+- Interaktive Aktionskarten mit „Übernehmen“ und „Alle übernehmen“; KI-Kurzwege auf Heute, in Therapie, BeWo, Mitteilungen & Wecker und Suche.
+- Lokale Terminerkennung in „Schnell festhalten“ auch ohne KI; sparsamer Kontext und Prompt-Caching. Details in `UPDATE-6100.md`.
+
 ## Update 6000.0.0 · Kompass 6
 
 - Therapie heißt jetzt **Kompass** (Bundle-ID und Datenordner unverändert). Tabs: Heute, Therapie, BeWo, Verlauf und Suche; Alltag liegt auf Heute.
