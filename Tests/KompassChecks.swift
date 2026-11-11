@@ -239,7 +239,8 @@ struct KompassChecks {
         try expect(springBoundary != nil && calendar.component(.day, from: springBoundary!.date) == 29, "Detection survives the DST gap")
 
         // MARK: Kompass 7: skipping round steps and calm alarms
-        var round = RunningTherapySession.start(TherapySessionTemplate(), at: now)
+        let plan = TherapySessionTemplate()
+        var round = RunningTherapySession.start(plan, at: now)
         let coffee = round.phases[0], airTag = round.phases[1], review = round.phases[2], talk = round.phases[3]
         let minute = now.addingTimeInterval(60)
         try expect(round.canSkip(coffee.id, at: minute) && !round.canSkip(talk.id, at: now.addingTimeInterval(21 * 60)), "Current step is skippable, the last remaining step is not")
@@ -247,7 +248,7 @@ struct KompassChecks {
         try expect(abs(round.remaining(at: minute) - 55 * 60) < 1, "The next step keeps its full time; the round gets shorter")
         try expect(round.skipPhase(review.id, at: minute) && round.phases.map(\.id) == [coffee.id, airTag.id, talk.id], "An upcoming step leaves today's plan")
         try expect(round.skippedPhaseTitles == [coffee.title, review.title], "Skipped steps are remembered by name")
-        var jumped = RunningTherapySession.start(TherapySessionTemplate(), at: now)
+        var jumped = RunningTherapySession.start(plan, at: now)
         jumped.pause(at: minute)
         try expect(jumped.jump(to: talk.id, at: minute) && jumped.phaseIndex(at: minute.addingTimeInterval(600)) == 1 && jumped.phases.last?.id == talk.id && jumped.pausedAt != nil, "Jumping works while paused and stays paused")
         let oldRound = try JSONSerialization.jsonObject(with: encoder.encode(RunningTherapySession.start(TherapySessionTemplate(), at: now))) as! [String: Any]
