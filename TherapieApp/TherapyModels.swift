@@ -125,6 +125,10 @@ struct RunningTherapySession: Codable, Equatable, Identifiable {
     var endedEarly = false
     var summary = ""
     var nextStep = ""
+    /// Kompass 7: phases the person skipped (already done before the round, e.g. coffee). Optional, so every
+    /// stored session without it still decodes.
+    var skippedPhaseTitles: [String]?
+    var skippedPhaseIDs: [UUID]?
     var totalSeconds: TimeInterval { TimeInterval(phases.reduce(0) { $0 + max(1, $1.minutes) } * 60) }
     var clockStart: Date { startedAt.addingTimeInterval(accumulatedPause) }
     var expectedEnd: Date { clockStart.addingTimeInterval(totalSeconds) }
@@ -151,6 +155,52 @@ struct RunningTherapySession: Codable, Equatable, Identifiable {
         accumulatedPause += max(0, date.timeIntervalSince(pause))
         pausedAt = nil
     }
+    func isSkipped(_ phase: SessionPhase) -> Bool { skippedPhaseIDs?.contains(phase.id) ?? false }
+
+    /// The phases a skip of `id` would leave out: the current phase is cut short, an upcoming one is removed.
+    /// With `through` all phases from the current one up to (excluding) the target are skipped, i.e. a jump.
+    func phasesSkipped(jumpingTo id: UUID, at now: Date = Date()) -> [SessionPhase] {
+        guard endedAt == nil, let current = phaseIndex(at: now), let target = phases.firstIndex(where: { $0.id == id }), target > current else { return [] }
+        return Array(phases[current..<target])
+    }
+
+    /// Whether `id` can be skipped right now. The last remaining phase cannot be skipped (that is "Beenden").
+    func canSkip(_ id: UUID, at now: Date = Date()) -> Bool {
+        guard endedAt == nil, let current = phaseIndex(at: now), let index = phases.firstIndex(where: { $0.id == id }) else { return false }
+        if index == current { return index < phases.count - 1 }
+        return index > current
+    }
+
+    /// Skips one phase. The current phase ends now (the clock jumps to the next phase, which then runs for its
+    /// full time); an upcoming phase is taken out of the plan. Paused sessions stay paused.
+    @discardableResult
+    mutating func skipPhase(_ id: UUID, at now: Date = Date()) -> Bool {
+        guard canSkip(id, at: now), let current = phaseIndex(at: now), let index = phases.firstIndex(where: { $0.id == id }) else { return false }
+        let title = phases[index].title
+        if index == current {
+            let boundary = phases.prefix(index + 1).reduce(0.0) { $0 + TimeInterval(max(1, $1.minutes) * 60) }
+            let jump = boundary - elapsed(at: now)
+            guard jump > 0 else { return false }
+            // A hundredth of a second past the boundary keeps the new phase current despite rounding.
+            accumulatedPause -= jump + 0.01
+            skippedPhaseIDs = (skippedPhaseIDs ?? []) + [id]
+        } else {
+            phases.remove(at: index)
+        }
+        skippedPhaseTitles = (skippedPhaseTitles ?? []) + [title]
+        return true
+    }
+
+    /// Jumps straight to `id`: every phase from the current one up to it is skipped.
+    @discardableResult
+    mutating func jump(to id: UUID, at now: Date = Date()) -> Bool {
+        let skipped = phasesSkipped(jumpingTo: id, at: now)
+        guard !skipped.isEmpty else { return false }
+        // Remove the upcoming phases first (back to front) so the current boundary stays where it is.
+        for phase in skipped.dropFirst().reversed() { skipPhase(phase.id, at: now) }
+        return skipPhase(skipped[0].id, at: now)
+    }
+
     static func start(_ template: TherapySessionTemplate, at date: Date = Date()) -> RunningTherapySession {
         RunningTherapySession(templateID: template.id, title: template.title, phases: template.phases, startedAt: date)
     }

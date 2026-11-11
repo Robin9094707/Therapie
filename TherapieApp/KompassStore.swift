@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit
 
 extension Notification.Name {
     /// Posted by intents that open the app (alarm stop, alarm button, shortcuts) after they stored their route.
@@ -60,8 +61,10 @@ extension AppStore {
 
     /// Called when the app comes back from an alarm or intent: redraw every screen from the current data and
     /// re-plan reminders, so the first frame after "Stopp" is never a stale preview.
-    func refreshAfterIntent() {
-        surfaceRevision &+= 1
+    func refreshAfterIntent(force: Bool = false) {
+        // Rebuilding every tab is only needed for the frame iOS captured while the app was not visible. While the
+        // app is on screen a rebuild would reset navigation, so the route is just presented.
+        if force || UIApplication.shared.applicationState != .active { surfaceRevision &+= 1 }
         TaskNotificationCoordinator.shared.refresh(self)
         TherapyWidgetBridge.refresh(self, force: true)
     }

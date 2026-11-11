@@ -230,6 +230,27 @@ enum CompanionAlarmPlanner {
         }
         return slots.sorted { $0.fireAt == $1.fireAt ? $0.id < $1.id : $0.fireAt < $1.fireAt }
     }
+    /// Alarms that would ring within `window` seconds of each other become one alarm, so a pause ending or a
+    /// busy minute never stacks several alarm screens. The most important one keeps ringing (wake, then the
+    /// running session, then the earliest) and its title names how many others it carries. The window stays
+    /// below one minute so consecutive one-minute session phases keep their own alarms.
+    static func coalesced(_ slots: [CompanionAlarmSlot], window: TimeInterval = 50) -> [CompanionAlarmSlot] {
+        func rank(_ slot: CompanionAlarmSlot) -> Int { slot.group.hasPrefix("wake") ? 0 : slot.group.hasPrefix("session") ? 1 : 2 }
+        var kept: [CompanionAlarmSlot] = [], extra: [Int] = []
+        for slot in slots.sorted(by: { $0.fireAt == $1.fireAt ? $0.id < $1.id : $0.fireAt < $1.fireAt }) {
+            if let last = kept.indices.last, slot.fireAt.timeIntervalSince(kept[last].fireAt) < window {
+                if rank(slot) < rank(kept[last]) { kept[last] = slot }
+                extra[last] += 1
+            } else {
+                kept.append(slot); extra.append(0)
+            }
+        }
+        for index in kept.indices where extra[index] > 0 {
+            kept[index].title = String(kept[index].title.prefix(80)) + (extra[index] == 1 ? " · +1 weitere Erinnerung" : " · +\(extra[index]) weitere Erinnerungen")
+        }
+        return kept
+    }
+
     static func admitted(_ all: [CompanionAlarmSlot], budget: Int = 24) -> [CompanionAlarmSlot] {
         var groups = Set<String>(), ids = Set<String>(), selected: [CompanionAlarmSlot] = []
         for slot in all where slot.group.hasPrefix("wake") && groups.insert(slot.group).inserted && selected.count < max(0,budget) { if ids.insert(slot.id).inserted { selected.append(slot) } }

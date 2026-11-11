@@ -238,6 +238,26 @@ struct KompassChecks {
         let springBoundary = GermanDateDetector.detect("Sonntag um 2:30 Termin", now: date("2026-03-27T12:00:00Z"), calendar: calendar)
         try expect(springBoundary != nil && calendar.component(.day, from: springBoundary!.date) == 29, "Detection survives the DST gap")
 
+        // MARK: Kompass 7: skipping round steps and calm alarms
+        var round = RunningTherapySession.start(TherapySessionTemplate(), at: now)
+        let coffee = round.phases[0], airTag = round.phases[1], review = round.phases[2], talk = round.phases[3]
+        let minute = now.addingTimeInterval(60)
+        try expect(round.canSkip(coffee.id, at: minute) && !round.canSkip(talk.id, at: now.addingTimeInterval(21 * 60)), "Current step is skippable, the last remaining step is not")
+        try expect(round.skipPhase(coffee.id, at: minute) && round.phaseIndex(at: minute) == 1 && round.isSkipped(coffee), "Skipping coffee starts the next step at once")
+        try expect(abs(round.remaining(at: minute) - 55 * 60) < 1, "The next step keeps its full time; the round gets shorter")
+        try expect(round.skipPhase(review.id, at: minute) && round.phases.map(\.id) == [coffee.id, airTag.id, talk.id], "An upcoming step leaves today's plan")
+        try expect(round.skippedPhaseTitles == [coffee.title, review.title], "Skipped steps are remembered by name")
+        var jumped = RunningTherapySession.start(TherapySessionTemplate(), at: now)
+        jumped.pause(at: minute)
+        try expect(jumped.jump(to: talk.id, at: minute) && jumped.phaseIndex(at: minute.addingTimeInterval(600)) == 1 && jumped.phases.last?.id == talk.id && jumped.pausedAt != nil, "Jumping works while paused and stays paused")
+        let oldRound = try JSONSerialization.jsonObject(with: encoder.encode(RunningTherapySession.start(TherapySessionTemplate(), at: now))) as! [String: Any]
+        try expect(try decoder.decode(RunningTherapySession.self, from: JSONSerialization.data(withJSONObject: oldRound.filter { !$0.key.hasPrefix("skipped") })).skippedPhaseTitles == nil, "Stored rounds without skip data still open")
+        let stacked = [CompanionAlarmSlot(id: "routine.a", group: "routine.a", fireAt: now, title: "Tabletten", route: "routine|a"),
+                       CompanionAlarmSlot(id: "wake.b", group: "wake.b", fireAt: now.addingTimeInterval(20), title: "Aufstehen", route: "wake|b"),
+                       CompanionAlarmSlot(id: "session.c", group: "session.phase", fireAt: now.addingTimeInterval(80), title: "Abschnitt", route: "session|c")]
+        let calm = CompanionAlarmPlanner.coalesced(stacked)
+        try expect(calm.count == 2 && calm[0].id == "wake.b" && calm[0].title.contains("+1") && calm[1].id == "session.c", "Alarms in the same moment ring once; one-minute phases stay separate")
+
         print("Passed \(count) Kompass checks: schema 19 migration, quiet mode (rest, early end, areas, single reminders, quiet hours across DST/New Year), task and alarm planning, BeWo rhythms, topics, agreements, readable backup, AI actions, context and German date detection.")
     }
 }

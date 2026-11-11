@@ -53,6 +53,8 @@ struct BackupChecks {
         data.dashboard.pinnedCards = ["routines"]
         data.dashboard.pinnedRecordIDs = ["note-backup-test"]
         data.dashboard.showWidgetTitles = true
+        data.dashboard.simpleHome = false
+        data.dashboard.extraCards = ["showers", "methods"]
         data.archivePreferences = ArchivePreferences(grouping: .year, oldestFirst: true)
         data.profile = UserProfile(userName: "Robin", therapistName: "Therapeutin", onboardingCompleted: true)
         let routine = DailyRoutine(title: "Frühstück", symbol: "fork.knife", goalID: nil, times: [RoutineTime(title: "Vor der Arbeit", weekdays: [2, 3, 4, 5, 6], hour: 6, minute: 15, weekendHour: 9, weekendMinute: 0)], urgentAlarm: true)
@@ -178,6 +180,7 @@ struct BackupChecks {
         try expect(prepared.manifest.data.aiSettings.thinking == "deep", "Therapie 5 AI thinking depth round-trips in the encrypted backup")
         defer { prepared.discard() }
         try expect(prepared.manifest.data.quietMode == data.quietMode && prepared.manifest.data.surface == data.surface, "Kompass quiet mode and glass preferences round-trip")
+        try expect(prepared.manifest.data.dashboard == data.dashboard && prepared.manifest.data.dashboard.simpleHome == false && prepared.manifest.data.dashboard.extraCards == ["showers", "methods"], "Kompass 7 Today layout round-trips")
         try expect(prepared.manifest.data.assistedLivingSettings == data.assistedLivingSettings && prepared.manifest.data.assistedLivingTopics.map(\.id) == [bewoTopic.id] && prepared.manifest.data.assistedLivingAppointments[0].agreements.count == 1 && prepared.manifest.data.assistedLivingGoals.count == 1, "Betreutes Wohnen round-trips in the encrypted backup")
         try expect(try json(prepared.manifest.data) == json(data.portableSnapshot), "All AppData fields round-trip")
         try expect(prepared.manifest.data.dashboard == data.dashboard && prepared.manifest.data.archivePreferences == data.archivePreferences, "Encrypted restore retains cards, pins and archive settings")

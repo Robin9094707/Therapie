@@ -22,6 +22,8 @@ struct SessionConductorContent: View {
     @State private var showPreferences = false
     @State private var showAI = false
     @State private var voiceActive = false
+    @State private var skipRequest: SessionSkipRequest?
+    @State private var startDraft: TherapySessionTemplate?
 
     var body: some View {
         TherapyScreen {
@@ -66,6 +68,19 @@ struct SessionConductorContent: View {
         .sheet(item: $historyDraft) { SessionHistoryEditorView(session: $0) }
         .sheet(isPresented: $showAI) { AIBuddyEntryView() }
         .sheet(isPresented: $showPreferences) { NavigationStack { SessionPreferencesView(controller: controller) } }
+        .sheet(item: $startDraft) { template in
+            SessionStartSheet(template: template) { skipped in controller.start(template, skipping: skipped) }
+                .presentationDetents([.medium, .large])
+        }
+        .confirmationDialog(skipRequest.map { "„\($0.title)“ überspringen?" } ?? "", isPresented: Binding(get: { skipRequest != nil }, set: { if !$0 { skipRequest = nil } }), titleVisibility: .visible, presenting: skipRequest) { request in
+            Button(request.isCurrent ? "Ja, überspringen" : "Nur diesen Schritt überspringen") { controller.skip(request.id); skipRequest = nil }
+            if !request.isCurrent && !request.jumpSkips.isEmpty {
+                Button("Direkt zu „\(request.title)“ springen") { controller.jump(to: request.id); skipRequest = nil }
+            }
+            Button("Abbrechen", role: .cancel) { skipRequest = nil }
+        } message: { request in
+            Text(request.message)
+        }
         .alert("Stunde vorzeitig beenden?", isPresented: $finish) {
             Button("Weiterlaufen lassen", role: .cancel) {}
             Button("Beenden") { controller.finish(early: true) }
@@ -93,36 +108,80 @@ struct SessionConductorContent: View {
         .onChange(of: scenePhase) { _, phase in if phase == .active { controller.synchronize() } }
     }
     private func activeCard(_ session: RunningTherapySession, now: Date) -> some View {
-        GlassCard(emphasized: true) {
+        let current = session.phaseIndex(at: now)
+        return GlassCard(emphasized: true) {
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
                     Text(session.title).font(.title2.bold())
                     Spacer()
-                    if session.pausedAt != nil { Label("Pause", systemImage: "pause.circle").font(.caption.bold()) }
+                    if session.pausedAt != nil { TherapyChip(text: "Pause", icon: "pause.fill", tint: .orange) }
                 }
-                SessionClockFace(session: session, now: now).frame(maxWidth: 320).frame(maxWidth: .infinity)
-                if let index = session.phaseIndex(at: now) {
+                SessionClockFace(session: session, now: now).frame(maxWidth: 300).frame(maxWidth: .infinity)
+                if let index = current {
                     let phase = session.phases[index]
-                    Label("Jetzt: " + phase.title, systemImage: "arrow.right.circle.fill").font(.headline)
-                    if index + 1 < session.phases.count { Text("Danach: " + session.phases[index + 1].title).font(.subheadline).foregroundStyle(.secondary) }
-                }
-                ForEach(Array(session.phases.enumerated()), id: \.element.id) { index, phase in
-                    HStack(alignment: .top) {
-                        Circle().fill(phaseColors[abs(phase.colorIndex) % phaseColors.count]).frame(width: 10, height: 10).padding(.top, 4).accessibilityHidden(true)
-                        Text(phase.title).font(.subheadline)
-                        Spacer()
-                        Text("\(phase.minutes) Min.").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                        if index == session.phaseIndex(at: now) { Image(systemName: "arrow.left").font(.caption).accessibilityLabel("Aktueller Abschnitt") }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Jetzt").font(.caption.weight(.semibold)).textCase(.uppercase).foregroundStyle(.secondary)
+                        Text(phase.title).font(.title3.weight(.semibold))
+                        if index + 1 < session.phases.count { Text("Danach: " + session.phases[index + 1].title).font(.subheadline).foregroundStyle(.secondary) }
                     }
+                    if session.canSkip(phase.id, at: now) {
+                        Button { skipRequest = SessionSkipRequest(session: session, phase: phase, now: now) } label: {
+                            Label("Diesen Schritt überspringen", systemImage: "forward.end.fill").frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.glass)
+                        .accessibilityIdentifier("session.skipCurrent")
+                    }
+                }
+                VStack(spacing: 0) {
+                    ForEach(Array(session.phases.enumerated()), id: \.element.id) { index, phase in
+                        phaseRow(session, index: index, phase: phase, current: current, now: now)
+                        if index < session.phases.count - 1 { Divider().padding(.leading, 34) }
+                    }
+                }
+                .padding(.horizontal, 12)
+                .therapyInsetSurface()
+                if let skipped = session.skippedPhaseTitles, !skipped.isEmpty {
+                    Label("Übersprungen: " + skipped.joined(separator: ", "), systemImage: "forward.end")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
                 ResponsiveButtonRow {
                     Button(session.pausedAt == nil ? "Pausieren" : "Fortsetzen", systemImage: session.pausedAt == nil ? "pause.fill" : "play.fill") { controller.pauseOrResume() }.buttonStyle(.glassProminent)
                     Button("Beenden", systemImage: "stop") { finish = true }.buttonStyle(.glass).disabled(voiceActive)
                 }
+                .controlSize(.large)
                 LiveActivityStatusRow(controller: controller, enabled: store.data.sessionPreferences.liveActivityEnabled)
-                Text(store.data.sessionPreferences.usesPrivateLiveActivity ? "Die Live-Aktivität zeigt neutrale Abschnittsnamen. Echte Namen kannst du in den Timer-Einstellungen einschalten." : "Die Live-Aktivität zeigt deine Abschnittsnamen. Notizen bleiben in der App; neutrale Namen sind in den Timer-Einstellungen wählbar.").font(.caption2).foregroundStyle(.secondary)
             }
         }
+    }
+
+    private func phaseRow(_ session: RunningTherapySession, index: Int, phase: SessionPhase, current: Int?, now: Date) -> some View {
+        let isCurrent = index == current
+        let done = current.map { index < $0 } ?? true
+        let skipped = session.isSkipped(phase)
+        return HStack(spacing: 10) {
+            Image(systemName: skipped ? "forward.end.circle.fill" : done ? "checkmark.circle.fill" : isCurrent ? "play.circle.fill" : "circle")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(isCurrent ? phaseColors[abs(phase.colorIndex) % phaseColors.count] : done ? Color.secondary : phaseColors[abs(phase.colorIndex) % phaseColors.count].opacity(0.7))
+                .frame(width: 24)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(phase.title).font(.subheadline.weight(isCurrent ? .semibold : .regular))
+                    .strikethrough(skipped)
+                    .foregroundStyle(done ? Color.secondary : Color.primary)
+                Text(skipped ? "Übersprungen" : "\(phase.minutes) Min.").font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 6)
+            if !done && !isCurrent && session.canSkip(phase.id, at: now) {
+                Button { skipRequest = SessionSkipRequest(session: session, phase: phase, now: now) } label: {
+                    Image(systemName: "forward.end").font(.subheadline.weight(.semibold)).frame(width: 40, height: 40).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.accentColor)
+                .accessibilityLabel("„\(phase.title)“ überspringen")
+            }
+        }
+        .frame(minHeight: 44)
+        .accessibilityElement(children: .contain)
     }
     private var templates: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -148,8 +207,14 @@ struct SessionConductorContent: View {
                             } label: { Image(systemName: "ellipsis.circle").frame(width: 44, height: 44) }
                         }
                         Text(template.phases.map { "\($0.title) (\($0.minutes) Min.)" }.joined(separator: " → ")).font(.subheadline).foregroundStyle(.secondary)
-                        Button("Stunde starten", systemImage: "play.circle.fill") { controller.start(template) }
-                            .buttonStyle(.glassProminent).disabled(store.data.currentSession != nil || !template.isValid)
+                        ResponsiveButtonRow {
+                            Button { controller.start(template) } label: { Label("Stunde starten", systemImage: "play.fill").frame(maxWidth: .infinity) }
+                                .buttonStyle(.glassProminent)
+                            Button { startDraft = template } label: { Label("Schritte auslassen", systemImage: "forward.end").frame(maxWidth: .infinity) }
+                                .buttonStyle(.glass)
+                                .accessibilityHint("Zum Beispiel, wenn der Kaffee schon fertig ist")
+                        }
+                        .disabled(store.data.currentSession != nil || !template.isValid)
                     }
                 }
             }
@@ -178,6 +243,83 @@ struct SessionConductorContent: View {
                         Button("Notizen & Rückblick öffnen") { historyDraft = session }.font(.subheadline.bold())
                     }
                 }
+            }
+        }
+    }
+}
+
+/// What a confirmed skip would do, phrased for the confirmation dialog.
+struct SessionSkipRequest: Identifiable {
+    let id: UUID
+    let title: String
+    let isCurrent: Bool
+    /// Steps a jump to this one would additionally skip (the current one and everything in between).
+    let jumpSkips: [String]
+    let message: String
+
+    init(session: RunningTherapySession, phase: SessionPhase, now: Date) {
+        let current = session.phaseIndex(at: now)
+        let index = session.phases.firstIndex { $0.id == phase.id }
+        let current_ = index != nil && index == current
+        let between = session.phasesSkipped(jumpingTo: phase.id, at: now).map(\.title)
+        var text = "Der Schritt wird aus dem heutigen Ablauf genommen. Deine Vorlage bleibt unverändert."
+        if current_, let index, index + 1 < session.phases.count {
+            text = "Der Schritt endet jetzt. „\(session.phases[index + 1].title)“ beginnt sofort mit seiner vollen Zeit, die Stunde wird entsprechend kürzer."
+        } else if !between.isEmpty {
+            text = "„Nur diesen Schritt“ nimmt ihn aus dem heutigen Ablauf. „Direkt springen“ überspringt außerdem: " + between.joined(separator: ", ") + ". Deine Vorlage bleibt unverändert."
+        }
+        id = phase.id
+        title = phase.title
+        isCurrent = current_
+        jumpSkips = between
+        message = text
+    }
+}
+
+/// Lets a round start without steps that are already done, e.g. when the coffee is ready before a later start.
+struct SessionStartSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let template: TherapySessionTemplate
+    let start: (Set<UUID>) -> Void
+    @State private var skipped: Set<UUID> = []
+    @State private var confirm = false
+
+    private var remainingMinutes: Int { template.phases.filter { !skipped.contains($0.id) }.reduce(0) { $0 + max(1, $1.minutes) } }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(template.phases) { phase in
+                        Toggle(isOn: Binding(get: { !skipped.contains(phase.id) }, set: { if $0 { skipped.remove(phase.id) } else { skipped.insert(phase.id) } })) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(phase.title)
+                                Text("\(phase.minutes) Min.").font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                } header: { Text("Was machst du heute?") } footer: {
+                    Text("Ausgeschaltete Schritte werden nur für diese Runde übersprungen. Die Vorlage bleibt gleich.")
+                }
+            }
+            .therapyFormStyle()
+            .navigationTitle(template.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { dismiss() } }
+            }
+            .safeAreaInset(edge: .bottom) {
+                PrimaryActionButton(title: skipped.isEmpty ? "Starten · \(remainingMinutes) Min." : "Ohne \(skipped.count) Schritt\(skipped.count == 1 ? "" : "e") starten · \(remainingMinutes) Min.", icon: "play.fill") {
+                    if skipped.isEmpty { start([]); dismiss() } else { confirm = true }
+                }
+                .disabled(skipped.count >= template.phases.count)
+                .padding(.horizontal, 20).padding(.bottom, 8)
+            }
+            .alert("Schritte wirklich überspringen?", isPresented: $confirm) {
+                Button("Abbrechen", role: .cancel) {}
+                Button("Überspringen & starten") { start(skipped); dismiss() }
+            } message: {
+                Text(template.phases.filter { skipped.contains($0.id) }.map(\.title).joined(separator: ", ") + " " + (skipped.count == 1 ? "wird" : "werden") + " heute ausgelassen.")
             }
         }
     }

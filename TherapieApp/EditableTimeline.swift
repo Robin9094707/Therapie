@@ -199,7 +199,10 @@ struct ArchiveTimelineCard: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Button(action: open) { Text(record.title).font(.headline).multilineTextAlignment(.leading) }.buttonStyle(.plain)
                         Text(record.subtitle).font(.subheadline).foregroundStyle(.secondary).lineLimit(3)
-                        Text(record.date.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
+                        HStack(spacing: 8) {
+                            Text(record.date.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
+                            EntryLocationBadge(recordID: record.id)
+                        }
                     }
                     Spacer(minLength: 0)
                     Button {
